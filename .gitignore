@@ -1,0 +1,39 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+artifacts/
+*.nupkg
+*.snupkg
+*.binlog
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.userprefs
+
+# Tests and coverage
+TestResults/
+[Cc]overage*/
+*.coverage
+*.coveragexml
+*.trx
+
+# Visual Studio Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!*.code-workspace
+.history/
+*.vsix
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
