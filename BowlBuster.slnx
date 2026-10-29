@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BowlBuster/BowlBuster.csproj" />
+    <Project Path="src/BowlBuster.Cli/BowlBuster.Cli.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BowlBuster.Tests/BowlBuster.Tests.csproj" />
+  </Folder>
+</Solution>
