@@ -23,6 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/BowlBuster/BowlBuster.csproj" />
     <ProjectReference Include="../../src/BowlBuster.Cli/BowlBuster.Cli.csproj" />
   </ItemGroup>
 
