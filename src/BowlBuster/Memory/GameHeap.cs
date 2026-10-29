@@ -93,4 +93,55 @@ public sealed class GameHeap
         LastBlock = new HeapBlock(address, size);
         return address;
     }
+
+    /// <summary>
+    /// Extends the last block in place by <paramref name="size"/> bytes, rounded up to a multiple of 4.
+    /// </summary>
+    /// <param name="size">The number of bytes to add.</param>
+    /// <returns>
+    /// The last block's old end: its address plus its size before the grow, which is not necessarily the cursor. Returns 0,
+    /// leaving the heap unchanged, when the bytes used plus the rounded size would pass the heap's size.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">There is no last block.</exception>
+    public uint Grow(uint size)
+    {
+        HeapBlock block = LastBlock ?? throw new InvalidOperationException("There is no block to grow.");
+        uint rounded = (size + 3) & ~3u;
+        HeapState current = Current;
+
+        if (current.Used + (ulong)rounded > profile.Size) return 0;
+
+        states[^1] = current with { Cursor = current.Cursor + rounded, Used = current.Used + rounded };
+        LastBlock = block with { Size = block.Size + rounded };
+        return block.Address + block.Size;
+    }
+
+    /// <summary>
+    /// Starts a new depth as a copy of the current state. Later allocations belong to the new depth until it is popped.
+    /// </summary>
+    /// <returns>The depth the heap came from, which <see cref="Pop"/> returns to.</returns>
+    /// <exception cref="InvalidOperationException">The heap is already at its deepest depth.</exception>
+    public int Push()
+    {
+        if (states.Count == profile.DepthCount)
+            throw new InvalidOperationException($"The heap has no depth beyond {profile.DepthCount - 1}.");
+
+        int from = Depth;
+        states.Add(Current);
+        return from;
+    }
+
+    /// <summary>
+    /// Returns to <paramref name="depth"/>, discarding every allocation made since it was pushed. The last block is not
+    /// changed, because it belongs to the heap and not to a depth.
+    /// </summary>
+    /// <param name="depth">A depth from 0 to the current depth.</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="depth"/> is negative or above the current depth.</exception>
+    public void Pop(int depth)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(depth);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(depth, Depth);
+
+        states.RemoveRange(depth + 1, Depth - depth);
+    }
 }

@@ -196,4 +196,238 @@ public class GameHeapTests
 
         Assert.Throws<ArgumentException>(() => new GameHeap(Profile, states));
     }
+
+    [Theory]
+    [InlineData(1u, 4u)]
+    [InlineData(5u, 8u)]
+    [InlineData(8u, 8u)]
+    [InlineData(4094u, 4096u)]
+    public void Grow_Size_RoundsUpAndMovesCursorUsedAndBlockSize(uint size, uint rounded)
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        uint address = heap.Allocate(100, 16);
+        HeapState before = heap.Current;
+
+        heap.Grow(size);
+
+        Assert.Equal(new HeapState(before.Cursor + rounded, before.BlockCount, before.Used + rounded), heap.Current);
+        Assert.Equal(new HeapBlock(address, 100 + rounded), heap.LastBlock);
+    }
+
+    [Fact]
+    public void Grow_AfterBlockOfSizeNotAMultipleOfFour_ReturnsBlockEndNotCursor()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        uint address = heap.Allocate(101, 16);
+        uint cursor = heap.Current.Cursor;
+
+        uint end = heap.Grow(8);
+
+        Assert.Equal(address + 101, end);
+        Assert.Equal(address + 104, cursor);
+    }
+
+    [Fact]
+    public void Grow_AfterBlockOfSizeAMultipleOfFour_ReturnsBlockEnd()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        uint address = heap.Allocate(256, 16);
+
+        uint end = heap.Grow(64);
+
+        Assert.Equal(address + 256, end);
+    }
+
+    [Fact]
+    public void Grow_ConsecutiveGrows_EachReturnsTheEndTheLastLeft()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        uint address = heap.Allocate(256, 16);
+
+        uint first = heap.Grow(76);
+        uint second = heap.Grow(12);
+
+        Assert.Equal(address + 256, first);
+        Assert.Equal(address + 256 + 76, second);
+    }
+
+    [Fact]
+    public void Grow_AdvancePassesSize_ReturnsZeroAndKeepsState()
+    {
+        GameHeap heap = CreateHeap(0x1000, Profile with { Size = 1000 });
+        heap.Allocate(900, 16);
+        HeapState before = heap.Current;
+        HeapBlock? lastBlock = heap.LastBlock;
+
+        uint end = heap.Grow(100);
+
+        Assert.Equal(0u, end);
+        Assert.Equal(before, heap.Current);
+        Assert.Equal(lastBlock, heap.LastBlock);
+    }
+
+    [Fact]
+    public void Grow_AdvanceFillsSizeExactly_Succeeds()
+    {
+        GameHeap heap = CreateHeap(0x1000, Profile with { Size = 1000 });
+        uint address = heap.Allocate(900, 16);
+
+        uint end = heap.Grow(84);
+
+        Assert.Equal(address + 900, end);
+        Assert.Equal(1000u, heap.Current.Used);
+    }
+
+    [Fact]
+    public void Grow_NoLastBlock_Throws()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+
+        Assert.Throws<InvalidOperationException>(() => heap.Grow(16));
+    }
+
+    [Fact]
+    public void Push_CurrentState_StartsADepthWithACopyAndReturnsThePreviousDepth()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        heap.Allocate(64, 16);
+        HeapState before = heap.Current;
+
+        int from = heap.Push();
+
+        Assert.Equal(0, from);
+        Assert.Equal(1, heap.Depth);
+        Assert.Equal(before, heap.Current);
+        Assert.Equal(before, heap.States[0]);
+    }
+
+    [Fact]
+    public void Push_AtTheDeepestDepth_Throws()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        for (int depth = 1; depth < Profile.DepthCount; depth++)
+        {
+            heap.Push();
+        }
+
+        Assert.Throws<InvalidOperationException>(() => heap.Push());
+    }
+
+    [Fact]
+    public void Pop_ToTheDepthPushedFrom_RestoresItsFrozenState()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        heap.Allocate(64, 16);
+        HeapState frozen = heap.Current;
+        int from = heap.Push();
+        heap.Allocate(128, 16);
+
+        heap.Pop(from);
+
+        Assert.Equal(from, heap.Depth);
+        Assert.Equal(frozen, heap.Current);
+    }
+
+    [Fact]
+    public void Pop_AfterBlocksAllocatedAtThePoppedDepth_ReusesTheirMemory()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        int from = heap.Push();
+        uint first = heap.Allocate(256, 16);
+        heap.Pop(from);
+
+        uint second = heap.Allocate(256, 16);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void Pop_WhenLastBlockLiesAboveTheRestoredCursor_KeepsTheLastBlock()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        int from = heap.Push();
+        uint address = heap.Allocate(256, 16);
+        HeapBlock? lastBlock = heap.LastBlock;
+
+        heap.Pop(from);
+
+        Assert.True(address >= heap.Current.Cursor);
+        Assert.Equal(lastBlock, heap.LastBlock);
+    }
+
+    [Fact]
+    public void Pop_NestedDepths_OneAtATimeOrAllAtOnceReachTheSameState()
+    {
+        GameHeap stepwise = CreateHeap(BootCursor);
+        GameHeap atOnce = CreateHeap(BootCursor);
+        foreach (GameHeap heap in new[] { stepwise, atOnce })
+        {
+            heap.Allocate(64, 16);
+            heap.Push();
+            heap.Allocate(96, 32);
+            heap.Push();
+            heap.Allocate(160, 64);
+        }
+
+        stepwise.Pop(1);
+        stepwise.Pop(0);
+        atOnce.Pop(0);
+
+        Assert.Equal(atOnce.States, stepwise.States);
+        Assert.Equal(atOnce.LastBlock, stepwise.LastBlock);
+    }
+
+    [Fact]
+    public void Pop_ToTheCurrentDepth_ChangesNothing()
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+        heap.Push();
+        heap.Allocate(64, 16);
+        HeapState before = heap.Current;
+
+        heap.Pop(1);
+
+        Assert.Equal(1, heap.Depth);
+        Assert.Equal(before, heap.Current);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    [InlineData(5)]
+    public void Pop_DepthOutsideZeroToCurrent_Throws(int depth)
+    {
+        GameHeap heap = CreateHeap(BootCursor);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => heap.Pop(depth));
+    }
+
+    [Fact]
+    public void Requests_OnAHeapBuiltFromCapturedState_ContinueExactlyAsTheOriginalDoes()
+    {
+        GameHeap original = CreateHeap(BootCursor);
+        original.Allocate(1024, 16);
+        original.Push();
+        original.Allocate(101, 64);
+        original.Grow(76);
+        var captured = new GameHeap(Profile, original.States, original.LastBlock);
+
+        uint[] fromOriginal = ContinueWith(original);
+        uint[] fromCaptured = ContinueWith(captured);
+
+        Assert.Equal(fromOriginal, fromCaptured);
+        Assert.Equal(original.States, captured.States);
+        Assert.Equal(original.LastBlock, captured.LastBlock);
+    }
+
+    private static uint[] ContinueWith(GameHeap heap)
+    {
+        uint grown = heap.Grow(12);
+        uint first = heap.Allocate(2048, 16);
+        heap.Push();
+        uint second = heap.Allocate(33, 32);
+        heap.Pop(1);
+        uint third = heap.Allocate(40, 0);
+        return [grown, first, second, third];
+    }
 }
