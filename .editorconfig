@@ -259,3 +259,6 @@ dotnet_diagnostic.IDE0083.severity = warning
 
 [*Tests.cs]
 dotnet_diagnostic.CA1707.severity = none
+
+[Phase.cs]
+dotnet_diagnostic.CA1008.severity = none
