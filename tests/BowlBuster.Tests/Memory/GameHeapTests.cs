@@ -166,7 +166,7 @@ public class GameHeapTests
     [Fact]
     public void Allocate_WithUsedBytesAlreadyCounted_ChecksSizeAgainstUsedPlusAdvance()
     {
-        var heap = new GameHeap(Profile with { Size = 1000 }, [new HeapState(0x1000, 3, 900)]);
+        GameHeap heap = new(Profile with { Size = 1000 }, [new HeapState(0x1000, 3, 900)]);
 
         uint address = heap.Allocate(100, 16);
 
@@ -178,7 +178,7 @@ public class GameHeapTests
     {
         HeapState[] states = [new(0x1000, 1, 100), new(0x2000, 2, 200), new(0x3000, 3, 300)];
 
-        var heap = new GameHeap(Profile, states);
+        GameHeap heap = new(Profile, states);
 
         Assert.Equal(2, heap.Depth);
         Assert.Equal(states[2], heap.Current);
@@ -187,7 +187,7 @@ public class GameHeapTests
 
     [Fact]
     public void Constructor_NoStates_Throws() =>
-        Assert.Throws<ArgumentException>(() => new GameHeap(Profile, []));
+        Assert.Throws<ArgumentException>(static () => new GameHeap(Profile, []));
 
     [Fact]
     public void Constructor_MoreStatesThanDepths_Throws()
@@ -410,7 +410,7 @@ public class GameHeapTests
         original.Push();
         original.Allocate(101, 64);
         original.Grow(76);
-        var captured = new GameHeap(Profile, original.States, original.LastBlock);
+        GameHeap captured = new(Profile, original.States, original.LastBlock);
 
         uint[] fromOriginal = ContinueWith(original);
         uint[] fromCaptured = ContinueWith(captured);

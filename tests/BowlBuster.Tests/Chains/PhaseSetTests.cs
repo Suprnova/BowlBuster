@@ -15,7 +15,7 @@ public class PhaseSetTests
     [Fact]
     public void Contains_PhasesGivenToTheConstructor_IsTrueOnlyForThose()
     {
-        var set = new PhaseSet(Phase.Fourth, Phase.First);
+        PhaseSet set = new(Phase.Fourth, Phase.First);
 
         Assert.True(set.Contains(Phase.First));
         Assert.False(set.Contains(Phase.Second));

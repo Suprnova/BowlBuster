@@ -66,7 +66,7 @@ public class PeriodOfFourTests
         return [.. Enumerable.Range(0, count).Select(_ => RunLoad(heap, scene))];
     }
 
-    private static uint[] Anchors(Scene scene, int count) => [.. RunLoads(scene, count).Select(load => load.Anchor)];
+    private static uint[] Anchors(Scene scene, int count) => [.. RunLoads(scene, count).Select(static load => load.Anchor)];
 
     private static uint AlignUp(uint value, uint alignment) => (value + alignment - 1) & ~(alignment - 1);
 
@@ -99,13 +99,13 @@ public class PeriodOfFourTests
     {
         uint[] anchors = Anchors(Scenes[scene], Loads);
 
-        uint[] moves = [.. anchors.Zip(anchors.Skip(1), (previous, next) => next - previous)];
+        uint[] moves = [.. anchors.Zip(anchors.Skip(1), static (previous, next) => next - previous)];
 
-        Assert.All(moves, move => Assert.Contains(move, new uint[] { 704, 768 }));
+        Assert.All(moves, static move => Assert.Contains(move, new uint[] { 704, 768 }));
         for (int first = 0; first + 4 <= moves.Length; first++)
         {
-            Assert.Equal(2880u, (uint)moves.Skip(first).Take(4).Sum(move => (int)move));
-            Assert.Equal(1, moves.Skip(first).Take(4).Count(move => move is 768));
+            Assert.Equal(2880u, (uint)moves.Skip(first).Take(4).Sum(static move => (int)move));
+            Assert.Equal(1, moves.Skip(first).Take(4).Count(static move => move is 768));
         }
     }
 
@@ -116,7 +116,7 @@ public class PeriodOfFourTests
     public void Anchor_ConsecutiveLoads_RepeatsItsMovesEveryFourLoads(int scene)
     {
         uint[] anchors = Anchors(Scenes[scene], Loads);
-        uint[] moves = [.. anchors.Zip(anchors.Skip(1), (previous, next) => next - previous)];
+        uint[] moves = [.. anchors.Zip(anchors.Skip(1), static (previous, next) => next - previous)];
 
         uint[] repeated = [.. moves.Skip(4)];
 

@@ -27,7 +27,7 @@ public class CounterBasisTests
     [InlineData(30, 25)]
     public void ToLoad_BasisBootingAtCounterFive_ReturnsCounterLessFive(int counter, int expected)
     {
-        var basis = new CounterBasis("MNUS", 5);
+        CounterBasis basis = new("MNUS", 5);
 
         Assert.Equal(new LoadNumber(expected), basis.ToLoad(counter));
     }
@@ -52,8 +52,8 @@ public class CounterBasisTests
     [InlineData(5, 40)]
     public void ToCounter_ThenToLoad_RoundTrips(int bootCounter, int load)
     {
-        var basis = new CounterBasis("BB02", bootCounter);
-        var original = new LoadNumber(load);
+        CounterBasis basis = new("BB02", bootCounter);
+        LoadNumber original = new(load);
 
         LoadNumber roundTripped = basis.ToLoad(basis.ToCounter(original));
 

@@ -78,13 +78,11 @@ public readonly record struct PhaseSet
     {
         set = default;
         char[] digits = [.. text?.Where(char.IsAsciiDigit) ?? []];
-        bool hasMultiDigitNumber = text?.Zip(text.Skip(1)).Any(pair => char.IsAsciiDigit(pair.First) && char.IsAsciiDigit(pair.Second)) ?? false;
-        if (digits.Length is 0 || hasMultiDigitNumber || digits.Any(digit => digit is < '1' or > '4'))
-        {
+        bool hasMultiDigitNumber = text?.Zip(text.Skip(1)).Any(static pair => char.IsAsciiDigit(pair.First) && char.IsAsciiDigit(pair.Second)) ?? false;
+        if (digits.Length is 0 || hasMultiDigitNumber || digits.Any(static digit => digit is < '1' or > '4'))
             return false;
-        }
 
-        set = new PhaseSet([.. digits.Select(digit => (Phase)(digit - '0'))]);
+        set = new PhaseSet([.. digits.Select(static digit => (Phase)(digit - '0'))]);
         return true;
     }
 
