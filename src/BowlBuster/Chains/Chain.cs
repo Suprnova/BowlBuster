@@ -1,4 +1,7 @@
+using BowlBuster.Chains.Parsing;
+using BowlBuster.Chains.Vocabulary;
 using BowlBuster.Loads;
+using System.Diagnostics.CodeAnalysis;
 
 namespace BowlBuster.Chains;
 
@@ -91,6 +94,47 @@ public sealed class Chain
     public PhaseSet OriginPhases => Timing is { } timing
         ? new PhaseSet(timing.Origin.Phase)
         : new PhaseSet([.. (TargetPhases ?? PhaseSet.All).Phases.Select(phase => Earlier(phase, K))]);
+
+    /// <summary>
+    /// Reads a chain as runners write it, such as <c>[load] > burn x2 > BL03 (Mermaid Man) > B101 x18 > TR01</c> or the shape
+    /// <c>BL03 > non-SB x18 > TR01 [target: 3rd or 4th]</c>. Keywords are case-insensitive, and every name in the
+    /// vocabulary is replaced by its preferred form.
+    /// </summary>
+    /// <param name="text">The chain.</param>
+    /// <param name="vocabulary">The names to accept, or <see langword="null"/> to use the default.</param>
+    /// <returns>The chain.</returns>
+    /// <exception cref="FormatException">
+    /// The text is not a chain: a step is missing or empty, a count is below 1, a burn is named or misplaced, a filler
+    /// has costumes, the origin or target is repeated, or the costumes are unknown or in the wrong order.
+    /// </exception>
+    public static Chain Parse(string text, ChainVocabulary? vocabulary = null)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return ChainParser.Parse(text, vocabulary ?? ChainVocabulary.Default);
+    }
+
+    /// <summary>
+    /// Tries to read a chain. See <see cref="Parse"/>.
+    /// </summary>
+    /// <param name="text">The chain.</param>
+    /// <param name="vocabulary">The names to accept, or <see langword="null"/> to keep every name as written.</param>
+    /// <param name="chain">The chain, when reading succeeds.</param>
+    /// <returns><see langword="true"/> when <paramref name="text"/> is a chain.</returns>
+    public static bool TryParse(string? text, ChainVocabulary? vocabulary, [NotNullWhen(true)] out Chain? chain)
+    {
+        chain = null;
+        if (text is null) return false;
+
+        try
+        {
+            chain = Parse(text, vocabulary);
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 
     /// <summary>
     /// Numbers the loads of a chain that starts at <c>[load]</c>: <c>[load]</c> is load 1, then the burns, the origin,
