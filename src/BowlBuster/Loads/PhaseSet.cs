@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace BowlBuster.Chains;
+namespace BowlBuster.Loads;
 
 /// <summary>
 /// A set of <see cref="Phase"/>s, such as the phases a chain's target may land on.

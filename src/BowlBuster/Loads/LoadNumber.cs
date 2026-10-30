@@ -1,4 +1,4 @@
-namespace BowlBuster.Chains;
+namespace BowlBuster.Loads;
 
 /// <summary>
 /// A load, numbered as runners number them: the first scene after the main menu at boot is load 1. This is the only

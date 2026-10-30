@@ -1,4 +1,5 @@
 using BowlBuster.Chains;
+using BowlBuster.Loads;
 
 namespace BowlBuster.Tests.Chains;
 

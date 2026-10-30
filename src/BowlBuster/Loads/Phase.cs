@@ -1,4 +1,4 @@
-namespace BowlBuster.Chains;
+namespace BowlBuster.Loads;
 
 /// <summary>
 /// Where a load falls in the heap layout's period of four, named as runners name it. The 1st, 2nd, 3rd and 4th load are

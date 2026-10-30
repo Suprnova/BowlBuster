@@ -1,6 +1,6 @@
-using BowlBuster.Chains;
+using BowlBuster.Loads;
 
-namespace BowlBuster.Tests.Chains;
+namespace BowlBuster.Tests.Loads;
 
 public class CounterBasisTests
 {

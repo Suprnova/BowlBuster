@@ -1,4 +1,4 @@
-namespace BowlBuster.Chains;
+namespace BowlBuster.Loads;
 
 /// <summary>
 /// How a recording's scene counter maps to load numbers: the scene the game boots into and the counter value it has.
