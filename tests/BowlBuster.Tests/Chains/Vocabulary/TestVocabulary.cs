@@ -11,12 +11,12 @@ internal static class TestVocabulary
     [
         new("Plain Sponge", Character.Spongebob, "PS"),
         new("Mermaid Man", Character.Spongebob, "MM"),
-        new("Ripped Shorts", Character.Spongebob),
-        new("Spongegar", Character.Spongebob),
+        new("Ripped Pants", Character.Spongebob, "RPS"),
+        new("Caveman Sponge", Character.Spongebob, "CMS"),
         new("Plain Patrick", Character.Patrick, "PP"),
         new("Disco Patrick", Character.Patrick, "DP"),
-        new("Caveman", Character.Patrick),
-        new("Goofy Goober", Character.Patrick),
+        new("Caveman Patrick", Character.Patrick, "CMP"),
+        new("Goofy Goober", Character.Patrick, "GGP"),
     ];
 
     public static ChainVocabulary CostumesOnly { get; } = new([], Costumes);

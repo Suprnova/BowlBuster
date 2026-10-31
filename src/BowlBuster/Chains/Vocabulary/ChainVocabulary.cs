@@ -35,12 +35,12 @@ public sealed class ChainVocabulary
     [
         new CostumeName("Plain Sponge", Character.Spongebob, "PS"),
         new CostumeName("Mermaid Man", Character.Spongebob, "MM"),
-        new CostumeName("Ripped Shorts", Character.Spongebob),
-        new CostumeName("Spongegar", Character.Spongebob),
+        new CostumeName("Ripped Pants", Character.Spongebob, "RPS"),
+        new CostumeName("Caveman Sponge", Character.Spongebob, "CMS"),
         new CostumeName("Plain Patrick", Character.Patrick, "PP"),
         new CostumeName("Disco Patrick", Character.Patrick, "DP"),
-        new CostumeName("Caveman", Character.Patrick),
-        new CostumeName("Goofy Goober", Character.Patrick),
+        new CostumeName("Caveman Patrick", Character.Patrick, "CMP"),
+        new CostumeName("Goofy Goober", Character.Patrick, "GGP"),
     ];
 
     /// <summary>

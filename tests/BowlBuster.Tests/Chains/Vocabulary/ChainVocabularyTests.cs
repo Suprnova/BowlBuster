@@ -39,8 +39,10 @@ public class ChainVocabularyTests
     [InlineData("mm", "Mermaid Man")]
     [InlineData("Mermaid Man", "Mermaid Man")]
     [InlineData(" ps ", "Plain Sponge")]
-    [InlineData("Spongegar", "Spongegar")]
-    [InlineData("ripped shorts", "Ripped Shorts")]
+    [InlineData("Caveman Sponge", "Caveman Sponge")]
+    [InlineData("cms", "Caveman Sponge")]
+    [InlineData("ripped pants", "Ripped Pants")]
+    [InlineData("RPS", "Ripped Pants")]
     public void ResolveCostumes_LoneSpongebobCostume_GoesInSpongebobsSlot(string text, string expected) =>
         Assert.Equal(new Costumes(expected, null), vocabulary.ResolveCostumes([text]));
 
@@ -48,7 +50,9 @@ public class ChainVocabularyTests
     [InlineData("DP", "Disco Patrick")]
     [InlineData("pp", "Plain Patrick")]
     [InlineData("Goofy Goober", "Goofy Goober")]
-    [InlineData("caveman", "Caveman")]
+    [InlineData("ggp", "Goofy Goober")]
+    [InlineData("caveman patrick", "Caveman Patrick")]
+    [InlineData("CMP", "Caveman Patrick")]
     public void ResolveCostumes_LonePatrickCostume_GoesInPatricksSlot(string text, string expected) =>
         Assert.Equal(new Costumes(null, expected), vocabulary.ResolveCostumes([text]));
 
@@ -68,12 +72,12 @@ public class ChainVocabularyTests
     }
 
     [Fact]
-    public void ResolveCostumes_PairWithPatricksCaveman_PlacesItInPatricksSlot() =>
-        Assert.Equal(new Costumes("Spongegar", "Caveman"), vocabulary.ResolveCostumes(["spongegar", "Caveman"]));
+    public void ResolveCostumes_CavemanPair_PlacesEachInItsCharactersSlot() =>
+        Assert.Equal(new Costumes("Caveman Sponge", "Caveman Patrick"), vocabulary.ResolveCostumes(["CMS", "CMP"]));
 
     [Fact]
     public void ResolveCostumes_PatricksCavemanFirst_Throws() =>
-        Assert.Throws<FormatException>(() => vocabulary.ResolveCostumes(["Caveman", "DP"]));
+        Assert.Throws<FormatException>(() => vocabulary.ResolveCostumes(["Caveman Patrick", "DP"]));
 
     [Fact]
     public void ResolveCostumes_PatrickFirst_Throws() =>
