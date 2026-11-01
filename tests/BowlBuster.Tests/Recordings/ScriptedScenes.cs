@@ -24,6 +24,18 @@ internal static class ScriptedScenes
     public static HeapSnapshot TargetStart { get; } =
         new([new HeapState(0x5C0030, 0, 0), new HeapState(0x6E6F18, 501, 0x126EE8)], new HeapBlock(0x749D50, 0x20));
 
+    /// <summary>
+    /// The heap a load starts from after the given number of extra leaks past <see cref="OriginStart"/>.
+    /// </summary>
+    public static HeapSnapshot StartAfterLeaks(int leaks)
+    {
+        const uint leakCost = 720;
+        uint added = (uint)leaks * leakCost;
+        HeapState state = OriginStart.States[1];
+
+        return OriginStart with { States = [OriginStart.States[0], new HeapState(state.Cursor + added, state.BlockCount + leaks, state.Used + added)] };
+    }
+
     public static Scene Origin { get; } = new(
         "ORIG",
         [
