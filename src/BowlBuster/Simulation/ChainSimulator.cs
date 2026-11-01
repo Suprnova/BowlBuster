@@ -18,8 +18,16 @@ namespace BowlBuster.Simulation;
 /// </remarks>
 /// <param name="profile">The platform's constants.</param>
 /// <param name="library">The recordings to draw on.</param>
-public sealed class ChainSimulator(PlatformProfile profile, RecordingLibrary library)
+/// <param name="captures">Where to find captures for original bytes, or <see langword="null"/> for none.</param>
+/// <param name="layers">The archive layers on disc, for bytes no capture holds, or <see langword="null"/> for none.</param>
+public sealed class ChainSimulator(
+    PlatformProfile profile,
+    RecordingLibrary library,
+    ICaptureSource? captures = null,
+    ILayerImageSource? layers = null)
 {
+    private readonly OriginalBytesReader originals = new(profile, layers);
+
     /// <summary>
     /// Simulates a chain.
     /// </summary>
@@ -91,6 +99,7 @@ public sealed class ChainSimulator(PlatformProfile profile, RecordingLibrary lib
             heap.Allocate(profile.PlayerEntitySize, 0);
         }
 
+        ILoadCapture?[] loadCaptures = [.. sources.Select(CaptureOf)];
         BlockTracker tracker = new(profile.Heap0);
         List<SimulatedLoad> loads = [];
         SphereAssignment? sphere = null;
@@ -111,7 +120,7 @@ public sealed class ChainSimulator(PlatformProfile profile, RecordingLibrary lib
             for (int op = 0; op <= log.Requests.Count; op++)
             {
                 if (op == log.Cutoff?.RequestCount && !setsSphere && sphere is { } stale)
-                    landing = Resolve(stale, tracker, heap);
+                    landing = Resolve(stale, tracker, heap, loadCaptures);
 
                 if (op == log.Requests.Count) break;
 
@@ -134,16 +143,22 @@ public sealed class ChainSimulator(PlatformProfile profile, RecordingLibrary lib
         return new ChainResult(loads, [], null);
     }
 
-    private Landing Resolve(SphereAssignment sphere, BlockTracker tracker, GameHeap heap) => new(
+    private ILoadCapture? CaptureOf(LoadSource source) =>
+        source.Load.Heap.Cutoff?.CaptureId is { } id ? captures?.Find(source.RecordingId, id) : null;
+
+    private Landing Resolve(SphereAssignment sphere, BlockTracker tracker, GameHeap heap, ILoadCapture?[] loadCaptures) => new(
         sphere,
         tracker.FindFrom(profile.Sites.PlayerEntity)?.Address,
         new LandingHeap(tracker.HeapTop, heap.Current.Cursor, heap.Depth),
-        [.. profile.Footprint.Words.Select(word => Resolve(word, sphere, tracker))]);
+        [.. profile.Footprint.Words.Select(word => Resolve(word, sphere, tracker, loadCaptures))]);
 
-    private static LandingWord Resolve(FootprintWord word, SphereAssignment sphere, BlockTracker tracker)
+    private LandingWord Resolve(FootprintWord word, SphereAssignment sphere, BlockTracker tracker, ILoadCapture?[] loadCaptures)
     {
         uint address = sphere.Address + word.Offset;
-        return new LandingWord(word, address, tracker.Locate(address, sphere.Position), null, false);
+        LandingRegion region = tracker.Locate(address, sphere.Position);
+        (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, region.Block is { } block ? loadCaptures[block.Position] : null);
+
+        return new LandingWord(word, address, region, original, isVolatile);
     }
 
     private bool IsSphere(HeapRequest request) => request is PoolAllocRequest instance && instance.Caller == profile.Sites.Sphere;

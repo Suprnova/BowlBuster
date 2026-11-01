@@ -32,7 +32,7 @@ public sealed class ModelPool
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        uint instancesOffset = ((uint)shape.Count * (uint)shape.Matrices * profile.MatrixSize) + profile.HeaderSize;
+        uint instancesOffset = profile.MatrixBytes(shape) + profile.HeaderSize;
 
         Shape = shape;
         instanceSize = profile.InstanceSize;

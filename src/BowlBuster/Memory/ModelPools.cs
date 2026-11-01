@@ -24,16 +24,11 @@ public sealed class ModelPools(ModelPoolProfile profile)
     /// <returns><see langword="true"/> when a pool was added; <see langword="false"/> when no shape has this size.</returns>
     public bool TryAdd(uint size, uint address, uint recordedAddress)
     {
-        foreach (ModelPoolShape shape in profile.Shapes)
-        {
-            if (profile.BlockSize(shape) != size) continue;
+        if (profile.ShapeOfSize(size) is not { } shape) return false;
 
-            int next = pools.FindIndex(pool => pool.Shape.Matrices < shape.Matrices);
-            pools.Insert(next < 0 ? pools.Count : next, new ModelPool(profile, shape, address, recordedAddress));
-            return true;
-        }
-
-        return false;
+        int next = pools.FindIndex(pool => pool.Shape.Matrices < shape.Matrices);
+        pools.Insert(next < 0 ? pools.Count : next, new ModelPool(profile, shape, address, recordedAddress));
+        return true;
     }
 
     /// <summary>
