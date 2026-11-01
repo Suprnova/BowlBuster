@@ -27,21 +27,26 @@ internal sealed record ExitScene : Step;
 internal sealed record Scene(string Name, Step[] Steps);
 
 /// <summary>
+/// What differs between the platforms a <see cref="ScriptedGame"/> can play.
+/// </summary>
+internal sealed record ScriptedRules(string Platform, uint PoolSite, uint InstanceSize, (uint Size, int Count, int Matrices)[] PoolKinds)
+{
+    public static ScriptedRules Xbox { get; } = new("xbox", 0x182B2A, 0xA0, [(72_588, 0x144, 1), (49_740, 0x4A, 8), (208_556, 0x31, 0x40)]);
+}
+
+/// <summary>
 /// Plays scripted scenes and writes down what a harness would have recorded. This is the oracle for every test of a
 /// recording, so it calls nothing under test: it places blocks with the placement formula as the game's code has it,
 /// and computes pool instances and free lists itself.
 /// </summary>
-internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1")
+internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1", ScriptedRules? rules = null)
 {
     private const uint HeaderAllowance = 12;
     private const uint DefaultAlignment = 16;
-    private const uint PoolSite = 0x182B2A;
     private const uint PoolHeader = 0xC;
-    private const uint InstanceSize = 0xA0;
     private const uint MatrixSize = 0x40;
 
-    private static readonly (uint Size, int Count, int Matrices)[] PoolKinds = [(72_588, 0x144, 1), (49_740, 0x4A, 8), (208_556, 0x31, 0x40)];
-
+    private readonly ScriptedRules rules = rules ?? ScriptedRules.Xbox;
     private readonly List<JsonObject> events = [];
     private readonly JsonArray loadRows = [];
     private readonly SortedDictionary<int, List<RecordedLoad>> segments = [];
@@ -57,7 +62,7 @@ internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1
 
     public Recording Recording => new(
         run,
-        "xbox",
+        rules.Platform,
         new CounterBasis("MNUS", 1),
         0,
         [.. segments.Select(static pair => new RecordingSegment(pair.Key, pair.Value))]);
@@ -66,7 +71,7 @@ internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1
     {
         ["schema_version"] = 1,
         ["run"] = run,
-        ["disc"] = new JsonObject { ["platform"] = "xbox" },
+        ["disc"] = new JsonObject { ["platform"] = rules.Platform },
         ["counter_basis"] = new JsonObject { ["boot_scene"] = "MNUS", ["boot_counter"] = 1 },
         ["events_dropped"] = 0,
         ["loads"] = loadRows.DeepClone(),
@@ -236,10 +241,10 @@ internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1
                 game.Advance((pre + alloc.Size + 3) & ~3u, 1);
                 game.lastBlock = new HeapBlock(address, alloc.Size);
 
-                if (alloc.Caller is PoolSite)
+                if (alloc.Caller == game.rules.PoolSite)
                 {
-                    (_, int count, int matrices) = PoolKinds.First(kind => kind.Size == alloc.Size);
-                    pools.Add(new PoolPlay(address, count, matrices));
+                    (_, int count, int matrices) = game.rules.PoolKinds.First(kind => kind.Size == alloc.Size);
+                    pools.Add(new PoolPlay(address, count, matrices, game.rules.InstanceSize));
                 }
             }
 
@@ -286,7 +291,7 @@ internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1
         }
     }
 
-    private sealed class PoolPlay(uint block, int count, int matrices)
+    private sealed class PoolPlay(uint block, int count, int matrices, uint instanceSize)
     {
         public int Count { get; } = count;
 
@@ -294,6 +299,6 @@ internal sealed class ScriptedGame(HeapSnapshot start, string run = "synthetic-1
 
         public Stack<int> Free { get; } = new(Enumerable.Range(0, count).Reverse());
 
-        public uint InstanceAddress(int index) => block + ((uint)Count * (uint)Matrices * MatrixSize) + PoolHeader + ((uint)index * InstanceSize);
+        public uint InstanceAddress(int index) => block + ((uint)Count * (uint)Matrices * MatrixSize) + PoolHeader + ((uint)index * instanceSize);
     }
 }
