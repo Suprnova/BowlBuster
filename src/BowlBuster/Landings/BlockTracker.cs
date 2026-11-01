@@ -92,11 +92,14 @@ public sealed class BlockTracker(HeapProfile profile)
     /// </summary>
     /// <param name="op">The request's position in the load.</param>
     /// <returns>The block, or <see langword="null"/> when that request placed none.</returns>
-    public PlacedBlock? Find(int op) => live
-        .Concat(popped)
-        .Where(block => block.Position == position && block.Op == op)
-        .Select(static block => (PlacedBlock?)block)
-        .FirstOrDefault();
+    public PlacedBlock? Find(int op) => FirstOfThisLoad(block => block.Op == op);
+
+    /// <summary>
+    /// Finds the first block of this load allocated from a site, live or popped.
+    /// </summary>
+    /// <param name="caller">The allocation's return address.</param>
+    /// <returns>The block, or <see langword="null"/> when the load has none from that site.</returns>
+    public PlacedBlock? FindFrom(uint caller) => FirstOfThisLoad(block => block.Request.Caller == caller);
 
     /// <summary>
     /// Says what lies at an address now.
@@ -133,6 +136,12 @@ public sealed class BlockTracker(HeapProfile profile)
 
         return high;
     }
+
+    private PlacedBlock? FirstOfThisLoad(Func<PlacedBlock, bool> match) => live
+        .Concat(popped)
+        .Where(block => block.Position == position && match(block))
+        .Select(static block => (PlacedBlock?)block)
+        .FirstOrDefault();
 
     private void Place(PlacedBlock block)
     {

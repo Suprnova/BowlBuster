@@ -59,6 +59,21 @@ internal static class ScriptedScenes
             new PopTo(1),
         ]);
 
+    /// <summary>
+    /// A small scene whose heap at the cutoff ends far below the origin's sphere, then reaches past it during play.
+    /// </summary>
+    public static Scene Filler { get; } = new(
+        "FILL",
+        [
+            new Alloc(EntitySize, 0, EntitySite),
+            new Push(),
+            new Alloc(0x1000, 0x40, LayerSite, new LayerId("FILL", 0)),
+            new CutoffHere(),
+            new Alloc(0x80000, 0x40, PlaySite),
+            new ExitScene(),
+            new PopTo(1),
+        ]);
+
     public static Scene Target { get; } = new(
         "TARG",
         [

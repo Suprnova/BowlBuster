@@ -1,3 +1,4 @@
+using BowlBuster.Landings;
 using BowlBuster.Loads;
 using BowlBuster.Recordings;
 
@@ -33,7 +34,8 @@ public sealed record PhaseResult(Phase TargetPhase, LoadNumber? OriginLoad, Chai
 /// <param name="Source">The recorded load that was replayed for it.</param>
 /// <param name="Status">What the stale write did at this load.</param>
 /// <param name="Sphere">The sphere pointer in force once the load has run, if any load has set one.</param>
-public sealed record SimulatedLoad(int Position, LoadNumber Load, LoadSource Source, LoadStatus Status, SphereAssignment? Sphere);
+/// <param name="Landing">Where the load's stale write fell, when <paramref name="Status"/> is <see cref="LoadStatus.Landed"/>.</param>
+public sealed record SimulatedLoad(int Position, LoadNumber Load, LoadSource Source, LoadStatus Status, SphereAssignment? Sphere, Landing? Landing);
 
 /// <summary>
 /// What the stale write did at a load.
@@ -60,13 +62,6 @@ public enum LoadStatus
     /// </summary>
     Landed,
 }
-
-/// <summary>
-/// The value of the sphere pointer.
-/// </summary>
-/// <param name="Position">The position of the load that set it.</param>
-/// <param name="Address">The sphere instance's simulated address.</param>
-public readonly record struct SphereAssignment(int Position, uint Address);
 
 /// <summary>
 /// A recording a chain needs: its load has none, or only one later than the chain can use.

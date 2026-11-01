@@ -1,4 +1,5 @@
 using BowlBuster.Chains;
+using BowlBuster.Landings;
 using BowlBuster.Loads;
 using BowlBuster.Memory;
 using BowlBuster.Platforms;
@@ -90,6 +91,7 @@ public sealed class ChainSimulator(PlatformProfile profile, RecordingLibrary lib
             heap.Allocate(profile.PlayerEntitySize, 0);
         }
 
+        BlockTracker tracker = new(profile.Heap0);
         List<SimulatedLoad> loads = [];
         SphereAssignment? sphere = null;
 
@@ -103,26 +105,45 @@ public sealed class ChainSimulator(PlatformProfile profile, RecordingLibrary lib
 
             bool setsSphere = log.Requests.Any(IsSphere);
             HeapReplayer replayer = new(profile, heap);
+            Landing? landing = null;
+            tracker.BeginLoad();
 
-            for (int op = 0; op < log.Requests.Count; op++)
+            for (int op = 0; op <= log.Requests.Count; op++)
             {
-                uint? result = replayer.Apply(log.Requests[op]);
+                if (op == log.Cutoff?.RequestCount && !setsSphere && sphere is { } stale)
+                    landing = Resolve(stale, tracker, heap);
+
+                if (op == log.Requests.Count) break;
+
+                uint? result = tracker.Apply(replayer, op, log.Requests[op]);
 
                 if (result is 0) return new ChainResult(loads, [], new HeapExhaustion(position, op));
                 if (result is { } instance && IsSphere(log.Requests[op])) sphere = new SphereAssignment(position, instance);
             }
 
-            heap.Pop(depth);
+            tracker.PopTo(heap, depth);
 
             LoadStatus status = setsSphere ? LoadStatus.SetsSphere
                 : sphere is null ? LoadStatus.BeforeSphere
                 : log.Cutoff is null ? LoadStatus.NoCutoff
                 : LoadStatus.Landed;
 
-            loads.Add(new SimulatedLoad(position, LoadAt(plan, position), sources[position], status, sphere));
+            loads.Add(new SimulatedLoad(position, LoadAt(plan, position), sources[position], status, sphere, landing));
         }
 
         return new ChainResult(loads, [], null);
+    }
+
+    private Landing Resolve(SphereAssignment sphere, BlockTracker tracker, GameHeap heap) => new(
+        sphere,
+        tracker.FindFrom(profile.Sites.PlayerEntity)?.Address,
+        new LandingHeap(tracker.HeapTop, heap.Current.Cursor, heap.Depth),
+        [.. profile.Footprint.Words.Select(word => Resolve(word, sphere, tracker))]);
+
+    private static LandingWord Resolve(FootprintWord word, SphereAssignment sphere, BlockTracker tracker)
+    {
+        uint address = sphere.Address + word.Offset;
+        return new LandingWord(word, address, tracker.Locate(address, sphere.Position), null, false);
     }
 
     private bool IsSphere(HeapRequest request) => request is PoolAllocRequest instance && instance.Caller == profile.Sites.Sphere;
