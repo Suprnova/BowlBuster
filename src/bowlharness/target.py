@@ -84,8 +84,15 @@ class Target(Protocol):
         """Stops the guest, making :meth:`run` return."""
         ...
 
-    def run(self) -> None:
-        """Continues the guest until it is interrupted or ends."""
+    def run(self, timeout: float | None = None) -> bool:
+        """Continues the guest until it is interrupted or ends.
+
+        Args:
+            timeout: Seconds after which the guest is stopped, if it hasn't stopped by itself.
+
+        Returns:
+            Whether the guest was stopped because the timeout elapsed.
+        """
         ...
 
     def reset(self) -> None:

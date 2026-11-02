@@ -13,6 +13,7 @@ ARCHIVE = 0x4000
 ARRAY = 0x4400
 LAYER_OBJECTS = 0x4800
 SCENE_OBJECT = 0x5000
+BUGCHECK_RVAS = (0x94B0, 0x9442)
 
 
 def _tag(text: str) -> bytes:
@@ -45,9 +46,45 @@ class ScriptedGame:
         """The steps collected so far."""
         return list(self._steps)
 
-    def build(self) -> MockTarget:
-        """The mock target that plays the steps collected so far."""
-        return MockTarget(self.script)
+    def build(self, *, kernel_loaded: bool = False) -> MockTarget:
+        """The mock target that plays the steps collected so far, with the kernel already in memory if asked."""
+        return MockTarget(self.script, self.kernel_image() if kernel_loaded else None)
+
+    def kernel_image(self) -> dict[int, bytes]:
+        """A kernel image whose export table places the bugcheck functions."""
+        base = self._profile.kernel_base
+        header, directory, functions = 0x80, 0x200, 0x300
+        memory = {
+            base + 0x3C: struct.pack("<I", header),
+            base + header + 0x78: struct.pack("<I", directory),
+            base + directory + 0x10: struct.pack("<III", 1, 400, 0),
+            base + directory + 0x1C: struct.pack("<I", functions),
+        }
+        for ordinal, rva in zip(self._profile.bugcheck_ordinals, BUGCHECK_RVAS, strict=True):
+            memory[base + functions + 4 * (ordinal - 1)] = struct.pack("<I", rva)
+        return memory
+
+    def bugcheck_address(self, kind: str) -> int:
+        """Where the kernel image puts a bugcheck function."""
+        return self._profile.kernel_base + BUGCHECK_RVAS[("KeBugCheck", "KeBugCheckEx").index(kind)]
+
+    def kernel_loaded(self) -> None:
+        """The kernel appearing in memory, as it does before the title starts."""
+        self._step(0, (0,), memory=self.kernel_image())
+
+    def title_started(self) -> None:
+        self._step(self._profile.points.title_entry.entry[0], (0,))
+
+    def bugcheck(self, kind: str, code: int, *params: int, calls: tuple[int, ...] = (), esp: int = STACK) -> None:
+        """A bugcheck, with the stack words after its arguments: ``calls`` are return addresses, each after a call."""
+        memory = {address - 6: bytes([0x90, 0xE8, 0, 0, 0, 0]) for address in calls}
+        padding = (0,) * self._profile.crash.scan_words
+        self._step(self.bugcheck_address(kind), (0x8001CA36, code, *params, *calls, *padding), memory=memory, esp=esp)
+
+    def idle(self, seconds: float, frame: int) -> None:
+        """The guest running for ``seconds`` with no stop, the frame counter then at ``frame``."""
+        memory = {self._profile.globals.frame: struct.pack("<I", frame)}
+        self._step(0, (0,), memory=memory, seconds=seconds)
 
     def scene_init(
         self,
@@ -163,11 +200,14 @@ class ScriptedGame:
         eax: int = 0,
         memory: dict[int, bytes] | None = None,
         written: int | None = None,
+        seconds: float = 0.0,
     ) -> None:
         stack = b"".join(word if isinstance(word, bytes) else struct.pack("<I", word) for word in words)
         self.frame += 1
         frame = {self._profile.globals.frame: struct.pack("<I", self.frame)}
-        self._steps.append(Step(pc, {"esp": esp, "eax": eax}, {STACK: stack, **frame, **(memory or {})}, written))
+        self._steps.append(
+            Step(pc, {"esp": esp, "eax": eax}, {STACK: stack, **frame, **(memory or {})}, written, seconds)
+        )
 
     def _capturable(self, depth: int) -> dict[int, bytes]:
         """The bytes a capture reads: the static range, heap 0 up to its cursor, and the bowl's statics."""

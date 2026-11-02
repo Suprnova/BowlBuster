@@ -26,6 +26,11 @@ class EventWriter:
         self._stream.flush()
         return seq
 
+    @property
+    def count(self) -> int:
+        """How many events have been written."""
+        return self._next_seq
+
     def close(self) -> None:
         self._stream.close()
 
@@ -47,6 +52,8 @@ class RunManifest:
     captures: list[dict[str, Any]] = field(default_factory=list)
     captures_dropped: list[dict[str, Any]] = field(default_factory=list)
     attended: bool = False
+    crash: dict[str, Any] | None = None
+    hang: dict[str, Any] | None = None
     loads: list[dict[str, Any]] = field(default_factory=list)
     events_dropped: int = 0
     duplicates_discarded: int = 0
@@ -71,6 +78,8 @@ class RunManifest:
             "captures": self.captures,
             "captures_dropped": self.captures_dropped,
             "write_ledger": [],
+            "crash": self.crash,
+            "hang": self.hang,
             "complete": self.complete,
             "interrupted": self.interrupted,
         }

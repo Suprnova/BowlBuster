@@ -16,6 +16,7 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/bowlharness"]
+pythonpath = ["tests/bowlharness"]
 addopts = "--import-mode=importlib"
 
 [tool.ruff]

@@ -2,6 +2,7 @@
 
 from bowlharness.profiles.profile import (
     Costumes,
+    Crash,
     Globals,
     Heap,
     Layers,
@@ -51,6 +52,7 @@ XBOX_NTSC_U = PlatformProfile(
         pool_free=Point(entry=(0x182BC0,), args=1),
         drawn=Point(entry=(0x9526B,)),
         frame=Point(entry=(0x54380,)),
+        title_entry=Point(entry=(0x204AF7,)),
         entity=Point(entry=(0x72679,)),
         players_done=Point(entry=(0x3F159,)),
         scene_id=Point(returns=(0x74326,)),
@@ -102,6 +104,15 @@ XBOX_NTSC_U = PlatformProfile(
         extension=".HIP",
         layers_offset=0xC0,
         count_offset=0xC4,
+    ),
+    crash=Crash(
+        stack_words=32,
+        scan_words=256,
+        exception_bugcheck=0x1E,
+        access_violation=0xC0000005,
+        instruction_param=1,
+        access_param=2,
+        address_param=3,
     ),
     globals=Globals(
         scene_counter=0x2B76B8,

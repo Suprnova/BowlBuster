@@ -38,6 +38,7 @@ class Points:
     pool_free: Point
     drawn: Point
     frame: Point
+    title_entry: Point
     entity: Point
     players_done: Point
     scene_id: Point
@@ -110,6 +111,33 @@ class Costumes:
     extra_kind: int
     extra_entries: int
     cheat_mask: int
+
+
+@dataclass(frozen=True)
+class Crash:
+    """How a bugcheck is read.
+
+    A bugcheck for an unhandled exception has the given code; its first parameter is the exception's code, and the
+    others, by index among the parameters, are the faulting instruction, the kind of access (1 for a write) and the
+    address accessed.
+
+    Attributes:
+        stack_words: How many stack words a crash record keeps.
+        scan_words: How many stack words are searched for return addresses.
+        exception_bugcheck: The bugcheck code for an unhandled exception.
+        access_violation: The exception code of an access violation.
+        instruction_param: The index of the faulting instruction's address among the parameters.
+        access_param: The index of the access kind.
+        address_param: The index of the address accessed.
+    """
+
+    stack_words: int
+    scan_words: int
+    exception_bugcheck: int
+    access_violation: int
+    instruction_param: int
+    access_param: int
+    address_param: int
 
 
 @dataclass(frozen=True)
@@ -191,7 +219,7 @@ class PlatformProfile:
         boot_counter: The load counter at the boot scene.
         boot_return: The return address of the call that initialises the boot scene.
         kernel_base: Where the kernel image is mapped.
-        bugcheck_ordinals: The kernel export ordinals of the bugcheck functions.
+        bugcheck_ordinals: The kernel export ordinals of ``KeBugCheck`` and ``KeBugCheckEx``.
     """
 
     name: str
@@ -210,6 +238,7 @@ class PlatformProfile:
     model: Model
     costumes: Costumes
     layers: Layers
+    crash: Crash
     globals: Globals
 
     @property

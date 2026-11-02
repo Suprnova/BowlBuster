@@ -4,12 +4,13 @@ This is the only module that imports ``gdb``. gdb imports it with ``python impor
 registers the ``bowl`` command group; ``python -m bowlharness`` does that.
 """
 
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import gdb
 
-from bowlharness.target import Capability, Handle, Handler, Registers, Stop
+from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
 
 
 class _Point(gdb.Breakpoint):
@@ -55,24 +56,47 @@ class GdbTarget:
         gdb.post_event(point.delete)
 
     def read(self, address: int, length: int) -> bytes:
-        return bytes(gdb.selected_inferior().read_memory(address, length))
+        try:
+            return bytes(gdb.selected_inferior().read_memory(address, length))
+        except gdb.MemoryError as error:
+            raise TargetError(str(error)) from error
 
     def registers(self) -> Registers:
         frame = gdb.selected_frame()
         return {name: int(frame.read_register(name)) & 0xFFFFFFFF for name in self._register_names}
 
     def write(self, address: int, data: bytes) -> None:
-        gdb.selected_inferior().write_memory(address, data)
+        try:
+            gdb.selected_inferior().write_memory(address, data)
+        except gdb.MemoryError as error:
+            raise TargetError(str(error)) from error
 
     def dump(self, address: int, length: int, path: Path) -> None:
-        gdb.execute(f"monitor memsave {address:#x} {length:#x} {path.as_posix()}")
+        try:
+            gdb.execute(f"monitor memsave {address:#x} {length:#x} {path.as_posix()}")
+        except gdb.error as error:
+            raise TargetError(str(error)) from error
 
     def interrupt(self) -> None:
         self._interrupted = True
 
-    def run(self) -> None:
+    def run(self, timeout: float | None = None) -> bool:
         self._interrupted = False
-        gdb.execute("continue")
+        expired = threading.Event()
+        timer = threading.Timer(timeout, lambda: self._expire(expired)) if timeout is not None else None
+        if timer:
+            timer.start()
+        try:
+            gdb.execute("continue")
+        finally:
+            if timer:
+                timer.cancel()
+        return expired.is_set()
+
+    @staticmethod
+    def _expire(expired: threading.Event) -> None:
+        expired.set()
+        gdb.post_event(lambda: gdb.execute("interrupt"))
 
     def reset(self) -> None:
         gdb.execute("monitor system_reset")

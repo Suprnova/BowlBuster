@@ -4,7 +4,7 @@
   "disc": {
     "platform": "xbox"
   },
-  "profile": "3b29da8c02c3f8da794bd9f81801c67a74ae59c4f78615201c9a414810e4318c",
+  "profile": "1562129c3bc71e34abef4e49bb8bad7ca708f4370d77e8ed6842d8743bdc4bc7",
   "counter_basis": {
     "boot_scene": "MNUS",
     "boot_counter": 1
@@ -69,6 +69,8 @@
   ],
   "captures_dropped": [],
   "write_ledger": [],
+  "crash": null,
+  "hang": null,
   "complete": true,
   "interrupted": null
 }

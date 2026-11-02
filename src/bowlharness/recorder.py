@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from bowlharness.detection import bugcheck_addresses, crash_record, stack_words
 from bowlharness.observe import bowl_statics, heap0_state, loading_layer, tag, u32, worn_archives
 from bowlharness.profiles.profile import PlatformProfile, Point
 from bowlharness.recording import EventWriter, RunManifest
@@ -141,6 +142,9 @@ class Recorder:
         self._counter: int | None = None
         self._scene: str | None = None
         self._capture_ids: Counter[str] = Counter()
+        self._last_event: dict[str, object] | None = None
+        self._ending: str | None = None
+        self.loading = False
 
     def start(self, reason: str) -> None:
         """Opens the first segment and arms the points that follow the game's loads."""
@@ -153,6 +157,7 @@ class Recorder:
         points = self._profile.points
         self._arm(points.scene_init, self._scene_init)
         self._arm(points.scene_exit, self._scene_exit)
+        self._arm_crash_detection()
         self._arm(points.entity, self._entity)
         self._arm(points.players_done, self._players_done)
         self._arm(points.scene_id, self._scene_id, at_return=True)
@@ -169,6 +174,8 @@ class Recorder:
     def capture(self, trigger: str, label: str | None = None) -> str | None:
         """Captures the stopped guest, unless the budget is spent or the capture fails.
 
+        The budget doesn't apply to the capture of a crash or a hang.
+
         A capture a person asks for (``manual``) marks the run attended. Every capture is logged as an event and
         listed in the manifest; one the budget refuses is listed there as dropped.
 
@@ -178,10 +185,15 @@ class Recorder:
         if trigger == "manual":
             self._manifest.attended = True
         budget = self._options.capture_budget
-        if budget is not None and len(self._manifest.captures) >= budget:
+        if budget is not None and len(self._manifest.captures) >= budget and trigger not in ("crash", "hang"):
             self._manifest.captures_dropped.append({"trigger": trigger, "label": label, "scene": self._scene})
             return None
-        counter = u32(self._target.read, self._profile.globals.scene_counter)
+        try:
+            counter = u32(self._target.read, self._profile.globals.scene_counter)
+        except TargetError as error:
+            self._manifest.events_dropped += 1
+            log.warning("dropped a %s capture: %s", trigger, error)
+            return None
         base = f"{self._events.segment}-{counter}-{trigger}"
         self._capture_ids[base] += 1
         capture_id = base if self._capture_ids[base] == 1 else f"{base}-{self._capture_ids[base]}"
@@ -221,9 +233,68 @@ class Recorder:
 
         return stop
 
+    @property
+    def ended(self) -> bool:
+        """Whether a crash or a hang has ended the recording."""
+        return self._ending is not None
+
+    @property
+    def event_count(self) -> int:
+        """How many events have been logged."""
+        return self._events.count
+
+    def frame(self) -> int:
+        """The guest's frame."""
+        return u32(self._target.read, self._profile.globals.frame)
+
     def _emit(self, event: str, **fields: object) -> int:
-        frame = u32(self._target.read, self._profile.globals.frame)
-        return self._events.emit(event, frame, **fields)
+        seq = self._events.emit(event, self.frame(), **fields)
+        self._last_event = {"seq": seq, "event": event}
+        return seq
+
+    def _arm_crash_detection(self) -> None:
+        """Breaks on the bugcheck functions, as soon as the kernel is loaded: at once, or when the title starts."""
+        try:
+            addresses = bugcheck_addresses(self._target.read, self._profile)
+        except TargetError, ValueError:
+            self._arm(self._profile.points.title_entry, self._title_started)
+            return
+        for kind, address in addresses.items():
+            point = Point(entry=(address,), args=1 if kind == "KeBugCheck" else 5)
+            self._arm(point, lambda hit, kind=kind: self._bugcheck(kind, hit))
+
+    def _title_started(self, hit: Hit) -> None:
+        self._arm_crash_detection()
+
+    def _bugcheck(self, kind: str, hit: Hit) -> None:
+        if self.ended:
+            return
+        self._ending = "crash"
+        words = hit.words
+        stack = stack_words(self._target.read, hit.registers["esp"], self._profile.crash.scan_words)
+        record = crash_record(kind, words, dict(hit.registers), stack, self._target.read, self._profile)
+        record |= {"scene": self._scene, "counter": self._counter, "capture": self.capture("crash")}
+        self._manifest.crash = record
+        try:
+            self._emit("crash", **record)
+        finally:
+            self._target.interrupt()
+
+    def hang(self, stalled: float, frame: int) -> None:
+        """Ends the recording as hung: the guest made no progress for ``stalled`` seconds."""
+        if self.ended:
+            return
+        self._ending = "hang"
+        record = {
+            "stalled": stalled,
+            "last_frame": frame,
+            "last_event": self._last_event,
+            "scene": self._scene,
+            "counter": self._counter,
+            "capture": self.capture("hang"),
+        }
+        self._manifest.hang = record
+        self._emit("hang", **record)
 
     def _scene_init(self, hit: Hit) -> None:
         scene = tag(hit.arg(0))
@@ -234,6 +305,7 @@ class Recorder:
             self._emit("counter_gap", counter=counter, expected=self._counter + 1)
         self._counter = counter
         self._scene = scene
+        self.loading = True
         seq = self._emit("scene_init", scene=scene, caller=hit.caller, counter=counter, heap=heap)
         self._manifest.loads.append(
             {
@@ -266,6 +338,7 @@ class Recorder:
         self._once[name] = self._arm(point, fire)[0]
 
     def _drawn(self, hit: Hit) -> None:
+        self.loading = False
         self._emit("drawn")
         if self._scene is not None and self._options.captures_cutoff(self._scene):
             self.capture("cutoff")

@@ -16,12 +16,14 @@ class Step:
         registers: The registers the guest presents there.
         memory: Bytes that take effect in guest memory on arriving, by address.
         written: The address the instruction writes, if any.
+        seconds: How long the guest runs before arriving.
     """
 
     pc: int
     registers: Registers = field(default_factory=dict)
     memory: Mapping[int, bytes] = field(default_factory=dict)
     written: int | None = None
+    seconds: float = 0.0
 
 
 @dataclass
@@ -39,10 +41,12 @@ class MockTarget:
 
     capabilities = frozenset(Capability) - {Capability.SAVED_STATES}
 
-    def __init__(self, script: Sequence[Step]) -> None:
+    def __init__(self, script: Sequence[Step], memory: Mapping[int, bytes] | None = None) -> None:
         self._script = script
         self._position = 0
         self._memory: dict[int, int] = {}
+        for address, data in (memory or {}).items():
+            self._store(address, data)
         self._registers: Registers = {}
         self._points: dict[Handle, _Point] = {}
         self._next_handle = 0
@@ -78,12 +82,17 @@ class MockTarget:
     def interrupt(self) -> None:
         self._interrupted = True
 
-    def run(self) -> None:
+    def run(self, timeout: float | None = None) -> bool:
         self._interrupted = False
+        elapsed = 0.0
         while not self._interrupted and self._position < len(self._script):
             step = self._script[self._position]
             self._position += 1
+            elapsed += step.seconds
             self._arrive(step)
+            if timeout is not None and elapsed >= timeout and not self._interrupted:
+                return True
+        return False
 
     def reset(self) -> None:
         self.resets += 1
