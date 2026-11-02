@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 from pathlib import Path
 
 from support import names, record, run, three_loads
@@ -361,18 +360,31 @@ def test_a_reset_logs_the_counter(tmp_path: Path) -> None:
 FIXTURE = Path(__file__).parents[1] / "BowlBuster.Tests" / "Recordings" / "Fixtures" / "synthetic"
 
 
+def pinned_profile(directory: Path) -> None:
+    """Replaces the profile's hash with a fixed one, so the fixture changes only with the recording's format."""
+    path = directory / "manifest.json"
+    manifest = json.loads(path.read_text())
+    manifest["profile"] = "synthetic"
+    path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def files_under(directory: Path) -> dict[Path, bytes]:
+    return {path.relative_to(directory): path.read_bytes() for path in sorted(directory.rglob("*")) if path.is_file()}
+
+
 def test_the_committed_fixture_is_what_the_recorder_writes(tmp_path: Path) -> None:
     record(three_loads(), tmp_path, Options(cutoff_captures=frozenset({"ORIG"})))
-    written = {path.relative_to(tmp_path): path.read_bytes() for path in sorted(tmp_path.rglob("*")) if path.is_file()}
+    pinned_profile(tmp_path)
+    written = files_under(tmp_path)
 
     if os.environ.get("BOWL_UPDATE_FIXTURE"):
-        shutil.rmtree(FIXTURE, ignore_errors=True)
+        for stale in files_under(FIXTURE).keys() - written.keys():
+            (FIXTURE / stale).unlink()
         for relative, content in written.items():
             (FIXTURE / relative).parent.mkdir(parents=True, exist_ok=True)
             (FIXTURE / relative).write_bytes(content)
 
-    committed = {path.relative_to(FIXTURE): path.read_bytes() for path in sorted(FIXTURE.rglob("*")) if path.is_file()}
-    assert written == committed
+    assert written == files_under(FIXTURE)
 
 
 def capture_dir(directory: Path, capture_id: str) -> Path:
