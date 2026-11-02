@@ -12,6 +12,8 @@ namespace BowlBuster.Catalog;
 /// </remarks>
 public sealed class Vocabulary
 {
+    private const string FileName = "vocabulary.yaml";
+
     private readonly Dictionary<string, LevelName> levels;
     private readonly Dictionary<string, CostumeName> costumes;
 
@@ -20,17 +22,51 @@ public sealed class Vocabulary
     /// </summary>
     /// <param name="levels">The levels with their names.</param>
     /// <param name="costumes">The costumes with their names.</param>
+    /// <param name="worlds">The pause menu's worlds with their task slots.</param>
     /// <exception cref="ArgumentException">
     /// A name is used by more than one level or by more than one costume, a scene is used by more than one level, or a
     /// level's name is another level's scene.
     /// </exception>
-    public Vocabulary(IEnumerable<LevelName> levels, IEnumerable<CostumeName> costumes)
+    public Vocabulary(IEnumerable<LevelName> levels, IEnumerable<CostumeName> costumes, IEnumerable<WorldName>? worlds = null)
     {
         ArgumentNullException.ThrowIfNull(levels);
         ArgumentNullException.ThrowIfNull(costumes);
 
-        this.levels = Index(levels, static level => [level.Scene, .. level.Name is null ? (string[])[] : [level.Name], .. level.Aliases]);
-        this.costumes = Index(costumes, static costume => [costume.Preferred, .. costume.Aliases]);
+        this.levels = Index("level", levels, static level => [level.Scene, .. level.Name is null ? (string[])[] : [level.Name], .. level.Aliases]);
+        this.costumes = Index("costume", costumes, static costume => [costume.Preferred, .. costume.Aliases]);
+        Worlds = [.. worlds ?? []];
+    }
+
+    /// <summary>
+    /// The pause menu's worlds with their task slots.
+    /// </summary>
+    public IReadOnlyList<WorldName> Worlds { get; }
+
+    /// <summary>
+    /// Reads a vocabulary from the text of <c>vocabulary.yaml</c>.
+    /// </summary>
+    /// <param name="reader">The YAML to read.</param>
+    /// <param name="source">What the YAML comes from, named by the exception when it has problems.</param>
+    /// <returns>The vocabulary.</returns>
+    /// <exception cref="CatalogException">The YAML is invalid or breaks the catalog's rules.</exception>
+    public static Vocabulary Read(TextReader reader, string source = FileName)
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        return VocabularyReader.Read(reader, source);
+    }
+
+    /// <summary>
+    /// Reads the vocabulary from <c>vocabulary.yaml</c> in a catalog.
+    /// </summary>
+    /// <param name="catalogDirectory">The catalog's directory.</param>
+    /// <returns>The vocabulary.</returns>
+    /// <exception cref="FileNotFoundException">The catalog has no <c>vocabulary.yaml</c>.</exception>
+    /// <exception cref="CatalogException">The file is invalid or breaks the catalog's rules.</exception>
+    public static Vocabulary Load(string catalogDirectory)
+    {
+        string path = Path.Combine(catalogDirectory, FileName);
+        using StreamReader reader = File.OpenText(path);
+        return Read(reader, path);
     }
 
     /// <summary>
@@ -103,9 +139,15 @@ public sealed class Vocabulary
         return new Costumes(Place(written[0], Character.Spongebob), Place(written[1], Character.Patrick));
     }
 
-    private static Dictionary<string, T> Index<T>(IEnumerable<T> entries, Func<T, string[]> names) => entries
-        .SelectMany(entry => names(entry).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => (Name: name, Entry: entry)))
-        .ToDictionary(static pair => pair.Name, static pair => pair.Entry, StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, T> Index<T>(string kind, IEnumerable<T> entries, Func<T, string[]> names)
+    {
+        List<(string Name, T Entry)> pairs = [.. entries.SelectMany(entry => names(entry).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => (Name: name, Entry: entry)))];
+        string[] duplicates = [.. pairs.GroupBy(static pair => pair.Name, StringComparer.OrdinalIgnoreCase).Where(static group => group.Count() > 1).Select(static group => $"'{group.Key}'")];
+
+        return duplicates.Length is 0
+            ? pairs.ToDictionary(static pair => pair.Name, static pair => pair.Entry, StringComparer.OrdinalIgnoreCase)
+            : throw new ArgumentException($"More than one {kind} is named {string.Join(", ", duplicates)}.");
+    }
 
     private string Place(string text, Character expected)
     {
