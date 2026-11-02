@@ -4,13 +4,19 @@ This is the only module that imports ``gdb``. gdb imports it with ``python impor
 registers the ``bowl`` command group; ``python -m bowlharness`` does that.
 """
 
+import subprocess
 import threading
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import gdb
 
+from bowlharness.commands import parse_record_arguments
+from bowlharness.profiles import XBOX_NTSC_U
+from bowlharness.session import ENDED, PAUSED, Session
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
+from bowlharness.xemu import default_config, describe, launch, load_config, preconditions, running_xemu
 
 
 class _Point(gdb.Breakpoint):
@@ -88,6 +94,8 @@ class GdbTarget:
             timer.start()
         try:
             gdb.execute("continue")
+        except gdb.error as error:
+            raise TargetError(str(error)) from error
         finally:
             if timer:
                 timer.cancel()
@@ -133,16 +141,104 @@ def _smoke(args: Sequence[str]) -> None:
     print(f"dumped: {path.stat().st_size} bytes")
 
 
-def _unavailable(name: str) -> Callable[[Sequence[str]], None]:
-    def command(_: Sequence[str]) -> None:
-        raise gdb.GdbError(f"bowl {name} is not available yet")
+_session: Session | None = None
+_session_out: Path | None = None
 
-    return command
+
+def _connect(port: int, process: subprocess.Popen[bytes] | None) -> None:
+    """Connects to the emulator's stub, retrying while a started emulator opens it."""
+    for _ in range(120):
+        if process is not None and process.poll() is not None:
+            raise gdb.GdbError(f"xemu exited with code {process.returncode}; see its log in the recording folder")
+        try:
+            gdb.execute(f"target remote :{port}", to_string=True)
+            return
+        except gdb.error:
+            time.sleep(0.5)
+    raise gdb.GdbError(f"could not connect to an emulator on port {port}")
+
+
+def _tell(state: str) -> None:
+    if state == PAUSED:
+        print("paused: bowl capture <label> | bowl read <address> <length> | bowl resume | bowl stop")
+    else:
+        print(f"ended: {_session.recordings if _session else 0} recording(s) in {_session_out}")
+
+
+def _record(args: Sequence[str]) -> None:
+    global _session, _session_out
+    if _session is not None and not _session.ended:
+        raise gdb.GdbError("a session is recording: bowl stop ends it")
+    try:
+        arguments = parse_record_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
+    except ValueError as error:
+        raise gdb.GdbError(str(error)) from error
+    if arguments.out.exists():
+        raise gdb.GdbError(f"{arguments.out} exists; give a folder that does not")
+    config = arguments.config or default_config()
+    process = None
+    if not arguments.attach and (failures := preconditions(load_config(config), running_xemu())):
+        raise gdb.GdbError("cannot record: " + "; ".join(failures))
+    environment = describe(arguments.xemu, config, gdb.VERSION)
+    if not arguments.attach:
+        assert arguments.xemu is not None
+        arguments.out.parent.mkdir(parents=True, exist_ok=True)
+        process = launch(arguments.xemu, config, arguments.port, arguments.out.parent / f"{arguments.name}-xemu.log")
+    _connect(arguments.port, process)
+    if process is not None:
+        gdb.execute("monitor system_reset", to_string=True)
+    _session_out = arguments.out
+    _session = Session(
+        GdbTarget(XBOX_NTSC_U.registers),
+        XBOX_NTSC_U,
+        arguments.out,
+        arguments.options,
+        run_stem=arguments.name,
+        environment=environment,
+        boot_path="attached" if arguments.attach else "boot",
+        liveness=arguments.liveness,
+        on_end=process.terminate if process else None,
+    )
+    print(f"recording to {arguments.out}; Ctrl-C pauses the guest")
+    _tell(_session.run())
+
+
+def _live() -> Session:
+    if _session is None or _session.ended:
+        raise gdb.GdbError("no session is recording: bowl record starts one")
+    return _session
+
+
+def _capture(args: Sequence[str]) -> None:
+    label = " ".join(args) or "manual"
+    print(f"capture: {_live().capture(label) or 'refused by the budget'}")
+
+
+def _read(args: Sequence[str]) -> None:
+    if len(args) != 2:
+        raise gdb.GdbError("usage: bowl read <address> <length>")
+    address, length = int(args[0], 0), int(args[1], 0)
+    data = _live().read(address, length)
+    for offset in range(0, len(data), 16):
+        print(f"{address + offset:08x}  {data[offset : offset + 16].hex(' ')}")
+
+
+def _resume(_: Sequence[str]) -> None:
+    _tell(_live().resume())
+
+
+def _stop(_: Sequence[str]) -> None:
+    _live().stop()
+    _tell(ENDED)
 
 
 _COMMANDS: dict[str, Callable[[Sequence[str]], None]] = {
     "smoke": _smoke,
-    **{name: _unavailable(name) for name in ("record", "capture", "read", "resume", "stop")},
+    "record": _record,
+    "capture": _capture,
+    "read": _read,
+    "resume": _resume,
+    "stop": _stop,
 }
 
 

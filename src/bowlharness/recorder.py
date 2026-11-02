@@ -116,9 +116,18 @@ class Recorder:
         directory: Where the recording's files go.
         run: The run's id.
         options: What to observe.
+        environment: What the session knows of the emulator and the host, for the manifest.
     """
 
-    def __init__(self, target: Target, profile: PlatformProfile, directory: Path, run: str, options: Options) -> None:
+    def __init__(
+        self,
+        target: Target,
+        profile: PlatformProfile,
+        directory: Path,
+        run: str,
+        options: Options,
+        environment: dict[str, object] | None = None,
+    ) -> None:
         directory.mkdir(parents=True, exist_ok=True)
         self._target = target
         self._profile = profile
@@ -133,9 +142,13 @@ class Recorder:
             boot_scene=profile.boot_scene,
             boot_counter=profile.boot_counter,
             observation=options.to_json(),
+            environment=environment or {},
         )
         self._duplicates = DuplicateFilter(frozenset(profile.points.frame.entry))
         self._heap_handles: list[Handle] = []
+        self._handles: set[Handle] = set()
+        self._loads_seen = 0
+        self.rebooted = False
         self._once: dict[str, Handle] = {}
         self._watched: dict[int, int] | None = None
         self._pops: list[int] = []
@@ -164,10 +177,16 @@ class Recorder:
         self._arm(points.reset, self._reset)
         self._manifest.write(self._manifest_path)
 
-    def finish(self, interrupted: str | None = None) -> None:
-        """Ends the recording: complete, or interrupted for the given reason."""
+    def finish(self, interrupted: str | None = None, ended: str | None = None) -> None:
+        """Ends the recording: complete, or interrupted for the given reason.
+
+        Args:
+            interrupted: Why the recording was cut short, if it was.
+            ended: Why a complete recording ended (``stopped``, ``reboot``); a crash or a hang says so itself.
+        """
         self._manifest.complete = interrupted is None
         self._manifest.interrupted = interrupted
+        self._manifest.ended = self._ending or ended
         self._manifest.write(self._manifest_path)
         self._events.close()
 
@@ -215,7 +234,19 @@ class Recorder:
     def _arm(self, point: Point, handler: Callable[[Hit], None], *, at_return: bool = False) -> list[Handle]:
         guarded = self._guard(point, handler, dedupe=True)
         addresses = point.returns if at_return or not point.entry else point.entry
-        return [self._target.set_breakpoint(address, guarded) for address in addresses]
+        handles = [self._target.set_breakpoint(address, guarded) for address in addresses]
+        self._handles.update(handles)
+        return handles
+
+    def _clear(self, handle: Handle) -> None:
+        if handle in self._handles:
+            self._handles.discard(handle)
+            self._target.clear(handle)
+
+    def detach(self) -> None:
+        """Stops observing: removes every breakpoint and watchpoint this recorder set."""
+        for handle in list(self._handles):
+            self._clear(handle)
 
     def _guard(self, point: Point, handler: Callable[[Hit], None], *, dedupe: bool) -> Callable[[Stop], None]:
         def stop(stop: Stop) -> None:
@@ -296,7 +327,22 @@ class Recorder:
         self._manifest.hang = record
         self._emit("hang", **record)
 
+    def note(self, event: str, **fields: object) -> None:
+        """Logs something a person did, which marks the run attended."""
+        self._manifest.attended = True
+        self._emit(event, **fields)
+
+    def replay_scene_init(self) -> None:
+        """Observes the scene init the guest is stopped at, for a recording that opens at a reboot."""
+        point = self._profile.points.scene_init
+        self._guard(point, self._scene_init, dedupe=False)(Stop(point.entry[0]))
+
     def _scene_init(self, hit: Hit) -> None:
+        if hit.caller == self._profile.boot_return and self._loads_seen > 0:
+            self.rebooted = True
+            self._target.interrupt()
+            return
+        self._loads_seen += 1
         scene = tag(hit.arg(0))
         counter = u32(self._target.read, self._profile.globals.scene_counter)
         heap = heap0_state(self._target.read, self._profile.heap)
@@ -332,7 +378,7 @@ class Recorder:
             return
 
         def fire(hit: Hit) -> None:
-            self._target.clear(self._once.pop(name))
+            self._clear(self._once.pop(name))
             handler(hit)
 
         self._once[name] = self._arm(point, fire)[0]
@@ -359,7 +405,7 @@ class Recorder:
         self._watched = {address: u32(self._target.read, address) for address in self._profile.globals.watched}
         for address in self._watched:
             guarded = self._guard(Point(args=self._profile.globals.watch_stack_words), self._watch, dedupe=False)
-            self._target.set_watchpoint(address, 4, guarded)
+            self._handles.add(self._target.set_watchpoint(address, 4, guarded))
 
     def _watch(self, hit: Hit) -> None:
         if self._watched is None or hit.address is None:
@@ -391,7 +437,7 @@ class Recorder:
             return
         if not wanted:
             for handle in self._heap_handles:
-                self._target.clear(handle)
+                self._clear(handle)
             self._heap_handles.clear()
             self._pops.clear()
             return

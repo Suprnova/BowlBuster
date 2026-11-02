@@ -13,3 +13,9 @@ def test_smoke_runs_in_batch_mode() -> None:
     command = gdb_command("gdb", ["smoke"])
 
     assert "-batch" in command
+
+
+def test_windows_paths_reach_gdb_with_forward_slashes() -> None:
+    command = gdb_command("gdb", ["record", "--out", r"C:\Users\me\out"])
+
+    assert command[-1] == 'bowl "record" "--out" "C:/Users/me/out"'

@@ -24,7 +24,7 @@ def find_gdb() -> str:
 def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:
     """The command line that starts ``gdb`` with the harness imported and ``bowl_args`` run as a ``bowl`` command."""
     path_setup = f"python import sys; sys.path.insert(0, {SOURCE_ROOT.as_posix()!r})"
-    quoted = " ".join(f'"{arg}"' for arg in bowl_args)
+    quoted = " ".join(f'"{arg.replace(chr(92), "/")}"' for arg in bowl_args)
     batch = ["-batch"] if bowl_args[:1] == ["smoke"] else []
     return [gdb, "-q", *batch, "-iex", path_setup, "-ex", "python import bowlharness.gdbhost", "-ex", f"bowl {quoted}"]
 

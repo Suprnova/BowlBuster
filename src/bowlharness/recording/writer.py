@@ -52,6 +52,8 @@ class RunManifest:
     captures: list[dict[str, Any]] = field(default_factory=list)
     captures_dropped: list[dict[str, Any]] = field(default_factory=list)
     attended: bool = False
+    ended: str | None = None
+    environment: dict[str, Any] = field(default_factory=dict)
     crash: dict[str, Any] | None = None
     hang: dict[str, Any] | None = None
     loads: list[dict[str, Any]] = field(default_factory=list)
@@ -65,7 +67,8 @@ class RunManifest:
         return {
             "schema_version": SCHEMA_VERSION,
             "run": self.run,
-            "disc": {"platform": self.platform},
+            **{key: value for key, value in self.environment.items() if key != "disc"},
+            "disc": {"platform": self.platform, **self.environment.get("disc", {})},
             "profile": self.profile,
             "counter_basis": {"boot_scene": self.boot_scene, "boot_counter": self.boot_counter},
             "passive": True,
@@ -81,6 +84,7 @@ class RunManifest:
             "crash": self.crash,
             "hang": self.hang,
             "complete": self.complete,
+            "ended": self.ended,
             "interrupted": self.interrupted,
         }
 

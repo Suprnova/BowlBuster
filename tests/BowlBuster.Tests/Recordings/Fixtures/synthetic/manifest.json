@@ -72,5 +72,6 @@
   "crash": null,
   "hang": null,
   "complete": true,
+  "ended": null,
   "interrupted": null
 }
