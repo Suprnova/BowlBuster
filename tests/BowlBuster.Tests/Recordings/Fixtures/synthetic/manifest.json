@@ -4,7 +4,7 @@
   "disc": {
     "platform": "xbox"
   },
-  "profile": "229c91f8a739f044f7729b0dd31cbdc317f2d3e34faac61e5b3446c8a7c5779c",
+  "profile": "a28bbdbdf15dec3480195de2aae632e080a4c3fc7aae34c30505d353cd34e737",
   "counter_basis": {
     "boot_scene": "MNUS",
     "boot_counter": 1
@@ -37,7 +37,7 @@
       "segment": 0,
       "counter": 3,
       "scene": "TARG",
-      "first_seq": 5,
+      "first_seq": 6,
       "costumes": {
         "spongebob": "PLSD",
         "patrick": null
@@ -47,7 +47,7 @@
       "segment": 0,
       "counter": 4,
       "scene": "TARG",
-      "first_seq": 10,
+      "first_seq": 11,
       "costumes": {
         "spongebob": null,
         "patrick": "PLPA"

@@ -26,6 +26,7 @@ def three_loads() -> ScriptedGame:
     game = ScriptedGame()
     game.scene_init("ORIG", 2, extras={1: 1, 4: 1}, last_block=(0x5C0100, 0x40))
     game.alloc(0, 0x40, 0x10, 0x5C0140)
+    game.layer_alloc(0x3000, 0x5C2000, "TARG", layers=4, index=1)
     game.drawn()
     game.scene_exit("ORIG", 2)
     game.scene_init("TARG", 3, depth=1, extras={2: 1}, cheats=0x2000000)
@@ -45,15 +46,16 @@ def test_three_loads_produce_the_expected_stream_and_manifest(tmp_path: Path) ->
         (0, "segment"),
         (1, "scene_init"),
         (2, "alloc"),
-        (3, "drawn"),
-        (4, "scene_exit"),
-        (5, "scene_init"),
-        (6, "push"),
-        (7, "model"),
-        (8, "drawn"),
-        (9, "scene_exit"),
-        (10, "scene_init"),
-        (11, "drawn"),
+        (3, "alloc"),
+        (4, "drawn"),
+        (5, "scene_exit"),
+        (6, "scene_init"),
+        (7, "push"),
+        (8, "model"),
+        (9, "drawn"),
+        (10, "scene_exit"),
+        (11, "scene_init"),
+        (12, "drawn"),
     ]
     assert events[1] == {
         "seq": 1,
@@ -80,7 +82,8 @@ def test_three_loads_produce_the_expected_stream_and_manifest(tmp_path: Path) ->
         "address": 0x5C0140,
         "caller": 0x1000,
     }
-    assert events[7]["nodes"] == 5
+    assert events[3]["layer"] == {"archive": "TARG", "layer": 1}
+    assert events[8]["nodes"] == 5
     assert manifest["loads"] == [
         {
             "segment": 0,
@@ -93,20 +96,54 @@ def test_three_loads_produce_the_expected_stream_and_manifest(tmp_path: Path) ->
             "segment": 0,
             "counter": 3,
             "scene": "TARG",
-            "first_seq": 5,
+            "first_seq": 6,
             "costumes": {"spongebob": "PLSD", "patrick": None},
         },
         {
             "segment": 0,
             "counter": 4,
             "scene": "TARG",
-            "first_seq": 10,
+            "first_seq": 11,
             "costumes": {"spongebob": None, "patrick": "PLPA"},
         },
     ]
     assert manifest["complete"] is True
     assert manifest["passive"] is True
     assert manifest["write_ledger"] == []
+
+
+def test_a_layer_block_names_its_archive_and_layer(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.layer_alloc(0x3000, 0x5C2000, "TARG", layers=4, index=2)
+
+    events, _, _ = record(game, tmp_path)
+
+    assert events[-1]["layer"] == {"archive": "TARG", "layer": 2}
+
+
+def test_an_asset_directory_block_has_no_layer(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.layer_alloc(0x600, 0x5C2000, "TARG", layers=4, index=2, directory=True)
+
+    events, _, _ = record(game, tmp_path)
+
+    assert "layer" not in events[-1]
+
+
+def test_a_layer_block_with_no_layer_loading_is_logged_without_one(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.layer_alloc(0x3000, 0x5C2000, "TARG", layers=4, index=2)
+    game.stop(
+        XBOX_NTSC_U.points.alloc.returns[-1],
+        (XBOX_NTSC_U.layers.site, 0, 8, 0x40, 0, 0, XBOX_NTSC_U.layers.layer_return),
+    )
+
+    events, manifest, _ = record(game, tmp_path)
+
+    assert (manifest["events_dropped"], names(events)[-2:]) == (0, ["alloc", "alloc"])
 
 
 def test_pop_reports_the_heap_it_entered_with_and_the_depth_it_returned(tmp_path: Path) -> None:

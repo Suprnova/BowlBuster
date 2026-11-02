@@ -108,6 +108,40 @@ class Costumes:
 
 
 @dataclass(frozen=True)
+class Layers:
+    """How the archive layer being loaded is found when a layer's block is allocated.
+
+    The allocation of a layer's block returns to ``site``, as does an archive's asset directory. The layer's block is
+    told apart by the function that asked for it: the word ``caller_arg`` of the allocation's stack, which holds that
+    function's return address, is ``layer_return`` for a layer. The loader keeps the archive and the layer it is
+    loading in two globals. An archive record names its file and holds the array of its layers.
+
+    Attributes:
+        site: The return address of the allocation shared by layers and asset directories.
+        caller_arg: The argument word of the allocation's stack that holds its caller's return address.
+        layer_return: That return address when a layer asked for the block.
+        archive: The global that points at the archive record being loaded.
+        layer: The global that points at the layer being loaded.
+        name_offset: Where an archive record holds its file name, a null-terminated string.
+        name_size: The most bytes a file name takes.
+        extension: The extension of an archive's file name.
+        layers_offset: Where an archive record holds the pointer to its array of layer pointers.
+        count_offset: Where an archive record holds the number of layers.
+    """
+
+    site: int
+    caller_arg: int
+    layer_return: int
+    archive: int
+    layer: int
+    name_offset: int
+    name_size: int
+    extension: str
+    layers_offset: int
+    count_offset: int
+
+
+@dataclass(frozen=True)
 class Globals:
     """The guest globals the recorder reads.
 
@@ -164,6 +198,7 @@ class PlatformProfile:
     heap: Heap
     model: Model
     costumes: Costumes
+    layers: Layers
     globals: Globals
 
     @property

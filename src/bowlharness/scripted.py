@@ -8,6 +8,9 @@ from bowlharness.profiles import XBOX_NTSC_U, PlatformProfile
 STACK = 0x1000
 BLOCK_HEADER = 0x2000
 INSTANCE = 0x3000
+ARCHIVE = 0x4000
+ARRAY = 0x4400
+LAYER_OBJECTS = 0x4800
 
 ARCHIVES = [(b"PLSB", 0, 0), (b"PLSD", 0, 0), (b"PLPB", 1, 0), (b"PLP1", 1, 0)]
 CHEAT_ARCHIVES = [(b"PLSA", 0, 0x2000000), (b"PLSC", 0, 0x4000000), (b"PLPA", 1, 0x10000000), (b"PLPC", 1, 0x8000000)]
@@ -52,7 +55,28 @@ class ScriptedGame:
         self._step(self._profile.points.scene_exit.entry[0], (0x6EAF0,), memory=memory)
 
     def alloc(self, heap: int, size: int, alignment: int, address: int, caller: int = 0x1000) -> None:
-        self._step(self._profile.points.alloc.returns[-1], (caller, heap, size, alignment, 0), eax=address)
+        self._step(self._profile.points.alloc.returns[-1], (caller, heap, size, alignment, 0, 0, 0), eax=address)
+
+    def layer_alloc(
+        self, size: int, address: int, archive: str, layers: int, index: int, *, directory: bool = False
+    ) -> None:
+        """A block allocated for the layer at ``index`` of ``archive``, or for the archive's asset directory."""
+        profile = self._profile.layers
+        record = bytearray(profile.count_offset + 4)
+        name = f"{archive}{profile.extension}".encode("ascii")
+        record[profile.name_offset : profile.name_offset + len(name)] = name
+        struct.pack_into("<I", record, profile.layers_offset, ARRAY)
+        struct.pack_into("<I", record, profile.count_offset, layers)
+        pointers = [LAYER_OBJECTS + 0x80 * layer for layer in range(layers)]
+        memory = {
+            ARCHIVE: bytes(record),
+            ARRAY: struct.pack(f"<{layers}I", *pointers),
+            profile.archive: struct.pack("<I", ARCHIVE),
+            profile.layer: struct.pack("<I", pointers[index]),
+        }
+        asked_by = 0x197916 if directory else profile.layer_return
+        words = (profile.site, 0, size, 0x40, 0, 0, asked_by)
+        self._step(self._profile.points.alloc.returns[-1], words, eax=address, memory=memory)
 
     def grow(self, heap: int, size: int) -> None:
         self._step(self._profile.points.grow.entry[0], (0x1100, heap, size))

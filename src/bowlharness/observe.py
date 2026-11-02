@@ -4,7 +4,7 @@ import struct
 from collections.abc import Callable
 from typing import Any
 
-from bowlharness.profiles.profile import Costumes, Heap
+from bowlharness.profiles.profile import Costumes, Heap, Layers
 
 type Read = Callable[[int, int], bytes]
 
@@ -68,3 +68,17 @@ def _extra_state(extras: bytes, costumes: Costumes, extra_id: int) -> int:
         if extras[offset] == costumes.extra_kind and extras[offset + 1] == extra_id:
             return extras[offset + costumes.extra_state_offset]
     return 0
+
+
+def loading_layer(read: Read, layers: Layers) -> dict[str, Any]:
+    """The archive and layer the loader is loading: the archive's file name without its extension, and the layer's
+    position in the archive's layer array. Raises ``ValueError`` when the loader holds no such layer."""
+    archive = u32(read, layers.archive)
+    layer = u32(read, layers.layer)
+    if not (archive and layer):
+        raise ValueError("the loader holds no layer")
+    name = read(archive + layers.name_offset, layers.name_size).split(b"\0")[0].decode("ascii")
+    count = u32(read, archive + layers.count_offset)
+    array = u32(read, archive + layers.layers_offset)
+    pointers = struct.unpack(f"<{count}I", read(array, 4 * count))
+    return {"archive": name.removesuffix(layers.extension), "layer": pointers.index(layer)}

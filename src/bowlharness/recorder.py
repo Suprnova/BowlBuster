@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from bowlharness.observe import heap0_state, tag, u32, worn_archives
+from bowlharness.observe import heap0_state, loading_layer, tag, u32, worn_archives
 from bowlharness.profiles.profile import PlatformProfile, Point
 from bowlharness.recording import EventWriter, RunManifest
 from bowlharness.target import Handle, Registers, Stop, Target, TargetError
@@ -204,8 +204,21 @@ class Recorder:
         self._heap_handles += self._arm(points.pop, self._pop_return, at_return=True)
 
     def _alloc(self, hit: Hit) -> None:
+        layers = self._profile.layers
+        fields: dict[str, object] = {}
+        if hit.caller == layers.site and hit.arg(layers.caller_arg) == layers.layer_return:
+            try:
+                fields["layer"] = loading_layer(self._target.read, layers)
+            except (TargetError, ValueError) as error:
+                log.warning("an archive layer's block has no known layer: %s", error)
         self._emit(
-            "alloc", heap=hit.arg(0), size=hit.arg(1), alignment=hit.arg(2), address=hit.result, caller=hit.caller
+            "alloc",
+            heap=hit.arg(0),
+            size=hit.arg(1),
+            alignment=hit.arg(2),
+            address=hit.result,
+            caller=hit.caller,
+            **fields,
         )
 
     def _grow(self, hit: Hit) -> None:
