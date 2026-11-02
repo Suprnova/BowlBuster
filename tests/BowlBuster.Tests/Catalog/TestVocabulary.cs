@@ -1,6 +1,6 @@
-using BowlBuster.Chains.Vocabulary;
+using BowlBuster.Catalog;
 
-namespace BowlBuster.Tests.Chains.Vocabulary;
+namespace BowlBuster.Tests.Catalog;
 
 /// <summary>
 /// The names the tests write chains in. The library holds no game names: they come from the catalog.
@@ -19,9 +19,9 @@ internal static class TestVocabulary
         new("Goofy Goober", Character.Patrick, "GGP"),
     ];
 
-    public static ChainVocabulary CostumesOnly { get; } = new([], Costumes);
+    public static Vocabulary CostumesOnly { get; } = new([], Costumes);
 
-    public static ChainVocabulary WithLevels { get; } = new(
+    public static Vocabulary WithLevels { get; } = new(
         [
             new("Rock Slide", "TR01"),
             new("Mindy Skip", "PT02", "mindy"),

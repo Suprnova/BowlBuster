@@ -1,6 +1,6 @@
 using BowlBuster.Chains;
 using BowlBuster.Loads;
-using BowlBuster.Tests.Chains.Vocabulary;
+using BowlBuster.Tests.Catalog;
 
 namespace BowlBuster.Tests.Chains.Parsing;
 

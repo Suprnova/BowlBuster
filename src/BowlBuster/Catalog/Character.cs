@@ -1,4 +1,4 @@
-namespace BowlBuster.Chains.Vocabulary;
+namespace BowlBuster.Catalog;
 
 /// <summary>
 /// One of the two playable characters a level loads. The player can usually switch between them in play.

@@ -1,16 +1,16 @@
+using BowlBuster.Catalog;
 using BowlBuster.Chains;
-using BowlBuster.Chains.Vocabulary;
 
-namespace BowlBuster.Tests.Chains.Vocabulary;
+namespace BowlBuster.Tests.Catalog;
 
-public class ChainVocabularyTests
+public class VocabularyTests
 {
-    private readonly ChainVocabulary vocabulary = new(
+    private readonly Vocabulary vocabulary = new(
         [
             new LevelName("Rock Slide", "TR01"),
             new LevelName("Mindy Skip", "PT02", "mindy"),
         ],
-        ChainVocabulary.KnownCostumes);
+        Vocabulary.KnownCostumes);
 
     [Theory]
     [InlineData("Rock Slide", "Rock Slide")]
@@ -102,15 +102,15 @@ public class ChainVocabularyTests
 
     [Fact]
     public void Constructor_AliasUsedByTwoLevels_Throws() =>
-        Assert.Throws<ArgumentException>(static () => new ChainVocabulary([new LevelName("A", "X"), new LevelName("B", "x")], []));
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("A", "X"), new LevelName("B", "x")], []));
 
     [Fact]
     public void Constructor_AliasEqualToAnotherLevelsPreferredName_Throws() =>
-        Assert.Throws<ArgumentException>(static () => new ChainVocabulary([new LevelName("A"), new LevelName("B", "a")], []));
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("A"), new LevelName("B", "a")], []));
 
     [Fact]
     public void Constructor_AbbreviationUsedByTwoCostumes_Throws() =>
-        Assert.Throws<ArgumentException>(static () => new ChainVocabulary([], [new CostumeName("A", Character.Spongebob, "X"), new CostumeName("B", Character.Patrick, "x")]));
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([], [new CostumeName("A", Character.Spongebob, "X"), new CostumeName("B", Character.Patrick, "x")]));
 
     [Fact]
     public void Constructor_BlankName_Throws()

@@ -1,4 +1,6 @@
-namespace BowlBuster.Chains.Vocabulary;
+using BowlBuster.Chains;
+
+namespace BowlBuster.Catalog;
 
 /// <summary>
 /// The names a chain may be written in, and the preferred name each resolves to. Every name is accepted without regard
@@ -8,7 +10,7 @@ namespace BowlBuster.Chains.Vocabulary;
 /// A name with no entry is kept as written. A level then prints as it was written, and a costume can only be placed by
 /// its position when both costumes are written.
 /// </remarks>
-public sealed class ChainVocabulary
+public sealed class Vocabulary
 {
     private readonly Dictionary<string, LevelName> levels;
     private readonly Dictionary<string, CostumeName> costumes;
@@ -19,7 +21,7 @@ public sealed class ChainVocabulary
     /// <param name="levels">The levels with their names.</param>
     /// <param name="costumes">The costumes with their names.</param>
     /// <exception cref="ArgumentException">A name is used by more than one level, or by more than one costume.</exception>
-    public ChainVocabulary(IEnumerable<LevelName> levels, IEnumerable<CostumeName> costumes)
+    public Vocabulary(IEnumerable<LevelName> levels, IEnumerable<CostumeName> costumes)
     {
         ArgumentNullException.ThrowIfNull(levels);
         ArgumentNullException.ThrowIfNull(costumes);
@@ -46,7 +48,7 @@ public sealed class ChainVocabulary
     /// <summary>
     /// The known costumes and no levels, until the labels file supplies them.
     /// </summary>
-    public static ChainVocabulary Default { get; } = new([], KnownCostumes);
+    public static Vocabulary Default { get; } = new([], KnownCostumes);
 
     /// <summary>
     /// Resolves a level to its preferred name.

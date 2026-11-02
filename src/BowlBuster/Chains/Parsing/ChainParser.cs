@@ -1,4 +1,4 @@
-using BowlBuster.Chains.Vocabulary;
+using BowlBuster.Catalog;
 using BowlBuster.Loads;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -13,7 +13,7 @@ internal static partial class ChainParser
 {
     private const string GenericFiller = "non-SB";
 
-    public static Chain Parse(string text, ChainVocabulary vocabulary)
+    public static Chain Parse(string text, Vocabulary vocabulary)
     {
         PhaseSet? targetPhases = null;
         if (TargetPhases().Match(text) is { Success: true } phases)
@@ -64,7 +64,7 @@ internal static partial class ChainParser
         }
     }
 
-    private static LevelStep ReadLevel(string step, string role, ChainVocabulary vocabulary)
+    private static LevelStep ReadLevel(string step, string role, Vocabulary vocabulary)
     {
         Match match = Step().Match(step);
         if (!match.Success) throw new FormatException($"The {role} '{step}' isn't a level with optional costumes.");
@@ -77,7 +77,7 @@ internal static partial class ChainParser
         return new LevelStep(vocabulary.ResolveLevel(name), costumes);
     }
 
-    private static FillerStep ReadFiller(string step, ChainVocabulary vocabulary)
+    private static FillerStep ReadFiller(string step, Vocabulary vocabulary)
     {
         Match match = Step().Match(step);
         if (!match.Success) throw new FormatException($"The filler '{step}' isn't a level or {GenericFiller} with an optional count.");
@@ -88,7 +88,7 @@ internal static partial class ChainParser
         return new FillerStep(name.Equals(GenericFiller, StringComparison.OrdinalIgnoreCase) ? null : vocabulary.ResolveLevel(name), count);
     }
 
-    private static Costumes ReadCostumes(string text, string step, ChainVocabulary vocabulary)
+    private static Costumes ReadCostumes(string text, string step, Vocabulary vocabulary)
     {
         string[] written = text.Split(',', StringSplitOptions.TrimEntries);
         if (written.Length > 2 || written.Any(string.IsNullOrEmpty))

@@ -1,5 +1,5 @@
+using BowlBuster.Catalog;
 using BowlBuster.Chains.Parsing;
-using BowlBuster.Chains.Vocabulary;
 using BowlBuster.Loads;
 using System.Diagnostics.CodeAnalysis;
 
@@ -107,10 +107,10 @@ public sealed class Chain
     /// The text is not a chain: a step is missing or empty, a count is below 1, a burn is named or misplaced, a filler
     /// has costumes, the origin or target is repeated, or the costumes are unknown or in the wrong order.
     /// </exception>
-    public static Chain Parse(string text, ChainVocabulary? vocabulary = null)
+    public static Chain Parse(string text, Vocabulary? vocabulary = null)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return ChainParser.Parse(text, vocabulary ?? ChainVocabulary.Default);
+        return ChainParser.Parse(text, vocabulary ?? Vocabulary.Default);
     }
 
     /// <summary>
@@ -120,7 +120,7 @@ public sealed class Chain
     /// <param name="vocabulary">The names to accept, or <see langword="null"/> to keep every name as written.</param>
     /// <param name="chain">The chain, when reading succeeds.</param>
     /// <returns><see langword="true"/> when <paramref name="text"/> is a chain.</returns>
-    public static bool TryParse(string? text, ChainVocabulary? vocabulary, [NotNullWhen(true)] out Chain? chain)
+    public static bool TryParse(string? text, Vocabulary? vocabulary, [NotNullWhen(true)] out Chain? chain)
     {
         chain = null;
         if (text is null) return false;

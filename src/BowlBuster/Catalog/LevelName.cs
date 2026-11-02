@@ -1,25 +1,22 @@
-namespace BowlBuster.Chains.Vocabulary;
+namespace BowlBuster.Catalog;
 
 /// <summary>
-/// A costume's preferred name, the character who wears it and the other names it is accepted under, such as an
-/// abbreviation.
+/// A level's preferred name and the other names it is accepted under, such as its scene tag.
 /// </summary>
-public sealed class CostumeName
+public sealed class LevelName
 {
     /// <summary>
-    /// Creates a costume name.
+    /// Creates a level name.
     /// </summary>
     /// <param name="preferred">The name BowlBuster prints, which is also accepted.</param>
-    /// <param name="character">The character who wears the costume.</param>
-    /// <param name="aliases">The other names accepted for the costume.</param>
+    /// <param name="aliases">The other names accepted for the level.</param>
     /// <exception cref="ArgumentException">A name is blank.</exception>
-    public CostumeName(string preferred, Character character, params ReadOnlySpan<string> aliases)
+    public LevelName(string preferred, params ReadOnlySpan<string> aliases)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(preferred);
         foreach (string alias in aliases) ArgumentException.ThrowIfNullOrWhiteSpace(alias);
 
         Preferred = preferred.Trim();
-        Character = character;
         Aliases = [.. aliases.ToArray().Select(static alias => alias.Trim())];
     }
 
@@ -29,12 +26,7 @@ public sealed class CostumeName
     public string Preferred { get; }
 
     /// <summary>
-    /// The character who wears the costume.
-    /// </summary>
-    public Character Character { get; }
-
-    /// <summary>
-    /// The other names accepted for the costume.
+    /// The other names accepted for the level.
     /// </summary>
     public IReadOnlyList<string> Aliases { get; }
 }
