@@ -29,6 +29,30 @@ jobs:
       - name: Format
         run: dotnet format --verify-no-changes --no-restore
 
+  harness:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Sync
+        run: uv sync
+
+      - name: Lint
+        run: uv run ruff check
+
+      - name: Format
+        run: uv run ruff format --check
+
+      - name: Test
+        run: uv run pytest
+
   reuse:
     runs-on: ubuntu-latest
 

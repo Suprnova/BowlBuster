@@ -16,6 +16,15 @@ artifacts/
 *.rsuser
 *.userprefs
 
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Harness recordings
+recordings/
+
 # Tests and coverage
 TestResults/
 [Cc]overage*/

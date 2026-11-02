@@ -20,6 +20,13 @@ dotnet test
 dotnet run --project src/BowlBuster.Cli
 ```
 
+The Python harness in [src/bowlharness/](src/bowlharness/) needs [uv](https://docs.astral.sh/uv/), which fetches Python 3.14.
+
+```
+uv sync
+uv run pytest
+```
+
 ## License
 
 BowlBuster's code is licensed under the [MIT License](LICENSE). The rule catalog in [catalog/](catalog/) is licensed under [CC0 1.0](LICENSES/CC0-1.0.txt).

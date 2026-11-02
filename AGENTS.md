@@ -9,6 +9,8 @@ BowlBuster studies Bowl Storage, a memory-corruption glitch in *The SpongeBob Sq
 | `src/BowlBuster/` | The library. Domain code goes here. |
 | `src/BowlBuster.Cli/` | The console application. |
 | `tests/BowlBuster.Tests/` | xUnit v3 tests. |
+| `src/bowlharness/` | The Python harness that records emulator runs. |
+| `tests/bowlharness/` | pytest tests for the harness. |
 | `catalog/` | The rule catalog: YAML files, licensed CC0. |
 
 Run these from the repository root:
@@ -17,9 +19,14 @@ Run these from the repository root:
 dotnet build
 dotnet test
 dotnet format
+
+uv sync
+uv run pytest
+uv run ruff check
+uv run ruff format --check
 ```
 
-Warnings are errors, and `dotnet format --verify-no-changes` must pass.
+Warnings are errors, and `dotnet format --verify-no-changes`, `ruff check` and `ruff format --check` must pass.
 
 ## C#
 
