@@ -34,7 +34,8 @@ internal static partial class VocabularyReader
         List<CostumeName> costumes = [.. (document.Costumes ?? []).Select(pair => ReadCostume(pair.Key, pair.Value, problems)).OfType<CostumeName>()];
         List<WorldName> worlds = [.. (document.Worlds ?? []).OrderBy(static pair => pair.Key).Select(pair => ReadWorld(pair.Key, pair.Value, problems)).OfType<WorldName>()];
         ReportDuplicates("worlds", worlds.Select(static world => world.Name), problems);
-        ReportDuplicates("task slots", worlds.SelectMany(static world => world.Tasks).Select(static task => task.Name), problems);
+        foreach (WorldName world in worlds)
+            ReportDuplicates($"task slots of world {world.Number}", world.Tasks.Select(static task => task.Name), problems);
 
         Vocabulary? vocabulary = null;
         try

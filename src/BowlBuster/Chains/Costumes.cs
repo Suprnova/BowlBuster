@@ -42,7 +42,7 @@ public sealed record Costumes
     public bool IsEmpty => Spongebob is null && Patrick is null;
 
     /// <summary>
-    /// Prints the costumes with SpongeBob's first, as "Mermaid Man" or "Mermaid Man, Disco Patrick".
+    /// Prints the costumes with SpongeBob's first, as "Plain Sponge" or "Plain Sponge, Plain Patrick".
     /// </summary>
     /// <returns>The costumes, comma-separated, or an empty string for <see cref="None"/>.</returns>
     public override string ToString() => string.Join(", ", new[] { Spongebob, Patrick }.OfType<string>());

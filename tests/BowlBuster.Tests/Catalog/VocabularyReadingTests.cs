@@ -23,7 +23,7 @@ public class VocabularyReadingTests
             name: Weenie
             game: No Weenie Parking Anytime
             tasks:
-              2: { name: Weenie Time, game: Time Challenge }
+              2: { name: Time, game: Time Challenge }
               1: { game: "Now, How Do We Get Out Of Here ?" }
         """;
 
@@ -38,7 +38,7 @@ public class VocabularyReadingTests
 
         Assert.Equal([7, 11], vocabulary.Worlds.Select(static world => world.Number));
         Assert.Equal(
-            [new TaskName(7, 1, null, "Now, How Do We Get Out Of Here ?"), new TaskName(7, 2, "Weenie Time", "Time Challenge")],
+            [new TaskName(7, 1, null, "Now, How Do We Get Out Of Here ?"), new TaskName(7, 2, "Time", "Time Challenge")],
             vocabulary.Worlds[0].Tasks);
         Assert.Equal(("SCDA", "Shell City, Dead Ahead"), (vocabulary.Worlds[1].Name, vocabulary.Worlds[1].GameName));
         Assert.Empty(vocabulary.Worlds[1].Tasks);
@@ -56,13 +56,28 @@ public class VocabularyReadingTests
     }
 
     [Fact]
-    public void Label_NameOrElseGameName()
+    public void LabelOf_NamedTask_FollowsTheWorldsLabel()
     {
-        Vocabulary vocabulary = Read(Full);
+        WorldName world = Read(Full).Worlds[0];
 
-        Assert.Equal("Weenie Time", vocabulary.Worlds[0].Tasks[1].Label);
-        Assert.Equal("Now, How Do We Get Out Of Here ?", vocabulary.Worlds[0].Tasks[0].Label);
-        Assert.Equal("Weenie", vocabulary.Worlds[0].Label);
+        Assert.Equal("Weenie", world.Label);
+        Assert.Equal("Weenie Time", world.LabelOf(world.Tasks[1]));
+    }
+
+    [Fact]
+    public void LabelOf_TaskWithTheWorldsName_IsNotPrefixed()
+    {
+        WorldName world = Read("worlds:\n  8: { name: Frogfish, tasks: { 1: { name: frogfish } } }").Worlds[0];
+
+        Assert.Equal("frogfish", world.LabelOf(world.Tasks[0]));
+    }
+
+    [Fact]
+    public void LabelOf_TaskWithoutAName_IsItsGameName()
+    {
+        WorldName world = Read(Full).Worlds[0];
+
+        Assert.Equal("Now, How Do We Get Out Of Here ?", world.LabelOf(world.Tasks[0]));
     }
 
     [Theory]
@@ -95,7 +110,7 @@ public class VocabularyReadingTests
     [InlineData("worlds:\n  -1: { name: Weenie }", "number")]
     [InlineData("worlds:\n  7: {}", "needs a name or a game text")]
     [InlineData("worlds:\n  7: { name: ' ' }", "blank")]
-    [InlineData("worlds:\n  7: { name: Weenie, tasks: { 0: { name: Weenie Time } } }", "number")]
+    [InlineData("worlds:\n  7: { name: Weenie, tasks: { 0: { name: Time } } }", "number")]
     [InlineData("worlds:\n  7: { name: Weenie, tasks: { 1: {} } }", "needs a name or a game text")]
     [InlineData("worlds:\n  7: { name: Weenie, tasks: { 1: { game: ' ' } } }", "blank")]
     [InlineData("costumes:\n  Mermaid Man: { character: squidward }", "spongebob or patrick")]
@@ -115,14 +130,14 @@ public class VocabularyReadingTests
     [InlineData("levels:\n  BL03: { name: SCDA Spongeball }\n  TT02: { name: SCDA SpongeBall }")]
     [InlineData("costumes:\n  Mermaid Man: { character: spongebob, aliases: [MM] }\n  Mighty Mouse: { character: spongebob, aliases: [mm] }")]
     [InlineData("worlds:\n  7: { name: Weenie }\n  8: { name: weenie }")]
-    [InlineData("worlds:\n  7: { name: Weenie, tasks: { 2: { name: Time } } }\n  8: { name: Frogfish, tasks: { 2: { name: time } } }")]
+    [InlineData("worlds:\n  7: { name: Weenie, tasks: { 1: { name: Time }, 2: { name: time } } }")]
     public void Read_DuplicateNames_Throws(string yaml) => ReadFailing(yaml);
 
     [Fact]
-    public void Read_RepeatedInGameTexts_IsAllowed() => Read("""
+    public void Read_RepeatedTaskNamesAndInGameTextsInDifferentWorlds_IsAllowed() => Read("""
         worlds:
-          7: { name: Weenie, tasks: { 2: { name: Weenie Time, game: Time Challenge } } }
-          8: { name: Frogfish, tasks: { 2: { name: Frogfish Time, game: Time Challenge } } }
+          7: { name: Weenie, tasks: { 2: { name: Time, game: Time Challenge } } }
+          8: { name: Frogfish, tasks: { 2: { name: Time, game: Time Challenge } } }
         """);
 
     [Theory]

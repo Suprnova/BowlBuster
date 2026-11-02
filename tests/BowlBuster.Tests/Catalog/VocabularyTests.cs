@@ -12,7 +12,7 @@ public class VocabularyTests
             new LevelName("BL03", "SCDA Spongeball", "SCDA SB"),
             new LevelName("MNUC"),
         ],
-        Vocabulary.KnownCostumes);
+        TestVocabulary.Costumes);
 
     [Theory]
     [InlineData("Rock Slide", "Rock Slide")]

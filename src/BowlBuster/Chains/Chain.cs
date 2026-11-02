@@ -96,12 +96,12 @@ public sealed class Chain
         : new PhaseSet([.. (TargetPhases ?? PhaseSet.All).Phases.Select(phase => Earlier(phase, K))]);
 
     /// <summary>
-    /// Reads a chain as runners write it, such as <c>[load] > burn x2 > BL03 (Mermaid Man) > B101 x18 > TR01</c> or the shape
+    /// Reads a chain as runners write it, such as <c>[load] > burn x2 > BL03 (Plain Sponge) > B101 x18 > TR01</c> or the shape
     /// <c>BL03 > non-SB x18 > TR01 [target: 3rd or 4th]</c>. Keywords are case-insensitive, and every name in the
     /// vocabulary is replaced by its preferred form.
     /// </summary>
     /// <param name="text">The chain.</param>
-    /// <param name="vocabulary">The names to accept, or <see langword="null"/> to use the default.</param>
+    /// <param name="vocabulary">The names to accept, or <see langword="null"/> to keep every name as written.</param>
     /// <returns>The chain.</returns>
     /// <exception cref="FormatException">
     /// The text is not a chain: a step is missing or empty, a count is below 1, a burn is named or misplaced, a filler
@@ -110,7 +110,7 @@ public sealed class Chain
     public static Chain Parse(string text, Vocabulary? vocabulary = null)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return ChainParser.Parse(text, vocabulary ?? Vocabulary.Default);
+        return ChainParser.Parse(text, vocabulary ?? Vocabulary.Empty);
     }
 
     /// <summary>

@@ -70,24 +70,9 @@ public sealed class Vocabulary
     }
 
     /// <summary>
-    /// The costumes known from the game, with the abbreviations runners use.
+    /// A vocabulary with no names: every level is kept as written, and costumes can only be placed by position.
     /// </summary>
-    public static IReadOnlyList<CostumeName> KnownCostumes { get; } =
-    [
-        new CostumeName("Plain Sponge", Character.Spongebob, "PS"),
-        new CostumeName("Mermaid Man", Character.Spongebob, "MM"),
-        new CostumeName("Ripped Pants", Character.Spongebob, "RPS"),
-        new CostumeName("Caveman Sponge", Character.Spongebob, "CMS"),
-        new CostumeName("Plain Patrick", Character.Patrick, "PP"),
-        new CostumeName("Disco Patrick", Character.Patrick, "DP"),
-        new CostumeName("Caveman Patrick", Character.Patrick, "CMP"),
-        new CostumeName("Goofy Goober", Character.Patrick, "GGP"),
-    ];
-
-    /// <summary>
-    /// The known costumes and no levels, until the labels file supplies them.
-    /// </summary>
-    public static Vocabulary Default { get; } = new([], KnownCostumes);
+    public static Vocabulary Empty { get; } = new([], []);
 
     /// <summary>
     /// Resolves a level to its preferred name.

@@ -1,0 +1,470 @@
+# SPDX-FileCopyrightText: 2026 Suprnova
+# SPDX-License-Identifier: CC0-1.0
+
+# The names BowlBuster prints and accepts for costumes, levels, worlds and task slots.
+#
+# Adding or changing a name
+#   Edit this file, then run `dotnet test`. The repository catalog test reads this file and fails with every problem it
+#   finds, each naming the entry it is about. Names are knowledge; game files and game data never belong here.
+#
+# costumes   Keyed by the printed name.
+#              character  spongebob or patrick. Required.
+#              aliases    Other names a chain may use, such as an abbreviation.
+#
+# levels     Keyed by scene tag: four upper-case letters or digits. The tag is always accepted in a chain.
+#              name       The community name. Optional; a level without one prints its tag.
+#              aliases    Other names a chain may use.
+#            A level with nothing but its tag is left out. Every name and alias resolves to the level's scene, so two
+#            levels never share one, and no name is another level's tag (compared without case).
+#
+# worlds     Keyed by the world's number in the pause menu, from 1. Worlds 13 and 20 are left out: no menu slot reaches them.
+#              name       The community name.
+#              game       The text the game shows, copied verbatim, spacing and capitals included.
+#              tasks      Keyed by slot number, from 1; each holds a name and a game text of its own. A task's name
+#                         is the part after the world's: "Time" for "Weenie Time".
+#            A world or task has at least one of name and game, and takes no aliases: a chain names scenes, and nothing
+#            reads a world or a task as input. World names are unique, and so are the task names within a world; game
+#            texts repeat ("Time Challenge" is in many worlds). A task's scene is not stored here: the pause menu
+#            decides it.
+#
+# Printing
+#   A level prints its community name; without one, its game text; with neither, its tag.
+#   A world prints its community name, or else its game text.
+#   A task prints its world's name followed by its own ("Weenie Time"). A task named like its world prints just that
+#   name ("Frogfish"), so a world's only task is named after the world. A task with no community name prints its
+#   game text as it is.
+#
+# Community names
+#   A world has a short name (Weenie, NTWM, SCDA). A world with two main scenes names them "<world> 1" and
+#   "<world> 2"; a world with one names it after the world. Challenge scenes are "<world> <word>". A task is named by
+#   a word or two: Main, Time, Ring, Macho, Guitar, FB, Spongeball, Bungee, Combat, or what the task is about
+#   (Bounce, Creek, Ice Skating).
+#
+# A level or costume name must be writable in a chain: it can't contain > , ( ) [ ], end in " x" and a number, begin
+# with the word "burn", or be "non-SB". Keys are camel case, and a key the file doesn't use is an error.
+
+costumes:
+  Plain Sponge:
+    character: spongebob
+    aliases:
+      - PS
+  Mermaid Man:
+    character: spongebob
+    aliases:
+      - MM
+  Ripped Pants:
+    character: spongebob
+    aliases:
+      - RPS
+  Caveman Sponge:
+    character: spongebob
+    aliases:
+      - CMS
+  Plain Patrick:
+    character: patrick
+    aliases:
+      - PP
+  Disco Patrick:
+    character: patrick
+    aliases:
+      - DP
+  Caveman Patrick:
+    character: patrick
+    aliases:
+      - CMP
+  Goofy Goober:
+    character: patrick
+    aliases:
+      - GGP
+
+levels:
+  AM01:
+    name: Depression Combat
+    aliases:
+      - Dep Combat
+  AM02:
+    name: BBBH Combat
+  AM03:
+    name: NTWM Combat
+  AM04:
+    name: Plank Combat
+  B101:
+    name: Frogfish
+  B201:
+    name: Dennis
+  B301:
+    name: Dennis 2
+    aliases:
+      - Hasselhoff
+  B401:
+    name: Neptune
+  B402:
+    name: Credits
+  BB01:
+    name: SD101
+    aliases:
+      - SD
+  BB02:
+    name: No Cheese
+  BB03:
+    name: Depression
+  BL01:
+    name: 3K Spongeball
+    aliases:
+      - 3K SB
+      - 3K ball
+  BL02:
+    name: BBBH Spongeball
+    aliases:
+      - BBBH SB
+      - BBBH ball
+  BL03:
+    name: SCDA Spongeball
+    aliases:
+      - SCDA SB
+      - SCDA ball
+  BL04:
+    name: Plank Spongeball
+    aliases:
+      - Plank SB
+      - Plank ball
+  DE01:
+    name: 3K
+  DE02:
+    name: Rub a Dub
+    aliases:
+      - Rub
+      - Rub a Dub Dub
+  FB01:
+    name: 3K FB
+  FB02:
+    name: NTWM FB
+  FB03:
+    name: SCDA FB
+  GG02:
+    name: Sundae
+  JK01:
+    name: SCDA 1
+  JK02:
+    name: SCDA 2
+  MNUS:
+    name: Main Menu
+  PT01:
+    name: Plank 1
+    aliases:
+      - Planktopolis
+  PT02:
+    name: Knucklehead
+    aliases:
+      - Knuck
+  PT03:
+    name: Plank 2
+  SC02:
+    name: GESK
+  TR01:
+    name: Rock Slide
+  TR02:
+    name: NTWM 1
+  TR03:
+    name: NTWM 2
+  TT01:
+    name: BBBH
+  TT02:
+    name: Weenie
+
+worlds:
+  1:
+    name: No Cheese
+    game: No Cheese!
+    tasks:
+      1:
+        name: No Cheese
+        game: Crisis At The Krusty Krab
+
+  2:
+    name: Depression
+    game: I'm Ready... Depression
+    tasks:
+      1:
+        name: Main
+        game: Sponge On a Wire
+      2:
+        name: Bounce
+        game: An Ounce Of Bounce
+      3:
+        name: Creek
+        game: Up Chocolate Creek
+      4:
+        name: Guitar
+        game: Sonic Wave Guitar Challenge
+      5:
+        name: Combat
+        game: Combat Arena Challenge
+
+  3:
+    name: SD101
+    game: Sandwich Driving 101
+    tasks:
+      1:
+        name: Main
+        game: Escape From Bikini Bottom
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  4:
+    name: 3K
+    game: Three... Thousand Miles To Shell City
+    tasks:
+      1:
+        name: Main
+        game: Topple a Trio of Towers
+      2:
+        name: Bounce
+        game: Bouncy, Bouncy, Bouncy
+      3:
+        name: Steamed
+        game: Patrick Gets Steamed
+      4:
+        name: FB
+        game: Floating Block Challenge
+      5:
+        name: Bungee
+        game: Bungee Challenge
+      6:
+        name: Spongeball
+        game: SpongeBall Challenge
+
+  5:
+    name: Rub a Dub
+    game: Rub a dub dub, slip slide in the tub
+    tasks:
+      1:
+        name: Main
+        game: "Plankton's Towers: Part Deux"
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  6:
+    name: BBBH
+    game: Bubble Blowing Baby Hunt
+    tasks:
+      1:
+        name: Main
+        game: The Key Ingredient
+      2:
+        name: Disco
+        game: Disco Star
+      3:
+        name: Fruit
+        game: Throwing The Fruit Electric
+      4:
+        name: Guitar
+        game: Sonic Wave Guitar Challenge
+      5:
+        name: Spongeball
+        game: SpongeBall Challenge
+      6:
+        name: Combat
+        game: Combat Arena Challenge
+
+  7:
+    name: Weenie
+    game: No Weenie Parking Anytime
+    tasks:
+      1:
+        name: Main
+        game: Now, How Do We Get Out Of Here ?
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  8:
+    name: Frogfish
+    game: I'll Let You Pet Mr. Whiskers
+    tasks:
+      1:
+        name: Frogfish
+        game: Defeat the Frog Fish
+
+  9:
+    name: Rock Slide
+    game: Rock Slide
+    tasks:
+      1:
+        name: Main
+        game: Getting To the Bottom of Things
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  10:
+    name: NTWM
+    game: Now That We're Men...
+    tasks:
+      1:
+        name: Main
+        game: Here Monster ... Nice Monster
+      2:
+        name: Frozen Lava
+        game: Frozen Lava Desert
+      3:
+        name: Swinging Starfish
+        game: Swinging Starfish
+      4:
+        name: FB
+        game: Floating Block Challenge
+      5:
+        name: Bungee
+        game: Bungee Challenge
+      6:
+        name: Combat
+        game: Combat Arena Challenge
+
+  11:
+    name: SCDA
+    game: Shell City, Dead Ahead
+    tasks:
+      1:
+        name: Main
+        game: Boob Tube Smashing Boob
+      2:
+        name: Cirque
+        game: Cirque Du Malaise
+      3:
+        name: 3M
+        game: Three Meter Island
+      4:
+        name: Guitar
+        game: Sonic Wave Guitar Challenge
+      5:
+        name: FB
+        game: Floating Block Challenge
+      6:
+        name: Spongeball
+        game: SpongeBall Challenge
+
+  12:
+    name: Dennis
+    game: Name's Dennis...
+    tasks:
+      1:
+        name: Dennis
+        game: Defeat Dennis
+
+  14:
+    name: Sundae
+    game: Sundae Driving
+    tasks:
+      1:
+        name: Main
+        game: Follow That Peanut !
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  15:
+    name: GESK
+    game: Google-eyes and Smelly Knick Knacks
+    tasks:
+      1:
+        name: Main
+        game: Escape The Shell City Cyclops
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  16:
+    name: Dennis 2
+    game: Dennis Strikes Back!
+    tasks:
+      1:
+        name: Dennis 2
+        game: Defeat Dennis ... Again
+
+  17:
+    name: Plank
+    game: Welcome To Planktopolis... Minions
+    tasks:
+      1:
+        name: Main
+        game: Monument-al Destruction
+      2:
+        name: Bounce
+        game: More Bounce Please
+      3:
+        name: Ice Skating
+        game: Ice Skating Idiot
+      4:
+        name: Spongeball
+        game: SpongeBall Challenge
+      5:
+        name: Bungee
+        game: Bungee Challenge
+      6:
+        name: Combat
+        game: Combat Arena Challenge
+
+  18:
+    name: Knucklehead
+    game: Drive of the Knucklehead-McSpazitron
+    tasks:
+      1:
+        name: Main
+        game: Chaos Ahead, Expect Delays
+      2:
+        name: Time
+        game: Time Challenge
+      3:
+        name: Ring
+        game: Ring Challenge
+      4:
+        name: Macho
+        game: Macho Time Challenge
+
+  19:
+    name: Neptune
+    game: Turn the Tables On Plankton
+    tasks:
+      1:
+        name: Neptune
+        game: Defeat Buckethead King Neptune
+      2:
+        name: Credits

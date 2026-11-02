@@ -2,6 +2,7 @@ using BowlBuster.Chains;
 using BowlBuster.Loads;
 using BowlBuster.Recordings;
 using BowlBuster.Simulation;
+using BowlBuster.Tests.Catalog;
 
 namespace BowlBuster.Tests.Simulation;
 
@@ -21,7 +22,7 @@ public class ChainPlanTests
     [Fact]
     public void From_Costumes_StayOnTheOriginAndTargetOnly()
     {
-        ChainPlan plan = ChainPlan.From(Chain.Parse("[load] > ORIG (Mermaid Man) > FILL > TARG (Disco Patrick)"), Same);
+        ChainPlan plan = ChainPlan.From(Chain.Parse("[load] > ORIG (Mermaid Man) > FILL > TARG (Disco Patrick)", TestVocabulary.CostumesOnly), Same);
 
         Assert.Equal(
             [new Costumes("Mermaid Man", null), Costumes.None, new Costumes(null, "Disco Patrick")],
