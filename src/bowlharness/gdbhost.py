@@ -50,7 +50,9 @@ class GdbTarget:
         return self._add(_Point(spec, gdb.BP_WATCHPOINT, handler, self, address))
 
     def clear(self, handle: Handle) -> None:
-        self._points.pop(handle).delete()
+        point = self._points.pop(handle)
+        point.enabled = False
+        gdb.post_event(point.delete)
 
     def read(self, address: int, length: int) -> bytes:
         return bytes(gdb.selected_inferior().read_memory(address, length))

@@ -38,6 +38,11 @@ class Points:
     pool_free: Point
     drawn: Point
     frame: Point
+    entity: Point
+    players_done: Point
+    scene_id: Point
+    first_stale_write: Point
+    reset: Point
 
 
 @dataclass(frozen=True)
@@ -151,6 +156,9 @@ class Globals:
         frame: A dword that grows by one each frame.
         bowl_statics: First and last dword of the bowl's statics.
         watched: The dwords whose writes are watched.
+        watch_stack_words: How many stack words a watch event records.
+        sphere: The dword holding the pointer the bowl writes through.
+        scene_pointer: The dword holding the pointer to the scene, whose first dword is the scene's id.
     """
 
     scene_counter: int
@@ -158,6 +166,9 @@ class Globals:
     frame: int
     bowl_statics: tuple[int, int]
     watched: tuple[int, ...]
+    watch_stack_words: int
+    sphere: int
+    scene_pointer: int
     token_count: int
     manliness_count: int
     play_state: int

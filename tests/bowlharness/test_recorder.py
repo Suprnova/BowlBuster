@@ -270,10 +270,10 @@ def test_a_repeated_stop_is_discarded_and_counted(tmp_path: Path) -> None:
 
 
 def test_a_repeated_stop_is_kept_at_an_exempt_address() -> None:
-    hit = Hit({"esp": 1, "eax": 2}, (3,))
+    hit = Hit(0x54380, None, {"esp": 1, "eax": 2}, (3,))
     duplicates = DuplicateFilter(frozenset({0x54380}))
 
-    assert [duplicates.discards(0x54380, hit), duplicates.discards(0x54380, hit)] == [False, False]
+    assert [duplicates.discards(hit), duplicates.discards(hit)] == [False, False]
 
 
 def test_a_passive_run_writes_nothing_to_the_guest(tmp_path: Path) -> None:
@@ -295,6 +295,101 @@ def test_manifest_is_incomplete_until_the_recording_ends(tmp_path: Path) -> None
     run(ScriptedGame(), tmp_path)
 
     assert json.loads((tmp_path / "manifest.json").read_text())["complete"] is False
+
+
+def test_the_leaked_player_entity_is_logged(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.entity(0x5C4000)
+
+    events, _, _ = record(game, tmp_path)
+
+    assert [e["address"] for e in events if e["event"] == "entity"] == [0x5C4000]
+
+
+def test_players_done_logs_the_scene_the_counter_and_the_bowl_statics(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.players_done()
+
+    events, _, _ = record(game, tmp_path)
+
+    done = events[-1]
+    assert (done["event"], done["scene"], done["counter"]) == ("players_done", "ORIG", 2)
+    assert done["bowl"] == {"address": 0x31722C, "words": list(range(1, 11))}
+
+
+def test_scene_id_is_read_from_the_scene_object(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.scene_id(0x1234)
+
+    events, _, _ = record(game, tmp_path)
+
+    assert [(e["scene"], e["counter"], e["id"]) for e in events if e["event"] == "scene_id"] == [("ORIG", 2, 0x1234)]
+
+
+def test_first_stale_write_is_logged_once_per_load(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.stale_write(0x5C1000)
+    game.stale_write(0x5C1000)
+    game.scene_init("TARG", 3)
+    game.stale_write(0x5C2000)
+
+    events, _, _ = record(game, tmp_path)
+
+    writes = [e for e in events if e["event"] == "first_stale_write"]
+    assert [(w["scene"], w["counter"], w["s"]) for w in writes] == [("ORIG", 2, 0x5C1000), ("TARG", 3, 0x5C2000)]
+    assert writes[0]["bowl"]["address"] == 0x31722C
+
+
+def test_a_watched_write_logs_the_old_and_new_values_the_instruction_and_a_stack(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.watch(0x2B13EC, 3, pc=0x9601)
+    game.watch(0x2B13EC, 4, pc=0x9602)
+
+    events, _, _ = record(game, tmp_path)
+
+    watches = [e for e in events if e["event"] == "watch"]
+    assert [(w["address"], w["old"], w["new"], w["pc"]) for w in watches] == [
+        (0x2B13EC, 0, 3, 0x9601),
+        (0x2B13EC, 3, 4, 0x9602),
+    ]
+    assert watches[0]["stack"] == list(range(1, 18))
+
+
+def test_consecutive_identical_watched_writes_are_all_logged(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.watch(0x2B13EC, 3)
+    game.watch(0x2B13EC, 3)
+
+    events, manifest, _ = record(game, tmp_path)
+
+    assert (names(events).count("watch"), manifest["duplicates_discarded"]) == (2, 0)
+
+
+def test_watches_are_armed_once(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.scene_init("TARG", 3)
+    game.watch(0x317234, 7)
+
+    events, _, _ = record(game, tmp_path)
+
+    assert names(events).count("watch") == 1
+
+
+def test_a_reset_logs_the_counter(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.reset()
+
+    events, _, _ = record(game, tmp_path)
+
+    assert [e["counter"] for e in events if e["event"] == "reset"] == [2]
 
 
 FIXTURE = Path(__file__).parents[1] / "BowlBuster.Tests" / "Recordings" / "Fixtures" / "synthetic"

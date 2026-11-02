@@ -8,7 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from bowlharness.observe import heap0_state, loading_layer, tag, u32, worn_archives
+from bowlharness.observe import bowl_statics, heap0_state, loading_layer, tag, u32, worn_archives
 from bowlharness.profiles.profile import PlatformProfile, Point
 from bowlharness.recording import EventWriter, RunManifest
 from bowlharness.recording.captures import take_capture
@@ -59,8 +59,17 @@ def _listed(scenes: bool | frozenset[str]) -> bool | list[str]:
 
 @dataclass(frozen=True)
 class Hit:
-    """A stop as a handler sees it: the registers, and the return address then the arguments from the stack."""
+    """A stop as a handler sees it.
 
+    Attributes:
+        pc: Where the guest stopped.
+        address: The address a watchpoint caught a write to, or ``None``.
+        registers: The registers.
+        words: The stack words from the stack pointer: the return address, then the arguments.
+    """
+
+    pc: int
+    address: int | None
     registers: Registers
     words: tuple[int, ...]
 
@@ -89,10 +98,10 @@ class DuplicateFilter:
         self._exempt = exempt
         self._last: tuple[int, tuple[tuple[str, int], ...], tuple[int, ...]] | None = None
 
-    def discards(self, pc: int, hit: Hit) -> bool:
+    def discards(self, hit: Hit) -> bool:
         """Whether this stop repeats the previous one; either way it becomes the previous one."""
-        key = (pc, tuple(hit.registers.items()), hit.words)
-        repeated = key == self._last and pc not in self._exempt
+        key = (hit.pc, tuple(hit.registers.items()), hit.words)
+        repeated = key == self._last and hit.pc not in self._exempt
         self._last = key
         return repeated
 
@@ -126,7 +135,8 @@ class Recorder:
         )
         self._duplicates = DuplicateFilter(frozenset(profile.points.frame.entry))
         self._heap_handles: list[Handle] = []
-        self._drawn_handle: Handle | None = None
+        self._once: dict[str, Handle] = {}
+        self._watched: dict[int, int] | None = None
         self._pops: list[int] = []
         self._counter: int | None = None
         self._scene: str | None = None
@@ -143,6 +153,10 @@ class Recorder:
         points = self._profile.points
         self._arm(points.scene_init, self._scene_init)
         self._arm(points.scene_exit, self._scene_exit)
+        self._arm(points.entity, self._entity)
+        self._arm(points.players_done, self._players_done)
+        self._arm(points.scene_id, self._scene_id, at_return=True)
+        self._arm(points.reset, self._reset)
         self._manifest.write(self._manifest_path)
 
     def finish(self, interrupted: str | None = None) -> None:
@@ -187,17 +201,17 @@ class Recorder:
         return capture_id
 
     def _arm(self, point: Point, handler: Callable[[Hit], None], *, at_return: bool = False) -> list[Handle]:
-        guarded = self._guard(point, handler)
+        guarded = self._guard(point, handler, dedupe=True)
         addresses = point.returns if at_return or not point.entry else point.entry
         return [self._target.set_breakpoint(address, guarded) for address in addresses]
 
-    def _guard(self, point: Point, handler: Callable[[Hit], None]) -> Callable[[Stop], None]:
+    def _guard(self, point: Point, handler: Callable[[Hit], None], *, dedupe: bool) -> Callable[[Stop], None]:
         def stop(stop: Stop) -> None:
             try:
                 registers = self._target.registers()
                 data = self._target.read(registers["esp"], 4 * (1 + point.args))
-                hit = Hit(registers, struct.unpack(f"<{1 + point.args}I", data))
-                if self._duplicates.discards(stop.pc, hit):
+                hit = Hit(stop.pc, stop.address, registers, struct.unpack(f"<{1 + point.args}I", data))
+                if dedupe and self._duplicates.discards(hit):
                     self._manifest.duplicates_discarded += 1
                 else:
                     handler(hit)
@@ -231,23 +245,73 @@ class Recorder:
             }
         )
         self._arm_heap_events(self._options.logs_heap(scene))
-        self._arm_drawn()
+        points = self._profile.points
+        self._arm_once("drawn", points.drawn, self._drawn)
+        self._arm_once("first_stale_write", points.first_stale_write, self._first_stale_write)
+        self._arm_watches()
 
     def _scene_exit(self, hit: Hit) -> None:
         scene = tag(u32(self._target.read, self._profile.globals.current_scene))
         self._emit("scene_exit", scene=scene, counter=u32(self._target.read, self._profile.globals.scene_counter))
 
-    def _arm_drawn(self) -> None:
-        if self._drawn_handle is None:
-            self._drawn_handle = self._arm(self._profile.points.drawn, self._drawn)[0]
+    def _arm_once(self, name: str, point: Point, handler: Callable[[Hit], None]) -> None:
+        """Arms a point that fires once per load: it disarms at its first hit and is armed again at the next init."""
+        if name in self._once:
+            return
+
+        def fire(hit: Hit) -> None:
+            self._target.clear(self._once.pop(name))
+            handler(hit)
+
+        self._once[name] = self._arm(point, fire)[0]
 
     def _drawn(self, hit: Hit) -> None:
-        if self._drawn_handle is not None:
-            self._target.clear(self._drawn_handle)
-            self._drawn_handle = None
         self._emit("drawn")
         if self._scene is not None and self._options.captures_cutoff(self._scene):
             self.capture("cutoff")
+
+    def _first_stale_write(self, hit: Hit) -> None:
+        self._emit(
+            "first_stale_write",
+            scene=self._scene,
+            counter=self._counter,
+            s=hit.registers["eax"],
+            bowl=bowl_statics(self._target.read, self._profile.globals),
+        )
+
+    def _arm_watches(self) -> None:
+        """Watches the bowl's variables from the first load on, keeping each value to report what a write replaced."""
+        if self._watched is not None:
+            return
+        self._watched = {address: u32(self._target.read, address) for address in self._profile.globals.watched}
+        for address in self._watched:
+            guarded = self._guard(Point(args=self._profile.globals.watch_stack_words), self._watch, dedupe=False)
+            self._target.set_watchpoint(address, 4, guarded)
+
+    def _watch(self, hit: Hit) -> None:
+        if self._watched is None or hit.address is None:
+            raise ValueError("a watch stop with no watched address")
+        new = u32(self._target.read, hit.address)
+        old, self._watched[hit.address] = self._watched[hit.address], new
+        self._emit("watch", address=hit.address, old=old, new=new, pc=hit.pc, stack=list(hit.words))
+
+    def _entity(self, hit: Hit) -> None:
+        self._emit("entity", address=hit.registers["eax"])
+
+    def _players_done(self, hit: Hit) -> None:
+        self._emit(
+            "players_done",
+            scene=self._scene,
+            counter=self._counter,
+            bowl=bowl_statics(self._target.read, self._profile.globals),
+        )
+
+    def _scene_id(self, hit: Hit) -> None:
+        scene_object = u32(self._target.read, self._profile.globals.scene_pointer)
+        self._emit("scene_id", scene=self._scene, counter=self._counter, id=u32(self._target.read, scene_object))
+
+    def _reset(self, hit: Hit) -> None:
+        self._emit("reset", counter=self._counter)
 
     def _arm_heap_events(self, wanted: bool) -> None:
         if wanted == bool(self._heap_handles):

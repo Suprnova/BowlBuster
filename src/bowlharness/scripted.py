@@ -12,11 +12,23 @@ INSTANCE = 0x3000
 ARCHIVE = 0x4000
 ARRAY = 0x4400
 LAYER_OBJECTS = 0x4800
+SCENE_OBJECT = 0x5000
+
+
+def _tag(text: str) -> bytes:
+    """A four-character tag as the game holds it in memory: a dword with the first character most significant."""
+    return text.encode("ascii")[::-1]
+
 
 COMPACT = replace(XBOX_NTSC_U, static_range=(0x8000, 0x8040))
 
-ARCHIVES = [(b"PLSB", 0, 0), (b"PLSD", 0, 0), (b"PLPB", 1, 0), (b"PLP1", 1, 0)]
-CHEAT_ARCHIVES = [(b"PLSA", 0, 0x2000000), (b"PLSC", 0, 0x4000000), (b"PLPA", 1, 0x10000000), (b"PLPC", 1, 0x8000000)]
+ARCHIVES = [(_tag("PLSB"), 0, 0), (_tag("PLSD"), 0, 0), (_tag("PLPB"), 1, 0), (_tag("PLP1"), 1, 0)]
+CHEAT_ARCHIVES = [
+    (_tag("PLSA"), 0, 0x2000000),
+    (_tag("PLSC"), 0, 0x4000000),
+    (_tag("PLPA"), 1, 0x10000000),
+    (_tag("PLPC"), 1, 0x8000000),
+]
 
 
 class ScriptedGame:
@@ -51,16 +63,17 @@ class ScriptedGame:
         """A scene initialising, with heap 0 at the given depth and the costumes the extras and cheats enable."""
         memory = {
             self._profile.globals.scene_counter: struct.pack("<I", counter),
-            self._profile.globals.current_scene: scene.encode("ascii"),
+            self._profile.globals.current_scene: _tag(scene),
+            **{address: bytes(4) for address in self._profile.globals.watched},
             **self._capturable(depth),
             **self._heap0(depth, last_block),
             **self._costumes(extras or {}, cheats),
         }
-        self._step(self._profile.points.scene_init.entry[0], (caller, scene.encode("ascii")), memory=memory)
+        self._step(self._profile.points.scene_init.entry[0], (caller, _tag(scene)), memory=memory)
 
     def scene_exit(self, scene: str, counter: int) -> None:
         memory = {
-            self._profile.globals.current_scene: scene.encode("ascii"),
+            self._profile.globals.current_scene: _tag(scene),
             self._profile.globals.scene_counter: struct.pack("<I", counter),
         }
         self._step(self._profile.points.scene_exit.entry[0], (0x6EAF0,), memory=memory)
@@ -111,6 +124,29 @@ class ScriptedGame:
     def pool_free(self, instance: int) -> None:
         self._step(self._profile.points.pool_free.entry[0], (0x1500, instance))
 
+    def entity(self, address: int) -> None:
+        self._step(self._profile.points.entity.entry[0], (0x7267E,), eax=address)
+
+    def players_done(self) -> None:
+        self._step(self._profile.points.players_done.entry[0], (0x4E8D2,))
+
+    def scene_id(self, scene_id: int) -> None:
+        """A scene init returning, with the scene object holding its id."""
+        globals_ = self._profile.globals
+        memory = {globals_.scene_pointer: struct.pack("<I", SCENE_OBJECT), SCENE_OBJECT: struct.pack("<I", scene_id)}
+        self._step(self._profile.points.scene_id.returns[0], (0x528B6,), memory=memory)
+
+    def stale_write(self, sphere: int) -> None:
+        self._step(self._profile.points.first_stale_write.entry[0], (0x9500,), eax=sphere)
+
+    def reset(self) -> None:
+        self._step(self._profile.points.reset.entry[0], (0x703DE,))
+
+    def watch(self, address: int, value: int, pc: int = 0x9600) -> None:
+        """A write of ``value`` to a watched ``address``, with a stack of two words."""
+        stack = tuple(range(1, self._profile.globals.watch_stack_words + 2))
+        self._step(pc, stack, memory={address: struct.pack("<I", value)}, written=address)
+
     def drawn(self) -> None:
         self._step(self._profile.points.drawn.entry[0], (0x9000,))
 
@@ -126,11 +162,12 @@ class ScriptedGame:
         esp: int = STACK,
         eax: int = 0,
         memory: dict[int, bytes] | None = None,
+        written: int | None = None,
     ) -> None:
         stack = b"".join(word if isinstance(word, bytes) else struct.pack("<I", word) for word in words)
         self.frame += 1
         frame = {self._profile.globals.frame: struct.pack("<I", self.frame)}
-        self._steps.append(Step(pc, {"esp": esp, "eax": eax}, {STACK: stack, **frame, **(memory or {})}))
+        self._steps.append(Step(pc, {"esp": esp, "eax": eax}, {STACK: stack, **frame, **(memory or {})}, written))
 
     def _capturable(self, depth: int) -> dict[int, bytes]:
         """The bytes a capture reads: the static range, heap 0 up to its cursor, and the bowl's statics."""

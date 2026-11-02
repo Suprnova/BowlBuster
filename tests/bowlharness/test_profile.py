@@ -1,5 +1,6 @@
 from dataclasses import fields, replace
 
+from bowlharness.observe import tag
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.profiles.profile import Point
 
@@ -34,3 +35,7 @@ def test_digest_changes_with_the_profile() -> None:
     changed = replace(XBOX_NTSC_U, boot_scene="ORIG")
 
     assert changed.digest != XBOX_NTSC_U.digest
+
+
+def test_a_tag_reads_with_its_first_character_most_significant() -> None:
+    assert tag(0x42423032) == "BB02"

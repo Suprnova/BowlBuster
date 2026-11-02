@@ -1,11 +1,10 @@
 """Takes captures: the game's static memory and heap 0 at one moment, with what is needed to read them."""
 
 import json
-import struct
 from pathlib import Path
 from typing import Any
 
-from bowlharness.observe import heap0_state, tag, u32
+from bowlharness.observe import bowl_statics, heap0_state, tag, u32
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.target import Target
 
@@ -26,7 +25,6 @@ def take_capture(
     if not 0 <= heap0[1] <= profile.heap_block_size:
         raise ValueError(f"heap 0's cursor {cursor:#x} is outside the heap")
 
-    first, last = profile.globals.bowl_statics
     manifest = {
         "id": capture_id,
         "trigger": trigger,
@@ -36,10 +34,7 @@ def take_capture(
         "counter": u32(target.read, profile.globals.scene_counter),
         "scene": tag(u32(target.read, profile.globals.current_scene)),
         "registers": dict(target.registers()),
-        "bowl": {
-            "address": first,
-            "words": list(struct.unpack(f"<{(last - first) // 4 + 1}I", target.read(first, last + 4 - first))),
-        },
+        "bowl": bowl_statics(target.read, profile.globals),
         "heap": heap,
         "ranges": {
             "static": {

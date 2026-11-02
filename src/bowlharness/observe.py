@@ -4,7 +4,7 @@ import struct
 from collections.abc import Callable
 from typing import Any
 
-from bowlharness.profiles.profile import Costumes, Heap, Layers
+from bowlharness.profiles.profile import Costumes, Globals, Heap, Layers
 
 type Read = Callable[[int, int], bytes]
 
@@ -15,8 +15,8 @@ def u32(read: Read, address: int) -> int:
 
 
 def tag(word: int) -> str:
-    """The four characters a dword holds, in memory order."""
-    return struct.pack("<I", word).decode("ascii")
+    """The four characters a dword holds, the most significant first: the game writes 'BB02' as 0x42423032."""
+    return struct.pack(">I", word).decode("ascii")
 
 
 def heap0_state(read: Read, heap: Heap) -> dict[str, Any]:
@@ -82,3 +82,12 @@ def loading_layer(read: Read, layers: Layers) -> dict[str, Any]:
     array = u32(read, archive + layers.layers_offset)
     pointers = struct.unpack(f"<{count}I", read(array, 4 * count))
     return {"archive": name.removesuffix(layers.extension), "layer": pointers.index(layer)}
+
+
+def bowl_statics(read: Read, globals_: Globals) -> dict[str, Any]:
+    """The bowl's statics: the address of the first and every dword up to the last."""
+    first, last = globals_.bowl_statics
+    return {
+        "address": first,
+        "words": list(struct.unpack(f"<{(last - first) // 4 + 1}I", read(first, last + 4 - first))),
+    }
