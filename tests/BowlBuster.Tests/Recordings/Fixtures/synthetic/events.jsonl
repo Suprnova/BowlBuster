@@ -1,0 +1,12 @@
+{"seq":0,"segment":0,"frame":0,"event":"segment","reason":"attach"}
+{"seq":1,"segment":0,"frame":1,"event":"scene_init","scene":"ORIG","caller":338102,"counter":2,"heap":{"depth":0,"states":[{"cursor":6029616,"blocks":1,"used":256,"wasted":0}],"last_block":{"address":6029568,"size":64}}}
+{"seq":2,"segment":0,"frame":2,"event":"alloc","heap":0,"size":64,"alignment":16,"address":6029632,"caller":4096}
+{"seq":3,"segment":0,"frame":3,"event":"drawn"}
+{"seq":4,"segment":0,"frame":4,"event":"scene_exit","scene":"ORIG","counter":2}
+{"seq":5,"segment":0,"frame":5,"event":"scene_init","scene":"TARG","caller":338102,"counter":3,"heap":{"depth":1,"states":[{"cursor":6029616,"blocks":1,"used":256,"wasted":0},{"cursor":6029872,"blocks":2,"used":512,"wasted":8}],"last_block":null}}
+{"seq":6,"segment":0,"frame":6,"event":"push","heap":0}
+{"seq":7,"segment":0,"frame":7,"event":"model","bypass":false,"instance":12288,"nodes":5,"flags":64,"caller":5120}
+{"seq":8,"segment":0,"frame":8,"event":"drawn"}
+{"seq":9,"segment":0,"frame":9,"event":"scene_exit","scene":"TARG","counter":3}
+{"seq":10,"segment":0,"frame":10,"event":"scene_init","scene":"TARG","caller":338102,"counter":4,"heap":{"depth":0,"states":[{"cursor":6029616,"blocks":1,"used":256,"wasted":0}],"last_block":null}}
+{"seq":11,"segment":0,"frame":11,"event":"drawn"}

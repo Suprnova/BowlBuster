@@ -71,6 +71,7 @@ XBOX_NTSC_U = PlatformProfile(
     ),
     model=Model(bypass=0x4143A0, nodes_offset=0x4E, flags_arg=3),
     costumes=Costumes(
+        characters=("spongebob", "patrick"),
         table=0x2B5CF0,
         count=0x2B5D50,
         stride=0xC,

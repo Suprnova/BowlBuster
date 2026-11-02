@@ -23,7 +23,7 @@ __pycache__/
 .ruff_cache/
 
 # Harness recordings
-recordings/
+/recordings/
 
 # Tests and coverage
 TestResults/

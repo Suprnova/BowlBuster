@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "run": "run-1",
+  "disc": {
+    "platform": "xbox"
+  },
+  "profile": "229c91f8a739f044f7729b0dd31cbdc317f2d3e34faac61e5b3446c8a7c5779c",
+  "counter_basis": {
+    "boot_scene": "MNUS",
+    "boot_counter": 1
+  },
+  "passive": true,
+  "attended": false,
+  "observation": {
+    "heap_events": true
+  },
+  "events_dropped": 0,
+  "duplicates_discarded": 0,
+  "segments": [
+    {
+      "segment": 0,
+      "reason": "attach"
+    }
+  ],
+  "loads": [
+    {
+      "segment": 0,
+      "counter": 2,
+      "scene": "ORIG",
+      "first_seq": 1,
+      "costumes": {
+        "spongebob": "PLSB",
+        "patrick": "PLP1"
+      }
+    },
+    {
+      "segment": 0,
+      "counter": 3,
+      "scene": "TARG",
+      "first_seq": 5,
+      "costumes": {
+        "spongebob": "PLSD",
+        "patrick": null
+      }
+    },
+    {
+      "segment": 0,
+      "counter": 4,
+      "scene": "TARG",
+      "first_seq": 10,
+      "costumes": {
+        "spongebob": null,
+        "patrick": "PLPA"
+      }
+    }
+  ],
+  "write_ledger": [],
+  "complete": true,
+  "interrupted": null
+}

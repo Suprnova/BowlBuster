@@ -87,8 +87,12 @@ class Costumes:
     The costume table has an entry per archive: its tag, its character and the cheat-mask bits that enable it. The
     first entries are enabled instead by a row of the extras table, of the given kind, whose id is the entry's index
     plus one. The first enabled entry of a character is the one worn.
+
+    Attributes:
+        characters: What a recording calls each character, by the index the table's character field holds.
     """
 
+    characters: tuple[str, ...]
     table: int
     count: int
     stride: int
