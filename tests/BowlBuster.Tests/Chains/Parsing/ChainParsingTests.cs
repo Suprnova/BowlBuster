@@ -1,4 +1,5 @@
 using BowlBuster.Chains;
+using BowlBuster.Chains.Parsing;
 using BowlBuster.Loads;
 using BowlBuster.Tests.Catalog;
 
@@ -136,4 +137,27 @@ public class ChainParsingTests
         Assert.False(parsed);
         Assert.Null(chain);
     }
+
+    [Theory]
+    [InlineData("Rock Slide")]
+    [InlineData("3K Spongeball")]
+    [InlineData("NTWM 2")]
+    [InlineData("I'll Let You Pet Mr. Whiskers")]
+    [InlineData("Plank x")]
+    [InlineData("Burnt Toast")]
+    [InlineData("100% Cutscene")]
+    public void CanName_NameTheNotationCanHold_IsTrue(string name) => Assert.True(ChainParser.CanName(name));
+
+    [Theory]
+    [InlineData("A > B")]
+    [InlineData("A, B")]
+    [InlineData("Rock (Slide)")]
+    [InlineData("Rock [Slide]")]
+    [InlineData("Rock Slide x2")]
+    [InlineData("Rock Slide X12")]
+    [InlineData("burn")]
+    [InlineData("Burn Notice")]
+    [InlineData("non-SB")]
+    [InlineData("NON-SB")]
+    public void CanName_NameTheNotationCannotHold_IsFalse(string name) => Assert.False(ChainParser.CanName(name));
 }

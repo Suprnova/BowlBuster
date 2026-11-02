@@ -20,14 +20,17 @@ public sealed class Vocabulary
     /// </summary>
     /// <param name="levels">The levels with their names.</param>
     /// <param name="costumes">The costumes with their names.</param>
-    /// <exception cref="ArgumentException">A name is used by more than one level, or by more than one costume.</exception>
+    /// <exception cref="ArgumentException">
+    /// A name is used by more than one level or by more than one costume, a scene is used by more than one level, or a
+    /// level's name is another level's scene.
+    /// </exception>
     public Vocabulary(IEnumerable<LevelName> levels, IEnumerable<CostumeName> costumes)
     {
         ArgumentNullException.ThrowIfNull(levels);
         ArgumentNullException.ThrowIfNull(costumes);
 
-        this.levels = Index(levels, static level => level.Preferred, static level => level.Aliases);
-        this.costumes = Index(costumes, static costume => costume.Preferred, static costume => costume.Aliases);
+        this.levels = Index(levels, static level => [level.Scene, .. level.Name is null ? (string[])[] : [level.Name], .. level.Aliases]);
+        this.costumes = Index(costumes, static costume => [costume.Preferred, .. costume.Aliases]);
     }
 
     /// <summary>
@@ -62,6 +65,17 @@ public sealed class Vocabulary
     }
 
     /// <summary>
+    /// Resolves a level to its scene.
+    /// </summary>
+    /// <param name="level">The level as written: a scene tag, a name or an alias.</param>
+    /// <returns>The level's scene, or <paramref name="level"/> trimmed when the level has no entry and is taken to be a scene tag.</returns>
+    public string SceneOf(string level)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(level);
+        return levels.TryGetValue(level.Trim(), out LevelName? entry) ? entry.Scene : level.Trim();
+    }
+
+    /// <summary>
     /// Resolves the costumes written for a level to their preferred names, placed by character: SpongeBob's first, then
     /// Patrick's.
     /// </summary>
@@ -89,8 +103,8 @@ public sealed class Vocabulary
         return new Costumes(Place(written[0], Character.Spongebob), Place(written[1], Character.Patrick));
     }
 
-    private static Dictionary<string, T> Index<T>(IEnumerable<T> entries, Func<T, string> preferred, Func<T, IReadOnlyList<string>> aliases) => entries
-        .SelectMany(entry => aliases(entry).Prepend(preferred(entry)).Select(name => (Name: name, Entry: entry)))
+    private static Dictionary<string, T> Index<T>(IEnumerable<T> entries, Func<T, string[]> names) => entries
+        .SelectMany(entry => names(entry).Distinct(StringComparer.OrdinalIgnoreCase).Select(name => (Name: name, Entry: entry)))
         .ToDictionary(static pair => pair.Name, static pair => pair.Entry, StringComparer.OrdinalIgnoreCase);
 
     private string Place(string text, Character expected)

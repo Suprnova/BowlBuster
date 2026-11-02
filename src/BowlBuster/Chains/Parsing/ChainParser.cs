@@ -1,5 +1,6 @@
 using BowlBuster.Catalog;
 using BowlBuster.Loads;
+using System.Buffers;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -12,6 +13,8 @@ namespace BowlBuster.Chains.Parsing;
 internal static partial class ChainParser
 {
     private const string GenericFiller = "non-SB";
+
+    private static readonly SearchValues<char> UnnameableCharacters = SearchValues.Create(">,()[]");
 
     public static Chain Parse(string text, Vocabulary vocabulary)
     {
@@ -64,6 +67,12 @@ internal static partial class ChainParser
         }
     }
 
+    public static bool CanName(string name) =>
+        name.AsSpan().IndexOfAny(UnnameableCharacters) < 0
+        && !BurnWord().IsMatch(name)
+        && !TrailingCount().IsMatch(name)
+        && !name.Trim().Equals(GenericFiller, StringComparison.OrdinalIgnoreCase);
+
     private static LevelStep ReadLevel(string step, string role, Vocabulary vocabulary)
     {
         Match match = Step().Match(step);
@@ -104,6 +113,9 @@ internal static partial class ChainParser
 
     [GeneratedRegex(@"\[\s*target\s*:(?<phases>[^\]]*)\]\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex TargetPhases();
+
+    [GeneratedRegex(@"\sx\d+\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex TrailingCount();
 
     [GeneratedRegex(@"^\[\s*load\s*\]$", RegexOptions.IgnoreCase)]
     private static partial Regex LoadMarker();

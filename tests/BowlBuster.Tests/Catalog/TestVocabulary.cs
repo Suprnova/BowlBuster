@@ -23,10 +23,9 @@ internal static class TestVocabulary
 
     public static Vocabulary WithLevels { get; } = new(
         [
-            new("Rock Slide", "TR01"),
-            new("Mindy Skip", "PT02", "mindy"),
-            new("Frogfish", "B101"),
-            new("No Cheese", "BB02"),
+            new("TR01", "Rock Slide"),
+            new("B101", "Frogfish"),
+            new("BB02", "No Cheese"),
         ],
         Costumes);
 }

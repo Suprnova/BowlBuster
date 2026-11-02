@@ -1,5 +1,6 @@
 using BowlBuster.Catalog;
 using BowlBuster.Chains;
+using BowlBuster.Simulation;
 
 namespace BowlBuster.Tests.Catalog;
 
@@ -7,8 +8,9 @@ public class VocabularyTests
 {
     private readonly Vocabulary vocabulary = new(
         [
-            new LevelName("Rock Slide", "TR01"),
-            new LevelName("Mindy Skip", "PT02", "mindy"),
+            new LevelName("TR01", "Rock Slide"),
+            new LevelName("BL03", "SCDA Spongeball", "SCDA SB"),
+            new LevelName("MNUC"),
         ],
         Vocabulary.KnownCostumes);
 
@@ -17,16 +19,51 @@ public class VocabularyTests
     [InlineData("TR01", "Rock Slide")]
     [InlineData("tr01", "Rock Slide")]
     [InlineData("  ROCK SLIDE  ", "Rock Slide")]
-    [InlineData("MINDY", "Mindy Skip")]
-    [InlineData("pt02", "Mindy Skip")]
+    [InlineData("SCDA SB", "SCDA Spongeball")]
+    [InlineData("bl03", "SCDA Spongeball")]
     public void ResolveLevel_KnownName_ReturnsThePreferredName(string text, string expected) =>
         Assert.Equal(expected, vocabulary.ResolveLevel(text));
 
     [Theory]
     [InlineData("Rub a Dub", "Rub a Dub")]
-    [InlineData("  BB02 ", "BB02")]
+    [InlineData("  DE02 ", "DE02")]
     public void ResolveLevel_UnknownName_IsKeptAsWritten(string text, string expected) =>
         Assert.Equal(expected, vocabulary.ResolveLevel(text));
+
+    [Fact]
+    public void ResolveLevel_LevelWithoutAName_ReturnsItsScene() =>
+        Assert.Equal("MNUC", vocabulary.ResolveLevel("mnuc"));
+
+    [Theory]
+    [InlineData("Rock Slide", "TR01")]
+    [InlineData("TR01", "TR01")]
+    [InlineData("tr01", "TR01")]
+    [InlineData("  ROCK SLIDE  ", "TR01")]
+    [InlineData("SCDA SB", "BL03")]
+    [InlineData(" bl03 ", "BL03")]
+    [InlineData("mnuc", "MNUC")]
+    public void SceneOf_KnownName_ReturnsTheScene(string text, string expected) =>
+        Assert.Equal(expected, vocabulary.SceneOf(text));
+
+    [Theory]
+    [InlineData("Rub a Dub", "Rub a Dub")]
+    [InlineData("  DE02 ", "DE02")]
+    public void SceneOf_UnknownName_IsReturnedTrimmed(string text, string expected) =>
+        Assert.Equal(expected, vocabulary.SceneOf(text));
+
+    [Fact]
+    public void SceneOf_Blank_Throws() =>
+        Assert.Throws<ArgumentException>(() => vocabulary.SceneOf(" "));
+
+    [Fact]
+    public void SceneOf_ChainWrittenInNames_KeysThePlanByScene()
+    {
+        Chain chain = Chain.Parse("[load] > rock slide > scda sb > TR01", vocabulary);
+
+        ChainPlan plan = ChainPlan.From(chain, vocabulary.SceneOf);
+
+        Assert.Equal(["TR01", "BL03", "TR01"], plan.Loads.Select(static key => key.Scene));
+    }
 
     [Theory]
     [InlineData("")]
@@ -102,11 +139,23 @@ public class VocabularyTests
 
     [Fact]
     public void Constructor_AliasUsedByTwoLevels_Throws() =>
-        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("A", "X"), new LevelName("B", "x")], []));
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("AAAA", "A", "X"), new LevelName("BBBB", "B", "x")], []));
 
     [Fact]
     public void Constructor_AliasEqualToAnotherLevelsPreferredName_Throws() =>
-        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("A"), new LevelName("B", "a")], []));
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("AAAA", "A"), new LevelName("BBBB", "B", "a")], []));
+
+    [Fact]
+    public void Constructor_TwoLevelsWithOneScene_Throws() =>
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("AAAA", "A"), new LevelName("aaaa", "B")], []));
+
+    [Fact]
+    public void Constructor_NameEqualToAnotherLevelsScene_Throws() =>
+        Assert.Throws<ArgumentException>(static () => new Vocabulary([new LevelName("AAAA"), new LevelName("BBBB", "aaaa")], []));
+
+    [Fact]
+    public void Constructor_NameEqualToItsOwnScene_IsAccepted() =>
+        Assert.Equal("AAAA", new Vocabulary([new LevelName("AAAA", "AAAA")], []).SceneOf("aaaa"));
 
     [Fact]
     public void Constructor_AbbreviationUsedByTwoCostumes_Throws() =>
@@ -116,7 +165,8 @@ public class VocabularyTests
     public void Constructor_BlankName_Throws()
     {
         Assert.Throws<ArgumentException>(static () => new LevelName(" "));
-        Assert.Throws<ArgumentException>(static () => new LevelName("A", ""));
+        Assert.Throws<ArgumentException>(static () => new LevelName("AAAA", " "));
+        Assert.Throws<ArgumentException>(static () => new LevelName("AAAA", "A", ""));
         Assert.Throws<ArgumentException>(static () => new CostumeName("", Character.Patrick));
     }
 }
