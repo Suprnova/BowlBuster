@@ -257,4 +257,41 @@ public class VocabularyReadingTests
 
         public void Dispose() => Directory.Delete(Path, recursive: true);
     }
+
+    [Fact]
+    public void Read_CostumeWithAnArchive_ResolvesTheArchiveToIt()
+    {
+        Vocabulary vocabulary = Read("""
+            costumes:
+              Mermaid Man: { character: spongebob, archive: PLSB }
+            """);
+
+        Assert.Equal("Mermaid Man", vocabulary.ResolveArchive("PLSB"));
+    }
+
+    [Theory]
+    [InlineData("plsb")]
+    [InlineData("PLS")]
+    [InlineData("PLSBX")]
+    public void Read_ArchiveThatIsNotFourUpperCaseCharacters_NamesTheCostume(string archive)
+    {
+        CatalogException exception = ReadFailing($$"""
+            costumes:
+              Mermaid Man: { character: spongebob, archive: {{archive}} }
+            """);
+
+        Assert.Contains("Costume 'Mermaid Man': an archive is four upper-case letters or digits.", exception.Problems);
+    }
+
+    [Fact]
+    public void Read_TwoCostumesWithOneArchive_Fails()
+    {
+        CatalogException exception = ReadFailing("""
+            costumes:
+              Mermaid Man: { character: spongebob, archive: PLSB }
+              Plain Sponge: { character: spongebob, archive: PLSB }
+            """);
+
+        Assert.Contains(exception.Problems, static problem => problem.Contains("'PLSB'", StringComparison.Ordinal));
+    }
 }

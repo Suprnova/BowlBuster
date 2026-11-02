@@ -169,4 +169,27 @@ public class VocabularyTests
         Assert.Throws<ArgumentException>(static () => new LevelName("AAAA", "A", ""));
         Assert.Throws<ArgumentException>(static () => new CostumeName("", Character.Patrick));
     }
+
+    [Theory]
+    [InlineData("PLSB", "Mermaid Man")]
+    [InlineData("PLP1", "Plain Patrick")]
+    [InlineData(" PLPB ", "Disco Patrick")]
+    public void ResolveArchive_ArchiveOfACostume_ReturnsItsPreferredName(string archive, string expected) =>
+        Assert.Equal(expected, vocabulary.ResolveArchive(archive));
+
+    [Theory]
+    [InlineData("PLSA")]
+    [InlineData("ZZZ9")]
+    public void ResolveArchive_ArchiveNoCostumeHas_ReturnsTheArchive(string archive) =>
+        Assert.Equal(archive, vocabulary.ResolveArchive(archive));
+
+    [Fact]
+    public void Constructor_TwoCostumesWithOneArchive_Throws()
+    {
+        CostumeName[] costumes = [new("Mermaid Man", Character.Spongebob) { Archive = "PLSB" }, new("Plain Sponge", Character.Spongebob) { Archive = "PLSB" }];
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new Vocabulary([], costumes));
+
+        Assert.Contains("'PLSB'", exception.Message, StringComparison.Ordinal);
+    }
 }

@@ -9,12 +9,12 @@ internal static class TestVocabulary
 {
     public static IReadOnlyList<CostumeName> Costumes { get; } =
     [
-        new("Plain Sponge", Character.Spongebob, "PS"),
-        new("Mermaid Man", Character.Spongebob, "MM"),
+        new("Plain Sponge", Character.Spongebob, "PS") { Archive = "PLSD" },
+        new("Mermaid Man", Character.Spongebob, "MM") { Archive = "PLSB" },
         new("Ripped Pants", Character.Spongebob, "RPS"),
         new("Caveman Sponge", Character.Spongebob, "CMS"),
-        new("Plain Patrick", Character.Patrick, "PP"),
-        new("Disco Patrick", Character.Patrick, "DP"),
+        new("Plain Patrick", Character.Patrick, "PP") { Archive = "PLP1" },
+        new("Disco Patrick", Character.Patrick, "DP") { Archive = "PLPB" },
         new("Caveman Patrick", Character.Patrick, "CMP"),
         new("Goofy Goober", Character.Patrick, "GGP"),
     ];

@@ -75,7 +75,10 @@ internal static partial class VocabularyReader
         if (character is null)
             problems.Add($"{where}: the character must be spongebob or patrick.");
 
-        return problems.Count == before ? new CostumeName(name, character!.Value, [.. entry.Aliases ?? []]) : null;
+        if (entry.Archive is not null && !SceneTag().IsMatch(entry.Archive))
+            problems.Add($"{where}: an archive is four upper-case letters or digits.");
+
+        return problems.Count == before ? new CostumeName(name, character!.Value, [.. entry.Aliases ?? []]) { Archive = entry.Archive } : null;
     }
 
     private static WorldName? ReadWorld(int number, WorldEntry? entry, List<string> problems)

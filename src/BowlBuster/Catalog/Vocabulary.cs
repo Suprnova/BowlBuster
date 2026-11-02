@@ -16,6 +16,7 @@ public sealed class Vocabulary
 
     private readonly Dictionary<string, LevelName> levels;
     private readonly Dictionary<string, CostumeName> costumes;
+    private readonly Dictionary<string, CostumeName> archives;
 
     /// <summary>
     /// Creates a vocabulary.
@@ -24,8 +25,8 @@ public sealed class Vocabulary
     /// <param name="costumes">The costumes with their names.</param>
     /// <param name="worlds">The pause menu's worlds with their task slots.</param>
     /// <exception cref="ArgumentException">
-    /// A name is used by more than one level or by more than one costume, a scene is used by more than one level, or a
-    /// level's name is another level's scene.
+    /// A name is used by more than one level or by more than one costume, a scene is used by more than one level, a
+    /// level's name is another level's scene, or an archive is the archive of more than one costume.
     /// </exception>
     public Vocabulary(IEnumerable<LevelName> levels, IEnumerable<CostumeName> costumes, IEnumerable<WorldName>? worlds = null)
     {
@@ -33,7 +34,9 @@ public sealed class Vocabulary
         ArgumentNullException.ThrowIfNull(costumes);
 
         this.levels = Index("level", levels, static level => [level.Scene, .. level.Name is null ? (string[])[] : [level.Name], .. level.Aliases]);
-        this.costumes = Index("costume", costumes, static costume => [costume.Preferred, .. costume.Aliases]);
+        CostumeName[] named = [.. costumes];
+        this.costumes = Index("costume", named, static costume => [costume.Preferred, .. costume.Aliases]);
+        archives = Index("costume archive", named.Where(static costume => costume.Archive is not null), static costume => [costume.Archive!]);
         Worlds = [.. worlds ?? []];
     }
 
@@ -73,6 +76,17 @@ public sealed class Vocabulary
     /// A vocabulary with no names: every level is kept as written, and costumes can only be placed by position.
     /// </summary>
     public static Vocabulary Empty { get; } = new([], []);
+
+    /// <summary>
+    /// Resolves the tag of a player archive, as a recording names it, to the preferred name of the costume that loads it.
+    /// </summary>
+    /// <param name="archive">The archive's tag.</param>
+    /// <returns>The costume's preferred name, or <paramref name="archive"/> when no costume has that archive.</returns>
+    public string ResolveArchive(string archive)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(archive);
+        return archives.TryGetValue(archive.Trim(), out CostumeName? costume) ? costume.Preferred : archive.Trim();
+    }
 
     /// <summary>
     /// Resolves a level to its preferred name.

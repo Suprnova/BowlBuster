@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <Content Include="../../catalog/**/*.yaml" Link="catalog/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Recordings/Fixtures/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

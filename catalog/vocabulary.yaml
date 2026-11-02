@@ -9,6 +9,8 @@
 #
 # costumes   Keyed by the printed name.
 #              character  spongebob or patrick. Required.
+#              archive    The tag of the player archive the costume loads, four upper-case letters or digits, as a
+#                         recording names it. Optional, and never shared.
 #              aliases    Other names a chain may use, such as an abbreviation.
 #
 # levels     Keyed by scene tag: four upper-case letters or digits. The tag is always accepted in a chain.
@@ -46,34 +48,42 @@
 costumes:
   Plain Sponge:
     character: spongebob
+    archive: PLSD
     aliases:
       - PS
   Mermaid Man:
     character: spongebob
+    archive: PLSB
     aliases:
       - MM
   Ripped Pants:
     character: spongebob
+    archive: PLSC
     aliases:
       - RPS
   Caveman Sponge:
     character: spongebob
+    archive: PLSA
     aliases:
       - CMS
   Plain Patrick:
     character: patrick
+    archive: PLP1
     aliases:
       - PP
   Disco Patrick:
     character: patrick
+    archive: PLPB
     aliases:
       - DP
   Caveman Patrick:
     character: patrick
+    archive: PLPA
     aliases:
       - CMP
   Goofy Goober:
     character: patrick
+    archive: PLPC
     aliases:
       - GGP
 

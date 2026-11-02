@@ -37,4 +37,10 @@ public sealed class CostumeName
     /// The other names accepted for the costume.
     /// </summary>
     public IReadOnlyList<string> Aliases { get; }
+
+    /// <summary>
+    /// The tag of the player archive the costume loads, as a recording names it, or <see langword="null"/> when the
+    /// costume's archive is not known.
+    /// </summary>
+    public string? Archive { get; init; }
 }

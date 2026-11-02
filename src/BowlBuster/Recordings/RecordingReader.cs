@@ -1,3 +1,4 @@
+using BowlBuster.Catalog;
 using BowlBuster.Chains;
 using BowlBuster.Loads;
 using BowlBuster.Memory;
@@ -29,17 +30,21 @@ public static class RecordingReader
     /// </summary>
     /// <param name="manifest">The run manifest.</param>
     /// <param name="events">The event stream, one JSON document per line.</param>
+    /// <param name="vocabulary">
+    /// Names the player archives the manifest says each load wore. An archive no costume has is kept as the costume's
+    /// name. Without a vocabulary every archive is kept so.
+    /// </param>
     /// <returns>The recording, with each load's counter converted once to its load number.</returns>
     /// <exception cref="FormatException">
     /// The manifest or a line isn't valid JSON or lacks a field replay needs; the manifest's version is newer than
     /// <see cref="SchemaVersion"/>; or a load has no costumes in the manifest. The message names the manifest or the line.
     /// </exception>
-    public static Recording Read(TextReader manifest, TextReader events)
+    public static Recording Read(TextReader manifest, TextReader events, Vocabulary? vocabulary = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(events);
 
-        Manifest run = ReadManifest(manifest);
+        Manifest run = ReadManifest(manifest, vocabulary ?? Vocabulary.Empty);
         RecordingBuilder builder = new(run);
         int number = 0;
 
@@ -62,7 +67,7 @@ public static class RecordingReader
         return new Recording(run.Id, run.Platform, run.Basis, run.EventsDropped, builder.Finish());
     }
 
-    private static Manifest ReadManifest(TextReader manifest)
+    private static Manifest ReadManifest(TextReader manifest, Vocabulary vocabulary)
     {
         try
         {
@@ -79,7 +84,7 @@ public static class RecordingReader
                 Text(Field(root, "disc"), "platform"),
                 new CounterBasis(Text(basis, "boot_scene"), Int(basis, "boot_counter")),
                 Int(root, "events_dropped"),
-                ReadCostumeRows(root));
+                ReadCostumeRows(root, vocabulary));
         }
         catch (Exception exception) when (exception is JsonException or FormatException)
         {
@@ -87,7 +92,7 @@ public static class RecordingReader
         }
     }
 
-    private static Dictionary<(int Segment, int Counter), Costumes> ReadCostumeRows(JsonElement manifest)
+    private static Dictionary<(int Segment, int Counter), Costumes> ReadCostumeRows(JsonElement manifest, Vocabulary vocabulary)
     {
         Dictionary<(int Segment, int Counter), Costumes> rows = [];
 
@@ -96,12 +101,14 @@ public static class RecordingReader
             (int Segment, int Counter) load = (Int(row, "segment"), Int(row, "counter"));
             JsonElement costumes = Field(row, "costumes");
 
-            if (!rows.TryAdd(load, new Costumes(OptionalText(costumes, "spongebob"), OptionalText(costumes, "patrick"))))
+            if (!rows.TryAdd(load, new Costumes(Named(vocabulary, OptionalText(costumes, "spongebob")), Named(vocabulary, OptionalText(costumes, "patrick")))))
                 throw new FormatException($"Segment {load.Segment}, counter {load.Counter} has two costumes rows.");
         }
 
         return rows;
     }
+
+    private static string? Named(Vocabulary vocabulary, string? archive) => archive is null ? null : vocabulary.ResolveArchive(archive);
 
     private static HeapSnapshot ReadHeap(JsonElement heap)
     {

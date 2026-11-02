@@ -15,6 +15,8 @@ internal sealed class VocabularyDocument
     {
         public string? Character { get; set; }
 
+        public string? Archive { get; set; }
+
         public List<string>? Aliases { get; set; }
     }
 
