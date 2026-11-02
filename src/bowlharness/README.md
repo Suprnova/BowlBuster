@@ -6,9 +6,9 @@ the guest's memory, and its recording says so.
 ## Setting up
 
 - [uv](https://docs.astral.sh/uv/) and `uv sync` at the repository root.
-- MSYS2's gdb, which embeds the Python the harness runs in. In an MSYS2 UCRT64 shell: `pacman -S
-  mingw-w64-ucrt-x86_64-gdb`. The launcher looks for `C:\msys64\ucrt64\bin\gdb.exe`, then for `gdb` on `PATH`; set
-  `BOWL_GDB` to use another.
+- A gdb for the harness to run inside, found through the `BOWL_GDB` environment variable or else `PATH`. It needs
+  Python scripting with an embedded Python of the version in `.python-version`, because the harness can't see a virtual
+  environment from inside gdb, and the remote protocol, to talk to xemu's debugger stub as an x86 target.
 - xemu, with a controller bound to port 1 in the configuration you record with. Without one the game's first frame of
   play crashes in the input read, so the harness refuses to start.
 - Close any running xemu first: the harness starts its own, which holds the storage image.

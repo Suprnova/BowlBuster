@@ -17,7 +17,7 @@ BowlBuster needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 ```
 dotnet build
 dotnet test
-dotnet run --project src/BowlBuster.Cli
+dotnet run --project src/BowlBuster.Cli -- --help
 ```
 
 The Python harness in [src/bowlharness/](src/bowlharness/) needs [uv](https://docs.astral.sh/uv/), which fetches Python 3.14.

@@ -6,19 +6,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_GDB = Path(r"C:\msys64\ucrt64\bin\gdb.exe")
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
 
 def find_gdb() -> str:
-    """Finds the gdb to host the harness: ``BOWL_GDB``, then MSYS2's, then the one on ``PATH``."""
+    """Finds the gdb to host the harness: the one ``BOWL_GDB`` names, or else the one on ``PATH``."""
     if configured := os.environ.get("BOWL_GDB"):
         return configured
-    if DEFAULT_GDB.exists():
-        return str(DEFAULT_GDB)
     if found := shutil.which("gdb"):
         return found
-    raise SystemExit("gdb not found: install MSYS2's ucrt64 gdb or set BOWL_GDB")
+    raise SystemExit("gdb not found: put a gdb with Python scripting on PATH, or set BOWL_GDB to it")
 
 
 def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:

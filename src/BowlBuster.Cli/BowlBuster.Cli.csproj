@@ -8,4 +8,12 @@
     <InternalsVisibleTo Include="BowlBuster.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../BowlBuster/BowlBuster.csproj" />
+  </ItemGroup>
+
 </Project>

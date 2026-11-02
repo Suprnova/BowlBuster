@@ -1,4 +1,3 @@
 using BowlBuster.Cli;
-using System.Reflection;
 
-Console.WriteLine(VersionBanner.For(Assembly.GetExecutingAssembly()));
+return CommandLineApp.Run(args, Console.Out, Console.Error);
