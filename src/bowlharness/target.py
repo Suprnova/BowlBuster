@@ -32,7 +32,8 @@ class Stop:
 
     Attributes:
         pc: The guest address of the instruction the guest stopped at.
-        address: The guest address that was written, for a watchpoint stop; ``None`` for a breakpoint.
+        address: The guest address that was written, for a watchpoint stop; ``None`` for a breakpoint. A backend that
+            cannot say which byte was written reports the start of the watched range.
     """
 
     pc: int
