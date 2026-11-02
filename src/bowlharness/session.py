@@ -80,6 +80,8 @@ class Session:
                 expired = self._target.run(timeout=self._watchdog.liveness)
             except TargetError as error:
                 return self._end(f"emulator exited: {error}")
+            if expired:
+                self._recorder.replay_current_stop()
             if expired and not self._recorder.ended:
                 self._watchdog.check()
             if self._recorder.ended:
@@ -93,6 +95,7 @@ class Session:
         """Lets the guest run again after a pause."""
         self._require_paused()
         self._recorder.note("resume")
+        self._recorder.replay_current_stop()
         self._watchdog.release()
         return self.run()
 

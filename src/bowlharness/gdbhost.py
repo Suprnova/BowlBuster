@@ -8,6 +8,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Sequence
+from contextlib import suppress
 from pathlib import Path
 
 import gdb
@@ -16,7 +17,7 @@ from bowlharness.commands import parse_record_arguments
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.session import ENDED, PAUSED, Session
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
-from bowlharness.xemu import default_config, describe, launch, load_config, preconditions, running_xemu
+from bowlharness.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
 
 
 class _Point(gdb.Breakpoint):
@@ -27,6 +28,7 @@ class _Point(gdb.Breakpoint):
         self._address = address
 
     def stop(self) -> bool:
+        self._target.stops += 1
         self._handler(Stop(int(gdb.selected_frame().pc()), self._address))
         return self._target.take_interrupt()
 
@@ -48,6 +50,7 @@ class GdbTarget:
         self._points: dict[Handle, _Point] = {}
         self._next_handle = 0
         self._interrupted = False
+        self.stops = 0
 
     def set_breakpoint(self, address: int, handler: Handler) -> Handle:
         return self._add(_Point(f"*{address:#x}", gdb.BP_BREAKPOINT, handler, self, None))
@@ -89,22 +92,44 @@ class GdbTarget:
     def run(self, timeout: float | None = None) -> bool:
         self._interrupted = False
         expired = threading.Event()
-        timer = threading.Timer(timeout, lambda: self._expire(expired)) if timeout is not None else None
-        if timer:
-            timer.start()
+        timers: list[threading.Timer] = []
+        if timeout is not None:
+            self._watch_for_silence(timeout, expired, timers)
         try:
-            gdb.execute("continue")
+            gdb.execute("continue", to_string=True)
+        except KeyboardInterrupt:
+            self._stop_running_guest()
         except gdb.error as error:
             raise TargetError(str(error)) from error
         finally:
-            if timer:
+            for timer in timers:
                 timer.cancel()
         return expired.is_set()
 
     @staticmethod
-    def _expire(expired: threading.Event) -> None:
-        expired.set()
-        gdb.post_event(lambda: gdb.execute("interrupt"))
+    def _stop_running_guest() -> None:
+        """Makes sure the guest is stopped after a person's Ctrl-C was raised as an exception instead of a stop."""
+        with suppress(gdb.error):
+            gdb.execute("interrupt", to_string=True)
+
+    def _watch_for_silence(self, timeout: float, expired: threading.Event, timers: list[threading.Timer]) -> None:
+        """Interrupts the guest after ``timeout`` seconds with no stop reaching a handler.
+
+        Interrupting a guest that keeps stopping at breakpoints would often land on a breakpoint's own address, and gdb
+        resumes from there by stepping over it, which loses that stop.
+        """
+        seen = self.stops
+
+        def check() -> None:
+            if self.stops != seen:
+                self._watch_for_silence(timeout, expired, timers)
+                return
+            expired.set()
+            gdb.post_event(lambda: gdb.execute("interrupt", to_string=True))
+
+        timer = threading.Timer(timeout, check)
+        timers.append(timer)
+        timer.start()
 
     def reset(self) -> None:
         gdb.execute("monitor system_reset")
@@ -197,9 +222,9 @@ def _record(args: Sequence[str]) -> None:
         environment=environment,
         boot_path="attached" if arguments.attach else "boot",
         liveness=arguments.liveness,
-        on_end=process.terminate if process else None,
+        on_end=(lambda: stop(process)) if process else None,
     )
-    print(f"recording to {arguments.out}; Ctrl-C pauses the guest")
+    print(f"recording to {arguments.out}")
     _tell(_session.run())
 
 

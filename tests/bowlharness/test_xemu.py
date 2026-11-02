@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bowlharness.xemu import load_config, parse_banner, preconditions
+from bowlharness.xemu import launch_command, load_config, parse_banner, preconditions
 
 BOUND = {"input": {"bindings": {"port1": "0300fa67"}}}
 
@@ -34,3 +34,12 @@ def test_a_configuration_is_read_from_its_file(tmp_path: Path) -> None:
     path.write_text("[input.bindings]\nport1 = 'abc'\n", encoding="utf-8")
 
     assert load_config(path)["input"]["bindings"]["port1"] == "abc"
+
+
+def test_xemu_is_started_under_a_cmd_that_keeps_quoted_paths_whole() -> None:
+    command = launch_command(Path(r"C:\Program Files\xemu\xemu.exe"), Path(r"D:\my games\xemu.toml"), 2345)
+
+    expected = (
+        r'cmd.exe /s /c ""C:\Program Files\xemu\xemu.exe" -config_path "D:\my games\xemu.toml" -gdb tcp::2345 -S"'
+    )
+    assert command == expected

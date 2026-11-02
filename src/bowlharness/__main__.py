@@ -23,7 +23,19 @@ def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:
     path_setup = f"python import sys; sys.path.insert(0, {SOURCE_ROOT.as_posix()!r})"
     quoted = " ".join(f'"{arg.replace(chr(92), "/")}"' for arg in bowl_args)
     batch = ["-batch"] if bowl_args[:1] == ["smoke"] else []
-    return [gdb, "-q", *batch, "-iex", path_setup, "-ex", "python import bowlharness.gdbhost", "-ex", f"bowl {quoted}"]
+    quiet = ["-iex", "set pagination off", "-iex", "set confirm off"]
+    return [
+        gdb,
+        "-q",
+        *batch,
+        *quiet,
+        "-iex",
+        path_setup,
+        "-ex",
+        "python import bowlharness.gdbhost",
+        "-ex",
+        f"bowl {quoted}",
+    ]
 
 
 def main() -> int:

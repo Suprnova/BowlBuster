@@ -29,7 +29,7 @@ memory, so keep them off GitHub.
 | `--captures cutoff:all\|cutoff:none\|cutoff:BB02` | which scenes take a capture at the cutoff |
 | `--budget <n>` | the most captures to take; a crash or hang capture is always taken |
 | `--attach <port>` | attach to a running xemu started with `-gdb tcp::<port> -S`, instead of starting one |
-| `--liveness <seconds>` | how long play may stall before it is a hang (default 5) |
+| `--liveness <seconds>` | how long play may stall before it is a hang (default 5). While the guest is silent, gdb prints `Program received signal SIGINT` each time the watchdog looks at it; a longer window prints less |
 
 Starting xemu runs it in its own console, so Ctrl-C in the gdb window can never reach it. The harness resets the machine
 and the game boots as if freshly started. Play as usual; do not load xemu's own snapshots during a recording, since the

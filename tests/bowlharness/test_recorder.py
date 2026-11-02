@@ -474,3 +474,32 @@ def test_the_observation_level_records_the_capture_options(tmp_path: Path) -> No
     _, manifest, _ = record(ScriptedGame(), tmp_path, Options(cutoff_captures=frozenset({"TARG"}), capture_budget=5))
 
     assert manifest["observation"] == {"heap_events": True, "cutoff_captures": ["TARG"], "capture_budget": 5}
+
+
+def test_a_stop_the_guest_is_held_at_is_observed_when_asked(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_exit("ORIG", 2)
+    target = game.build()
+    target.run()
+    recorder = Recorder(target, game.profile, tmp_path, "run-1", Options())
+    recorder.start("attach")
+
+    recorder.replay_current_stop()
+    recorder.finish()
+
+    events = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text().splitlines()]
+    assert [(e["event"], e.get("scene")) for e in events] == [("segment", None), ("scene_exit", "ORIG")]
+
+
+def test_a_guest_held_where_no_point_is_armed_observes_nothing(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.idle(5, 10)
+    target = game.build()
+    target.run()
+    recorder = Recorder(target, game.profile, tmp_path, "run-1", Options())
+    recorder.start("attach")
+
+    recorder.replay_current_stop()
+
+    assert recorder.event_count == 1

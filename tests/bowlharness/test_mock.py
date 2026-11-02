@@ -95,3 +95,20 @@ def test_reset_restarts_the_script() -> None:
     target.run()
 
     assert stops == [Stop(0x10), Stop(0x10)]
+
+
+def test_run_with_a_timeout_stops_the_guest_after_a_silent_stretch() -> None:
+    target = MockTarget([Step(0x10, seconds=3), Step(0x20, seconds=3), Step(0x30, seconds=3)])
+
+    expired = target.run(timeout=5)
+
+    assert expired is True
+
+
+def test_run_with_a_timeout_is_not_stopped_while_stops_keep_coming() -> None:
+    target = MockTarget([Step(0x10, seconds=3), Step(0x10, seconds=3), Step(0x10, seconds=3)])
+    target.set_breakpoint(0x10, lambda _: None)
+
+    expired = target.run(timeout=5)
+
+    assert expired is False

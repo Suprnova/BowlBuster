@@ -206,7 +206,7 @@ class ScriptedGame:
         self.frame += 1
         frame = {self._profile.globals.frame: struct.pack("<I", self.frame)}
         self._steps.append(
-            Step(pc, {"esp": esp, "eax": eax}, {STACK: stack, **frame, **(memory or {})}, written, seconds)
+            Step(pc, {"esp": esp, "eax": eax, "eip": pc}, {STACK: stack, **frame, **(memory or {})}, written, seconds)
         )
 
     def _capturable(self, depth: int) -> dict[int, bytes]:

@@ -147,6 +147,7 @@ class Recorder:
         self._duplicates = DuplicateFilter(frozenset(profile.points.frame.entry))
         self._heap_handles: list[Handle] = []
         self._handles: set[Handle] = set()
+        self._armed: dict[Handle, tuple[int, Callable[[Stop], None]]] = {}
         self._loads_seen = 0
         self.rebooted = False
         self._once: dict[str, Handle] = {}
@@ -236,12 +237,24 @@ class Recorder:
         addresses = point.returns if at_return or not point.entry else point.entry
         handles = [self._target.set_breakpoint(address, guarded) for address in addresses]
         self._handles.update(handles)
+        self._armed.update({handle: (address, guarded) for handle, address in zip(handles, addresses, strict=True)})
         return handles
 
     def _clear(self, handle: Handle) -> None:
         if handle in self._handles:
             self._handles.discard(handle)
+            self._armed.pop(handle, None)
             self._target.clear(handle)
+
+    def replay_current_stop(self) -> None:
+        """Observes the points at the address the guest is stopped at, which it stopped at before reaching them.
+
+        A guest interrupted at a breakpoint's address resumes by stepping over the breakpoint, so the stop the
+        breakpoint would have given never happens. The recorder gives it itself.
+        """
+        pc = self._target.registers().get("eip")
+        for address, guarded in [armed for armed in self._armed.values() if armed[0] == pc]:
+            guarded(Stop(address))
 
     def detach(self) -> None:
         """Stops observing: removes every breakpoint and watchpoint this recorder set."""

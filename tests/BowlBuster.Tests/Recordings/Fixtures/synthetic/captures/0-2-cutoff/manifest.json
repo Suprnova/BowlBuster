@@ -8,7 +8,8 @@
   "scene": "ORIG",
   "registers": {
     "esp": 4096,
-    "eax": 0
+    "eax": 0,
+    "eip": 610923
   },
   "bowl": {
     "address": 3240492,

@@ -89,9 +89,11 @@ class MockTarget:
             step = self._script[self._position]
             self._position += 1
             elapsed += step.seconds
-            self._arrive(step)
+            fired = self._arrive(step)
             if timeout is not None and elapsed >= timeout and not self._interrupted:
                 return True
+            if fired:
+                elapsed = 0.0
         return False
 
     def reset(self) -> None:
@@ -108,13 +110,18 @@ class MockTarget:
     def _store(self, address: int, data: bytes) -> None:
         self._memory.update(enumerate(data, address))
 
-    def _arrive(self, step: Step) -> None:
+    def _arrive(self, step: Step) -> bool:
+        """Applies a step and calls the handlers it reaches; returns whether any ran."""
         self._registers = step.registers
         for address, data in step.memory.items():
             self._store(address, data)
+        fired = False
         for point in list(self._points.values()):
             if point.length is None:
                 if point.address == step.pc:
                     point.handler(Stop(step.pc))
+                    fired = True
             elif step.written is not None and point.address <= step.written < point.address + point.length:
                 point.handler(Stop(step.pc, step.written))
+                fired = True
+        return fired

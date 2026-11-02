@@ -8,7 +8,7 @@ def test_gdb_command_imports_the_harness_and_runs_the_bowl_command() -> None:
 
     assert "python import bowlharness.gdbhost" in command
     assert command[-1] == 'bowl "record" "--out" "a b"'
-    assert SOURCE_ROOT.as_posix() in command[command.index("-iex") + 1]
+    assert SOURCE_ROOT.as_posix() in next(arg for arg in command if "sys.path.insert" in arg)
 
 
 def test_smoke_runs_in_batch_mode() -> None:
@@ -43,3 +43,9 @@ def test_no_gdb_is_an_error_that_says_what_to_do(monkeypatch: pytest.MonkeyPatch
 
     with pytest.raises(SystemExit, match="BOWL_GDB"):
         find_gdb()
+
+
+def test_gdb_is_told_not_to_page_or_ask() -> None:
+    command = gdb_command("gdb", ["record"])
+
+    assert [arg for arg in command if arg.startswith("set ")] == ["set pagination off", "set confirm off"]

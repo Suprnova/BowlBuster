@@ -88,16 +88,27 @@ def describe(exe: Path | None, config_path: Path, gdb_version: str) -> dict[str,
     }
 
 
-def launch(exe: Path, config_path: Path, port: int, log: Path) -> subprocess.Popen[bytes]:
-    """Starts xemu held at reset with its debugger stub on ``port``, in its own process group and console.
+def launch_command(exe: Path, config_path: Path, port: int) -> str:
+    """The command line that runs xemu held at reset with its debugger stub on ``port``, under ``cmd.exe``."""
+    xemu = f'"{exe}" -config_path "{config_path}" -gdb tcp::{port} -S'
+    return f'cmd.exe /s /c "{xemu}"'
 
-    Its output goes to ``log``. An interrupt meant for the debugger can't reach it.
+
+def launch(exe: Path, config_path: Path, port: int, log: Path) -> subprocess.Popen[bytes]:
+    """Starts xemu held at reset with its debugger stub on ``port``, in a console of its own.
+
+    xemu attaches to its parent's console on startup, so the process that starts it must have a console that is not
+    gdb's: ``cmd.exe`` gets a new one, with no window, and xemu takes it. Started from gdb directly, xemu would
+    share gdb's console, and a Ctrl-C meant for gdb would close it. Its output goes to ``log``. Stop it with
+    :func:`stop`.
     """
-    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NEW_CONSOLE  # type: ignore[attr-defined]
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
     with log.open("wb") as output:
         return subprocess.Popen(
-            [str(exe), "-config_path", str(config_path), "-gdb", f"tcp::{port}", "-S"],
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            creationflags=flags,
+            launch_command(exe, config_path, port), stdout=output, stderr=subprocess.STDOUT, creationflags=flags
         )
+
+
+def stop(process: subprocess.Popen[bytes]) -> None:
+    """Closes the xemu that :func:`launch` started, and the ``cmd.exe`` around it."""
+    subprocess.run(["taskkill", "/T", "/F", "/PID", str(process.pid)], capture_output=True, check=False)

@@ -88,7 +88,8 @@ class Target(Protocol):
         """Continues the guest until it is interrupted or ends.
 
         Args:
-            timeout: Seconds after which the guest is stopped, if it hasn't stopped by itself.
+            timeout: Seconds the guest may run without a stop reaching a handler. After that long a stretch, the guest
+                is stopped. A guest that keeps stopping at points is making progress and is never stopped by it.
 
         Returns:
             Whether the guest was stopped because the timeout elapsed.
