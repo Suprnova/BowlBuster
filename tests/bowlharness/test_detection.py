@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
 
+from scripted import ScriptedGame
 from support import names
 
-from bowlharness.detection import Watchdog
-from bowlharness.mock import MockTarget
-from bowlharness.recorder import Options, Recorder
-from bowlharness.scripted import ScriptedGame
+from bowlharness.backends.mock import MockTarget
+from bowlharness.recording.detection import Watchdog
+from bowlharness.recording.recorder import Options, Recorder
 
 ACCESS_VIOLATION = 0xC0000005
 EXCEPTION = 0x1E

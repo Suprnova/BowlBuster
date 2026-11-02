@@ -3,12 +3,12 @@
 import struct
 from typing import TYPE_CHECKING, Any
 
-from bowlharness.observe import Read, u32
 from bowlharness.profiles.profile import PlatformProfile
+from bowlharness.recording.observe import Read, u32
 from bowlharness.target import TargetError
 
 if TYPE_CHECKING:
-    from bowlharness.recorder import Recorder
+    from bowlharness.recording.recorder import Recorder
 
 BUGCHECK_KINDS = ("KeBugCheck", "KeBugCheckEx")
 

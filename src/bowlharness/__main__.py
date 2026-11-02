@@ -32,7 +32,7 @@ def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:
         "-iex",
         path_setup,
         "-ex",
-        "python import bowlharness.gdbhost",
+        "python import bowlharness.backends.gdbhost",
         "-ex",
         f"bowl {quoted}",
     ]

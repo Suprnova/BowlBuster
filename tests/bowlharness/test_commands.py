@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bowlharness.commands import parse_record_arguments, scene_selection
+from bowlharness.session.commands import parse_record_arguments, scene_selection
 
 OUT = str(Path.cwd() / "recordings-test")
 

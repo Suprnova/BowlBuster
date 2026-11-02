@@ -2,12 +2,12 @@ import json
 import os
 from pathlib import Path
 
+from scripted import ScriptedGame
 from support import names, record, run, three_loads
 
-from bowlharness.mock import MockTarget
+from bowlharness.backends.mock import MockTarget
 from bowlharness.profiles import XBOX_NTSC_U
-from bowlharness.recorder import DuplicateFilter, Hit, Options, Recorder
-from bowlharness.scripted import ScriptedGame
+from bowlharness.recording.recorder import DuplicateFilter, Hit, Options, Recorder
 from bowlharness.target import TargetError
 
 

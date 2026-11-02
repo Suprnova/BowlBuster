@@ -5,9 +5,9 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
-from bowlharness.detection import Watchdog
 from bowlharness.profiles.profile import PlatformProfile
-from bowlharness.recorder import Options, Recorder
+from bowlharness.recording.detection import Watchdog
+from bowlharness.recording.recorder import Options, Recorder
 from bowlharness.target import Target, TargetError
 
 PAUSED = "paused"

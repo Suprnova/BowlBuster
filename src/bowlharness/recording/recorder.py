@@ -8,11 +8,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from bowlharness.detection import bugcheck_addresses, crash_record, stack_words
-from bowlharness.observe import bowl_statics, heap0_state, loading_layer, tag, u32, worn_archives
 from bowlharness.profiles.profile import PlatformProfile, Point
 from bowlharness.recording import EventWriter, RunManifest
 from bowlharness.recording.captures import take_capture
+from bowlharness.recording.detection import bugcheck_addresses, crash_record, stack_words
+from bowlharness.recording.observe import bowl_statics, heap0_state, loading_layer, tag, u32, worn_archives
 from bowlharness.target import Handle, Registers, Stop, Target, TargetError
 
 log = logging.getLogger(__name__)

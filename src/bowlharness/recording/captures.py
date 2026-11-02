@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from bowlharness.observe import bowl_statics, heap0_state, tag, u32
 from bowlharness.profiles.profile import PlatformProfile
+from bowlharness.recording.observe import bowl_statics, heap0_state, tag, u32
 from bowlharness.target import Target
 
 MARKER = "complete"

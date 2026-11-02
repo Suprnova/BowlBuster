@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
 
-from bowlharness.recorder import Options
+from bowlharness.recording.recorder import Options
 
 
 @dataclass(frozen=True)

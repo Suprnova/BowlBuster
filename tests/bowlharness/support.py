@@ -1,9 +1,10 @@
 import json
 from pathlib import Path
 
-from bowlharness.mock import MockTarget
-from bowlharness.recorder import Options, Recorder
-from bowlharness.scripted import ScriptedGame
+from scripted import ScriptedGame
+
+from bowlharness.backends.mock import MockTarget
+from bowlharness.recording.recorder import Options, Recorder
 
 
 def run(game: ScriptedGame, directory: Path, options: Options | None = None) -> tuple[Recorder, MockTarget]:

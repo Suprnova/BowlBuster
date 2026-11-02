@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from bowlharness.xemu import launch_command, load_config, parse_banner, preconditions
+from bowlharness.backends.xemu import launch_command, load_config, parse_banner, preconditions
 
 BOUND = {"input": {"bindings": {"port1": "0300fa67"}}}
 

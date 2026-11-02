@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bowlharness.mock import MockTarget, Step
+from bowlharness.backends.mock import MockTarget, Step
 from bowlharness.target import Stop, TargetError
 
 

@@ -1,8 +1,8 @@
 from dataclasses import fields, replace
 
-from bowlharness.observe import tag
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.profiles.profile import Point
+from bowlharness.recording.observe import tag
 
 
 def all_points() -> dict[str, Point]:

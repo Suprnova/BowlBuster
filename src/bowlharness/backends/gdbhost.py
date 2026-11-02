@@ -1,6 +1,6 @@
 """The harness hosted inside gdb: a :class:`~bowlharness.target.Target` over gdb's Python API and the ``bowl`` commands.
 
-This is the only module that imports ``gdb``. gdb imports it with ``python import bowlharness.gdbhost``, which
+This is the only module that imports ``gdb``. gdb imports it with ``python import bowlharness.backends.gdbhost``, which
 registers the ``bowl`` command group; ``python -m bowlharness`` does that.
 """
 
@@ -13,11 +13,11 @@ from pathlib import Path
 
 import gdb
 
-from bowlharness.commands import parse_record_arguments
+from bowlharness.backends.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
 from bowlharness.profiles import XBOX_NTSC_U
-from bowlharness.session import ENDED, PAUSED, Session
+from bowlharness.session.commands import parse_record_arguments
+from bowlharness.session.session import ENDED, PAUSED, Session
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
-from bowlharness.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
 
 
 class _Point(gdb.Breakpoint):

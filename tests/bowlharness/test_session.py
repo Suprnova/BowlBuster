@@ -2,12 +2,12 @@ import json
 from pathlib import Path
 
 import pytest
+from scripted import ScriptedGame
 from support import names
 
-from bowlharness.mock import MockTarget
-from bowlharness.recorder import Options
-from bowlharness.scripted import ScriptedGame
-from bowlharness.session import ENDED, PAUSED, Session
+from bowlharness.backends.mock import MockTarget
+from bowlharness.recording.recorder import Options
+from bowlharness.session.session import ENDED, PAUSED, Session
 from bowlharness.target import TargetError
 
 

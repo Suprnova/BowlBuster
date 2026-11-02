@@ -3,7 +3,7 @@
 import struct
 from dataclasses import replace
 
-from bowlharness.mock import MockTarget, Step
+from bowlharness.backends.mock import MockTarget, Step
 from bowlharness.profiles import XBOX_NTSC_U, PlatformProfile
 
 STACK = 0x1000

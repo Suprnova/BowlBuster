@@ -6,7 +6,7 @@ from bowlharness.__main__ import SOURCE_ROOT, find_gdb, gdb_command
 def test_gdb_command_imports_the_harness_and_runs_the_bowl_command() -> None:
     command = gdb_command("gdb", ["record", "--out", "a b"])
 
-    assert "python import bowlharness.gdbhost" in command
+    assert "python import bowlharness.backends.gdbhost" in command
     assert command[-1] == 'bowl "record" "--out" "a b"'
     assert SOURCE_ROOT.as_posix() in next(arg for arg in command if "sys.path.insert" in arg)
 
