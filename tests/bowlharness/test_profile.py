@@ -1,7 +1,7 @@
 from dataclasses import fields, replace
 
 from bowlharness.profiles import XBOX_NTSC_U
-from bowlharness.profiles.profile import Point
+from bowlharness.profiles.profile import Point, Ready
 from bowlharness.recording.observe import tag
 
 
@@ -39,3 +39,51 @@ def test_digest_changes_with_the_profile() -> None:
 
 def test_a_tag_reads_with_its_first_character_most_significant() -> None:
     assert tag(0x42423032) == "BB02"
+
+
+def test_the_pad_read_is_in_the_code() -> None:
+    first, last = XBOX_NTSC_U.code
+
+    assert first <= XBOX_NTSC_U.points.pad_read.entry[0] < last
+
+
+def test_every_button_has_its_own_mask() -> None:
+    masks = [getattr(XBOX_NTSC_U.input.buttons, field.name) for field in fields(XBOX_NTSC_U.input.buttons)]
+
+    assert len(set(masks)) == len(masks)
+
+
+def test_the_cheat_entry_needs_both_triggers() -> None:
+    buttons = XBOX_NTSC_U.input.buttons
+
+    assert XBOX_NTSC_U.navigation.cheats.held == buttons.l | buttons.r
+
+
+def test_every_paused_mode_is_a_menu_mode_or_listed() -> None:
+    modes = XBOX_NTSC_U.navigation.modes
+
+    assert {modes.boot_movies, modes.menu, modes.pause_menu} <= set(modes.paused) and modes.play not in modes.paused
+
+
+def test_every_scene_class_has_a_signal_and_a_settle_count() -> None:
+    classes = (*XBOX_NTSC_U.scene_classes.classes, XBOX_NTSC_U.scene_classes.other)
+
+    assert all(isinstance(found.ready, Ready) and found.settle_frames > 0 for found in classes)
+
+
+def test_no_scene_is_in_two_classes() -> None:
+    scenes = [scene for found in XBOX_NTSC_U.scene_classes.classes for scene in found.scenes]
+
+    assert len(set(scenes)) == len(scenes)
+
+
+def test_a_scene_in_a_class_is_that_class_and_any_other_is_other() -> None:
+    classes = XBOX_NTSC_U.scene_classes
+
+    assert (classes.of("FB02").name, classes.of("BB02").name) == ("floating_block", "other")
+
+
+def test_digest_changes_with_an_input_value() -> None:
+    changed = replace(XBOX_NTSC_U, input=replace(XBOX_NTSC_U.input, hold_polls=7))
+
+    assert changed.digest != XBOX_NTSC_U.digest

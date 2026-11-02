@@ -3,6 +3,7 @@
 import hashlib
 import json
 from dataclasses import asdict, dataclass
+from enum import StrEnum
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class Points:
     scene_id: Point
     first_stale_write: Point
     reset: Point
+    pad_read: Point
 
 
 @dataclass(frozen=True)
@@ -205,6 +207,199 @@ class Globals:
 
 
 @dataclass(frozen=True)
+class Buttons:
+    """The masks of the buttons in the game's button dword, by name."""
+
+    a: int
+    b: int
+    x: int
+    y: int
+    start: int
+    back: int
+    l: int  # noqa: E741
+    r: int
+    up: int
+    down: int
+    left: int
+    right: int
+
+
+@dataclass(frozen=True)
+class Input:
+    """How the harness presses buttons at the game's pad read.
+
+    At the pad read point the stack holds the pad record, then a pointer to the button dword the read has just filled,
+    and further on the port (``Globals.active_port`` names the one the controller is on); the accumulator is zero when
+    no pad was read. A pad record holds the held mask, the
+    pressed edge and the released edge, and a time per button.
+
+    Attributes:
+        record_word: The stack word, counted from the stack pointer, that holds the pad record's address.
+        buffer_word: The stack word that holds the address of the button dword.
+        port_word: The stack word that holds the port being polled.
+        active_record: The dword that holds the active pad record's address.
+        record_base: Where port 0's pad record starts.
+        record_stride: The size of a pad record.
+        held_offset: Where a pad record holds the held mask.
+        pressed_offset: Where it holds the pressed edge.
+        released_offset: Where it holds the released edge.
+        times_offset: Where it holds the time of the first button.
+        buttons: The button masks.
+        hold_polls: How many polls a press is held for.
+        release_polls: How many polls it is released for before the next.
+        resend_limit: How many times a press the game didn't take is sent again.
+    """
+
+    record_word: int
+    buffer_word: int
+    port_word: int
+    active_record: int
+    record_base: int
+    record_stride: int
+    held_offset: int
+    pressed_offset: int
+    released_offset: int
+    times_offset: int
+    buttons: Buttons
+    hold_polls: int
+    release_polls: int
+    resend_limit: int
+
+
+@dataclass(frozen=True)
+class GameModes:
+    """The values of the game mode (``Globals.game_mode``).
+
+    Attributes:
+        boot_movies: The boot logos.
+        menu: The title, the main menu and the autosave prompt.
+        pause_menu: The pause menu and the options menu.
+        play: A level in play.
+        paused: Every mode in which the game is paused.
+    """
+
+    boot_movies: int
+    menu: int
+    pause_menu: int
+    play: int
+    paused: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Cheats:
+    """How the cheat entry and its table are read.
+
+    The cheat entry takes the pressed X and Y buttons into a history, counted and timed out by its own dwords. A row of
+    the cheat table names the history it matches, the callback it calls, the bit it sets in the cheat mask, and flags,
+    one of which makes it toggle the bit.
+
+    Attributes:
+        held: The held mask the entry needs and no more: both triggers.
+        count: The dword holding the number of presses in the history.
+        timeout: The dword holding the float that counts down to clearing the history.
+        history: The first of the history's dwords.
+        history_length: How many dwords the history has.
+        table: The first row of the cheat table.
+        row_stride: The size of a row.
+        sequence_offset: Where a row holds the address of its sequence.
+        mask_offset: Where it holds its mask bit.
+        flags_offset: Where it holds its flags.
+        toggle_flag: The flag that makes the row toggle its bit.
+    """
+
+    held: int
+    count: int
+    timeout: int
+    history: int
+    history_length: int
+    table: int
+    row_stride: int
+    sequence_offset: int
+    mask_offset: int
+    flags_offset: int
+    toggle_flag: int
+
+
+@dataclass(frozen=True)
+class Navigation:
+    """What the harness reads and waits for while it moves through the game.
+
+    Attributes:
+        modes: The game mode values.
+        playing: The play state (``Globals.play_state``) of a level in play.
+        control_off: The dword holding the mask of what owns the player's control; zero when the player has it.
+        render_gate: The byte that is non-zero once the player is drawn.
+        movie_flag: The dword that is ``movie_playing`` while a Bink movie plays.
+        movie_playing: The movie flag's value while a movie plays.
+        menu_world: The dword holding the pause menu's world, zero-based.
+        menu_slot: The dword holding its task slot, zero-based.
+        menu_start_world: The world the pause menu opens on when the game opens it.
+        menu_scenes: The pause menu's table of scenes, a row per world.
+        menu_row_stride: The size of a row.
+        cheats: The cheat entry.
+        warp_delay_frames: How long a level must have been in play before the harness warps out of it.
+    """
+
+    modes: GameModes
+    playing: int
+    control_off: int
+    render_gate: int
+    movie_flag: int
+    movie_playing: int
+    menu_world: int
+    menu_slot: int
+    menu_start_world: int
+    menu_scenes: int
+    menu_row_stride: int
+    cheats: Cheats
+    warp_delay_frames: int
+
+
+class Ready(StrEnum):
+    """The signal that says a scene's player is ready for the next step."""
+
+    FIRST_FRAME = "first_frame"
+    CONTROL = "control"
+    DRAWN_AND_CONTROL = "drawn_and_control"
+
+
+@dataclass(frozen=True)
+class SceneClass:
+    """A class of scenes that become ready the same way.
+
+    Attributes:
+        name: What a recording calls the class.
+        scenes: The scenes in it.
+        ready: The signal that ends the wait.
+        settle_frames: How many frames the signal must hold.
+    """
+
+    name: str
+    scenes: tuple[str, ...]
+    ready: Ready
+    settle_frames: int
+
+
+@dataclass(frozen=True)
+class SceneClasses:
+    """The scene classes, and the class of every scene in none of them.
+
+    Attributes:
+        classes: The classes with scenes.
+        other: The class of every other scene.
+        stall_frames: How many frames without the draw (``undrawn``) or without control (``control_off``) end a wait.
+    """
+
+    classes: tuple[SceneClass, ...]
+    other: SceneClass
+    stall_frames: int
+
+    def of(self, scene: str) -> SceneClass:
+        """The class of ``scene``."""
+        return next((found for found in self.classes if scene in found.scenes), self.other)
+
+
+@dataclass(frozen=True)
 class PlatformProfile:
     """Everything the harness knows about one platform's build of the game.
 
@@ -240,6 +435,9 @@ class PlatformProfile:
     layers: Layers
     crash: Crash
     globals: Globals
+    input: Input
+    navigation: Navigation
+    scene_classes: SceneClasses
 
     @property
     def digest(self) -> str:
