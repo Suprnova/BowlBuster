@@ -42,8 +42,11 @@ class RunManifest:
     profile: str
     boot_scene: str
     boot_counter: int
-    heap_events: bool | list[str]
+    observation: dict[str, Any]
     segments: list[dict[str, Any]] = field(default_factory=list)
+    captures: list[dict[str, Any]] = field(default_factory=list)
+    captures_dropped: list[dict[str, Any]] = field(default_factory=list)
+    attended: bool = False
     loads: list[dict[str, Any]] = field(default_factory=list)
     events_dropped: int = 0
     duplicates_discarded: int = 0
@@ -59,12 +62,14 @@ class RunManifest:
             "profile": self.profile,
             "counter_basis": {"boot_scene": self.boot_scene, "boot_counter": self.boot_counter},
             "passive": True,
-            "attended": False,
-            "observation": {"heap_events": self.heap_events},
+            "attended": self.attended,
+            "observation": self.observation,
             "events_dropped": self.events_dropped,
             "duplicates_discarded": self.duplicates_discarded,
             "segments": self.segments,
             "loads": self.loads,
+            "captures": self.captures,
+            "captures_dropped": self.captures_dropped,
             "write_ledger": [],
             "complete": self.complete,
             "interrupted": self.interrupted,

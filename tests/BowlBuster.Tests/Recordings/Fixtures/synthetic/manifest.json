@@ -4,7 +4,7 @@
   "disc": {
     "platform": "xbox"
   },
-  "profile": "a28bbdbdf15dec3480195de2aae632e080a4c3fc7aae34c30505d353cd34e737",
+  "profile": "cde934a119b89643d58a58ccafc619796dc1f982eef73daf49ffb6015fbe6160",
   "counter_basis": {
     "boot_scene": "MNUS",
     "boot_counter": 1
@@ -12,7 +12,11 @@
   "passive": true,
   "attended": false,
   "observation": {
-    "heap_events": true
+    "heap_events": true,
+    "cutoff_captures": [
+      "ORIG"
+    ],
+    "capture_budget": null
   },
   "events_dropped": 0,
   "duplicates_discarded": 0,
@@ -37,7 +41,7 @@
       "segment": 0,
       "counter": 3,
       "scene": "TARG",
-      "first_seq": 6,
+      "first_seq": 7,
       "costumes": {
         "spongebob": "PLSD",
         "patrick": null
@@ -47,13 +51,23 @@
       "segment": 0,
       "counter": 4,
       "scene": "TARG",
-      "first_seq": 11,
+      "first_seq": 12,
       "costumes": {
         "spongebob": null,
         "patrick": "PLPA"
       }
     }
   ],
+  "captures": [
+    {
+      "id": "0-2-cutoff",
+      "trigger": "cutoff",
+      "label": null,
+      "counter": 2,
+      "scene": "ORIG"
+    }
+  ],
+  "captures_dropped": [],
   "write_ledger": [],
   "complete": true,
   "interrupted": null

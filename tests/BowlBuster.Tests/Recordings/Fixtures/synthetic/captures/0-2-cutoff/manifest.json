@@ -1,0 +1,55 @@
+{
+  "id": "0-2-cutoff",
+  "trigger": "cutoff",
+  "label": null,
+  "platform": "xbox",
+  "arch": "x86",
+  "counter": 2,
+  "scene": "ORIG",
+  "registers": {
+    "esp": 4096,
+    "eax": 0
+  },
+  "bowl": {
+    "address": 3240492,
+    "words": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10
+    ]
+  },
+  "heap": {
+    "depth": 0,
+    "states": [
+      {
+        "cursor": 6029616,
+        "blocks": 1,
+        "used": 256,
+        "wasted": 0
+      }
+    ],
+    "last_block": {
+      "address": 6029568,
+      "size": 64
+    }
+  },
+  "ranges": {
+    "static": {
+      "address": 32768,
+      "length": 64,
+      "file": "data.bin"
+    },
+    "heap0": {
+      "address": 6029360,
+      "length": 256,
+      "file": "heap0.bin"
+    }
+  }
+}

@@ -1,18 +1,25 @@
 import json
 import os
+import shutil
 from pathlib import Path
 
 from bowlharness.mock import MockTarget
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.recorder import DuplicateFilter, Hit, Options, Recorder
 from bowlharness.scripted import ScriptedGame
+from bowlharness.target import TargetError
+
+
+def run(game: ScriptedGame, directory: Path, options: Options | None = None) -> tuple[Recorder, MockTarget]:
+    target = game.build()
+    recorder = Recorder(target, game.profile, directory, "run-1", options or Options())
+    recorder.start("attach")
+    target.run()
+    return recorder, target
 
 
 def record(game: ScriptedGame, directory: Path, options: Options | None = None) -> tuple[list[dict], dict, MockTarget]:
-    target = game.build()
-    recorder = Recorder(target, XBOX_NTSC_U, directory, "run-1", options or Options())
-    recorder.start("attach")
-    target.run()
+    recorder, target = run(game, directory, options)
     recorder.finish()
     events = [json.loads(line) for line in (directory / "events.jsonl").read_text().splitlines()]
     return events, json.loads((directory / "manifest.json").read_text()), target
@@ -276,9 +283,7 @@ def test_a_passive_run_writes_nothing_to_the_guest(tmp_path: Path) -> None:
 
 
 def test_an_interrupted_recording_is_incomplete_and_says_why(tmp_path: Path) -> None:
-    target = ScriptedGame().build()
-    recorder = Recorder(target, XBOX_NTSC_U, tmp_path, "run-1", Options())
-    recorder.start("attach")
+    recorder, _ = run(ScriptedGame(), tmp_path)
 
     recorder.finish(interrupted="emulator exited")
 
@@ -287,10 +292,7 @@ def test_an_interrupted_recording_is_incomplete_and_says_why(tmp_path: Path) -> 
 
 
 def test_manifest_is_incomplete_until_the_recording_ends(tmp_path: Path) -> None:
-    target = ScriptedGame().build()
-    recorder = Recorder(target, XBOX_NTSC_U, tmp_path, "run-1", Options())
-
-    recorder.start("attach")
+    run(ScriptedGame(), tmp_path)
 
     assert json.loads((tmp_path / "manifest.json").read_text())["complete"] is False
 
@@ -299,12 +301,103 @@ FIXTURE = Path(__file__).parents[1] / "BowlBuster.Tests" / "Recordings" / "Fixtu
 
 
 def test_the_committed_fixture_is_what_the_recorder_writes(tmp_path: Path) -> None:
-    record(three_loads(), tmp_path)
+    record(three_loads(), tmp_path, Options(cutoff_captures=frozenset({"ORIG"})))
+    written = {path.relative_to(tmp_path): path.read_bytes() for path in sorted(tmp_path.rglob("*")) if path.is_file()}
 
     if os.environ.get("BOWL_UPDATE_FIXTURE"):
-        FIXTURE.mkdir(parents=True, exist_ok=True)
-        for name in ("manifest.json", "events.jsonl"):
-            (FIXTURE / name).write_bytes((tmp_path / name).read_bytes())
+        shutil.rmtree(FIXTURE, ignore_errors=True)
+        for relative, content in written.items():
+            (FIXTURE / relative).parent.mkdir(parents=True, exist_ok=True)
+            (FIXTURE / relative).write_bytes(content)
 
-    for name in ("manifest.json", "events.jsonl"):
-        assert (tmp_path / name).read_bytes() == (FIXTURE / name).read_bytes()
+    committed = {path.relative_to(FIXTURE): path.read_bytes() for path in sorted(FIXTURE.rglob("*")) if path.is_file()}
+    assert written == committed
+
+
+def capture_dir(directory: Path, capture_id: str) -> Path:
+    return directory / "captures" / capture_id
+
+
+def test_the_cutoff_capture_holds_both_ranges_and_the_state_at_the_stop(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2, depth=1)
+    game.drawn()
+
+    events, manifest, _ = record(game, tmp_path, Options(cutoff_captures=True))
+
+    directory = capture_dir(tmp_path, "0-2-cutoff")
+    capture = json.loads((directory / "manifest.json").read_text())
+    assert [e["id"] for e in events if e["event"] == "capture"] == ["0-2-cutoff"]
+    assert (directory / "complete").exists()
+    assert (directory / "data.bin").read_bytes() == bytes(i % 251 for i in range(0x40))
+    assert (directory / "heap0.bin").read_bytes() == bytes(i % 241 for i in range(0x200))
+    assert (capture["scene"], capture["counter"], capture["platform"], capture["arch"]) == ("ORIG", 2, "xbox", "x86")
+    assert capture["heap"]["depth"] == 1
+    assert capture["bowl"]["words"][0] == 1
+    assert manifest["captures"] == [
+        {"id": "0-2-cutoff", "trigger": "cutoff", "label": None, "counter": 2, "scene": "ORIG"}
+    ]
+
+
+def test_cutoff_captures_follow_the_scene_list(tmp_path: Path) -> None:
+    game = three_loads()
+
+    _, manifest, _ = record(game, tmp_path, Options(cutoff_captures=frozenset({"TARG"})))
+
+    assert [c["id"] for c in manifest["captures"]] == ["0-3-cutoff", "0-4-cutoff"]
+
+
+def test_a_capture_over_the_budget_is_dropped_and_listed(tmp_path: Path) -> None:
+    game = three_loads()
+
+    events, manifest, _ = record(game, tmp_path, Options(cutoff_captures=True, capture_budget=1))
+
+    assert [c["id"] for c in manifest["captures"]] == ["0-2-cutoff"]
+    assert [(c["trigger"], c["scene"]) for c in manifest["captures_dropped"]] == [("cutoff", "TARG")] * 2
+    assert sorted(path.name for path in (tmp_path / "captures").iterdir()) == ["0-2-cutoff"]
+    assert names(events).count("capture") == 1
+
+
+def test_a_capture_that_fails_midway_is_absent(tmp_path: Path) -> None:
+    class FailingDump(MockTarget):
+        def dump(self, address: int, length: int, path: Path) -> None:
+            super().dump(address, length, path)
+            raise TargetError("the emulator stopped answering")
+
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    game.drawn()
+    target = FailingDump(game.script)
+    recorder = Recorder(target, game.profile, tmp_path, "run-1", Options(cutoff_captures=True))
+    recorder.start("attach")
+    target.run()
+    recorder.finish()
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert (manifest["captures"], manifest["events_dropped"]) == ([], 1)
+    assert not capture_dir(tmp_path, "0-2-cutoff").exists()
+
+
+def test_a_manual_capture_marks_the_run_attended_and_repeats_get_their_own_ids(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 2)
+    recorder, _ = run(game, tmp_path)
+
+    ids = [recorder.capture("manual", "before the warp"), recorder.capture("manual", "after")]
+    recorder.finish()
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text())
+    assert ids == ["0-2-manual", "0-2-manual-2"]
+    assert (manifest["attended"], [c["label"] for c in manifest["captures"]]) == (True, ["before the warp", "after"])
+
+
+def test_an_unattended_recording_has_no_captures_unless_asked(tmp_path: Path) -> None:
+    _, manifest, _ = record(three_loads(), tmp_path)
+
+    assert (manifest["captures"], manifest["attended"], (tmp_path / "captures").exists()) == ([], False, False)
+
+
+def test_the_observation_level_records_the_capture_options(tmp_path: Path) -> None:
+    _, manifest, _ = record(ScriptedGame(), tmp_path, Options(cutoff_captures=frozenset({"TARG"}), capture_budget=5))
+
+    assert manifest["observation"] == {"heap_events": True, "cutoff_captures": ["TARG"], "capture_budget": 5}

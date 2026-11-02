@@ -1,7 +1,9 @@
 """Records a passive run's events and manifest by observing a target. Nothing here writes to guest memory."""
 
 import logging
+import shutil
 import struct
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +11,7 @@ from pathlib import Path
 from bowlharness.observe import heap0_state, loading_layer, tag, u32, worn_archives
 from bowlharness.profiles.profile import PlatformProfile, Point
 from bowlharness.recording import EventWriter, RunManifest
+from bowlharness.recording.captures import take_capture
 from bowlharness.target import Handle, Registers, Stop, Target, TargetError
 
 log = logging.getLogger(__name__)
@@ -21,13 +24,37 @@ class Options:
     Attributes:
         heap_events: Whether heap events are logged for every scene, for none, or for the listed scenes. A scene's
             init always logs its heap state.
+        cutoff_captures: Whether a capture is taken at the cutoff of every scene, of none, or of the listed scenes.
+        capture_budget: The most captures to take, or ``None`` for no limit.
     """
 
     heap_events: bool | frozenset[str] = True
+    cutoff_captures: bool | frozenset[str] = False
+    capture_budget: int | None = None
 
     def logs_heap(self, scene: str) -> bool:
         """Whether heap events are logged while ``scene`` runs."""
-        return self.heap_events if isinstance(self.heap_events, bool) else scene in self.heap_events
+        return _includes(self.heap_events, scene)
+
+    def captures_cutoff(self, scene: str) -> bool:
+        """Whether a capture is taken at the cutoff of ``scene``."""
+        return _includes(self.cutoff_captures, scene)
+
+    def to_json(self) -> dict[str, object]:
+        """The options as a manifest records them."""
+        return {
+            "heap_events": _listed(self.heap_events),
+            "cutoff_captures": _listed(self.cutoff_captures),
+            "capture_budget": self.capture_budget,
+        }
+
+
+def _includes(scenes: bool | frozenset[str], scene: str) -> bool:
+    return scenes if isinstance(scenes, bool) else scene in scenes
+
+
+def _listed(scenes: bool | frozenset[str]) -> bool | list[str]:
+    return scenes if isinstance(scenes, bool) else sorted(scenes)
 
 
 @dataclass(frozen=True)
@@ -86,6 +113,7 @@ class Recorder:
         self._target = target
         self._profile = profile
         self._options = options
+        self._directory = directory
         self._manifest_path = directory / "manifest.json"
         self._events = EventWriter((directory / "events.jsonl").open("w", encoding="utf-8", newline="\n"))
         self._manifest = RunManifest(
@@ -94,13 +122,15 @@ class Recorder:
             profile=profile.digest,
             boot_scene=profile.boot_scene,
             boot_counter=profile.boot_counter,
-            heap_events=options.heap_events if isinstance(options.heap_events, bool) else sorted(options.heap_events),
+            observation=options.to_json(),
         )
         self._duplicates = DuplicateFilter(frozenset(profile.points.frame.entry))
         self._heap_handles: list[Handle] = []
         self._drawn_handle: Handle | None = None
         self._pops: list[int] = []
         self._counter: int | None = None
+        self._scene: str | None = None
+        self._capture_ids: Counter[str] = Counter()
 
     def start(self, reason: str) -> None:
         """Opens the first segment and arms the points that follow the game's loads."""
@@ -121,6 +151,40 @@ class Recorder:
         self._manifest.interrupted = interrupted
         self._manifest.write(self._manifest_path)
         self._events.close()
+
+    def capture(self, trigger: str, label: str | None = None) -> str | None:
+        """Captures the stopped guest, unless the budget is spent or the capture fails.
+
+        A capture a person asks for (``manual``) marks the run attended. Every capture is logged as an event and
+        listed in the manifest; one the budget refuses is listed there as dropped.
+
+        Returns:
+            The capture's id, or ``None`` when it was not taken.
+        """
+        if trigger == "manual":
+            self._manifest.attended = True
+        budget = self._options.capture_budget
+        if budget is not None and len(self._manifest.captures) >= budget:
+            self._manifest.captures_dropped.append({"trigger": trigger, "label": label, "scene": self._scene})
+            return None
+        counter = u32(self._target.read, self._profile.globals.scene_counter)
+        base = f"{self._events.segment}-{counter}-{trigger}"
+        self._capture_ids[base] += 1
+        capture_id = base if self._capture_ids[base] == 1 else f"{base}-{self._capture_ids[base]}"
+        directory = self._directory / "captures" / capture_id
+        try:
+            take_capture(self._target, self._profile, directory, capture_id, trigger, label)
+        except (TargetError, ValueError, OSError) as error:
+            shutil.rmtree(directory, ignore_errors=True)
+            self._manifest.events_dropped += 1
+            log.warning("dropped the capture %s: %s", capture_id, error)
+            return None
+        self._manifest.captures.append(
+            {"id": capture_id, "trigger": trigger, "label": label, "counter": counter, "scene": self._scene}
+        )
+        self._emit("capture", id=capture_id, trigger=trigger, label=label)
+        self._manifest.write(self._manifest_path)
+        return capture_id
 
     def _arm(self, point: Point, handler: Callable[[Hit], None], *, at_return: bool = False) -> list[Handle]:
         guarded = self._guard(point, handler)
@@ -155,6 +219,7 @@ class Recorder:
         if self._counter is not None and counter != self._counter + 1 and hit.caller != self._profile.boot_return:
             self._emit("counter_gap", counter=counter, expected=self._counter + 1)
         self._counter = counter
+        self._scene = scene
         seq = self._emit("scene_init", scene=scene, caller=hit.caller, counter=counter, heap=heap)
         self._manifest.loads.append(
             {
@@ -181,6 +246,8 @@ class Recorder:
             self._target.clear(self._drawn_handle)
             self._drawn_handle = None
         self._emit("drawn")
+        if self._scene is not None and self._options.captures_cutoff(self._scene):
+            self.capture("cutoff")
 
     def _arm_heap_events(self, wanted: bool) -> None:
         if wanted == bool(self._heap_handles):

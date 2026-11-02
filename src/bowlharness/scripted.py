@@ -1,6 +1,7 @@
 """Builds scripted guests for the mock target: the stops a game would give, with the memory behind them."""
 
 import struct
+from dataclasses import replace
 
 from bowlharness.mock import MockTarget, Step
 from bowlharness.profiles import XBOX_NTSC_U, PlatformProfile
@@ -12,6 +13,8 @@ ARCHIVE = 0x4000
 ARRAY = 0x4400
 LAYER_OBJECTS = 0x4800
 
+COMPACT = replace(XBOX_NTSC_U, static_range=(0x8000, 0x8040))
+
 ARCHIVES = [(b"PLSB", 0, 0), (b"PLSD", 0, 0), (b"PLPB", 1, 0), (b"PLP1", 1, 0)]
 CHEAT_ARCHIVES = [(b"PLSA", 0, 0x2000000), (b"PLSC", 0, 0x4000000), (b"PLPA", 1, 0x10000000), (b"PLPC", 1, 0x8000000)]
 
@@ -19,14 +22,20 @@ CHEAT_ARCHIVES = [(b"PLSA", 0, 0x2000000), (b"PLSC", 0, 0x4000000), (b"PLPA", 1,
 class ScriptedGame:
     """Collects the steps of a guest's run, one call per stop the game would give."""
 
-    def __init__(self, profile: PlatformProfile = XBOX_NTSC_U) -> None:
+    def __init__(self, profile: PlatformProfile = COMPACT) -> None:
+        self.profile = profile
         self._profile = profile
         self._steps: list[Step] = []
         self.frame = 0
 
+    @property
+    def script(self) -> list[Step]:
+        """The steps collected so far."""
+        return list(self._steps)
+
     def build(self) -> MockTarget:
         """The mock target that plays the steps collected so far."""
-        return MockTarget(list(self._steps))
+        return MockTarget(self.script)
 
     def scene_init(
         self,
@@ -42,6 +51,8 @@ class ScriptedGame:
         """A scene initialising, with heap 0 at the given depth and the costumes the extras and cheats enable."""
         memory = {
             self._profile.globals.scene_counter: struct.pack("<I", counter),
+            self._profile.globals.current_scene: scene.encode("ascii"),
+            **self._capturable(depth),
             **self._heap0(depth, last_block),
             **self._costumes(extras or {}, cheats),
         }
@@ -120,6 +131,17 @@ class ScriptedGame:
         self.frame += 1
         frame = {self._profile.globals.frame: struct.pack("<I", self.frame)}
         self._steps.append(Step(pc, {"esp": esp, "eax": eax}, {STACK: stack, **frame, **(memory or {})}))
+
+    def _capturable(self, depth: int) -> dict[int, bytes]:
+        """The bytes a capture reads: the static range, heap 0 up to its cursor, and the bowl's statics."""
+        first, last = self._profile.globals.bowl_statics
+        static_first, static_last = self._profile.static_range
+        heap0 = 0x100 * (depth + 1)
+        return {
+            static_first: bytes(index % 251 for index in range(static_last - static_first)),
+            self._profile.heap.heap0_base: bytes(index % 241 for index in range(heap0)),
+            first: struct.pack(f"<{(last - first) // 4 + 1}I", *range(1, (last - first) // 4 + 2)),
+        }
 
     def _heap0(self, depth: int, last_block: tuple[int, int] | None) -> dict[int, bytes]:
         heap = self._profile.heap
