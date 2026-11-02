@@ -1,0 +1,169 @@
+"""The platform profile: every address and constant that belongs to one platform's build of the game."""
+
+import hashlib
+import json
+from dataclasses import asdict, dataclass
+
+
+@dataclass(frozen=True)
+class Point:
+    """A place in the game's code the recorder observes.
+
+    The arguments are the stack words after the return address, which sits at the stack pointer. They are read at the
+    entry when the point has one, since a function may overwrite its argument slots before it returns, and otherwise
+    at the return.
+
+    Attributes:
+        entry: Addresses of the function's first instruction, or of the instruction observed.
+        returns: Addresses of every return instruction of the function. The result is in the accumulator there.
+        args: How many argument words to read.
+    """
+
+    entry: tuple[int, ...] = ()
+    returns: tuple[int, ...] = ()
+    args: int = 0
+
+
+@dataclass(frozen=True)
+class Points:
+    """The points the recorder observes, by event."""
+
+    scene_init: Point
+    scene_exit: Point
+    alloc: Point
+    grow: Point
+    push: Point
+    pop: Point
+    model: Point
+    pool_free: Point
+    drawn: Point
+    frame: Point
+
+
+@dataclass(frozen=True)
+class Heap:
+    """How a heap descriptor is laid out in guest memory.
+
+    A descriptor holds the heap's flags, its depth states and its current depth. A depth state holds a cursor, a block
+    count, the bytes used and the bytes wasted. The last block is a pointer to the header of the block last
+    allocated, which holds the block's address and size.
+    """
+
+    descriptors: int
+    stride: int
+    flags_offset: int
+    states_offset: int
+    state_stride: int
+    state_count: int
+    cursor_offset: int
+    blocks_offset: int
+    used_offset: int
+    wasted_offset: int
+    depth_offset: int
+    last_block_offset: int
+    block_address_offset: int
+    block_size_offset: int
+    heap0_base: int
+    active_heap: int
+
+
+@dataclass(frozen=True)
+class Model:
+    """Where the model allocator's fields are read.
+
+    The instance is the result. The flags are an argument. The bypass flag is a global, and the node count a byte of
+    the instance.
+    """
+
+    bypass: int
+    nodes_offset: int
+    flags_arg: int
+
+
+@dataclass(frozen=True)
+class Costumes:
+    """How the worn player archive of each character is resolved.
+
+    The costume table has an entry per archive: its tag, its character and the cheat-mask bits that enable it. The
+    first entries are enabled instead by a row of the extras table, of the given kind, whose id is the entry's index
+    plus one. The first enabled entry of a character is the one worn.
+    """
+
+    table: int
+    count: int
+    stride: int
+    character_offset: int
+    mask_offset: int
+    extras_count: int
+    extras: int
+    extra_stride: int
+    extra_state_offset: int
+    extra_kind: int
+    extra_entries: int
+    cheat_mask: int
+
+
+@dataclass(frozen=True)
+class Globals:
+    """The guest globals the recorder reads.
+
+    Attributes:
+        scene_counter: The load counter, already advanced when a scene initialises.
+        current_scene: The four characters of the scene being run, valid from its init until its exit.
+        frame: A dword that grows by one each frame.
+        bowl_statics: First and last dword of the bowl's statics.
+        watched: The dwords whose writes are watched.
+    """
+
+    scene_counter: int
+    current_scene: int
+    frame: int
+    bowl_statics: tuple[int, int]
+    watched: tuple[int, ...]
+    token_count: int
+    manliness_count: int
+    play_state: int
+    game_mode: int
+    active_port: int
+
+
+@dataclass(frozen=True)
+class PlatformProfile:
+    """Everything the harness knows about one platform's build of the game.
+
+    Attributes:
+        name: The platform, as a recording names it.
+        arch: The processor architecture.
+        registers: The registers a capture and a crash record read, by name.
+        code: First and one past the last address of the game's code.
+        static_range: First and one past the last address of the data and zero-initialised sections.
+        heap_block_size: The size of the block the game takes for its heaps.
+        boot_scene: The scene the game boots into.
+        boot_counter: The load counter at the boot scene.
+        boot_return: The return address of the call that initialises the boot scene.
+        kernel_base: Where the kernel image is mapped.
+        bugcheck_ordinals: The kernel export ordinals of the bugcheck functions.
+    """
+
+    name: str
+    arch: str
+    registers: tuple[str, ...]
+    code: tuple[int, int]
+    static_range: tuple[int, int]
+    heap_block_size: int
+    boot_scene: str
+    boot_counter: int
+    boot_return: int
+    kernel_base: int
+    bugcheck_ordinals: tuple[int, int]
+    points: Points
+    heap: Heap
+    model: Model
+    costumes: Costumes
+    globals: Globals
+
+    @property
+    def digest(self) -> str:
+        """A hash of the whole profile, for a run's manifest."""
+        canonical = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(canonical.encode()).hexdigest()
