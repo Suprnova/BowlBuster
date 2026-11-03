@@ -336,10 +336,13 @@ class Navigation:
         menu_world: The dword holding the pause menu's world, zero-based.
         menu_slot: The dword holding its task slot, zero-based.
         menu_start_world: The world the pause menu opens on when the game opens it.
-        menu_scenes: The pause menu's table of scenes, a row per world.
+        menu_scenes: The pause menu's table of scenes, a row per world, filled when the game boots.
         menu_row_stride: The size of a row.
+        menu_slot_stride: The size of a slot in a row, which starts with the scene's four characters.
         cheats: The cheat entry.
         warp_delay_frames: How long a level must have been in play before the harness warps out of it.
+        action_polls: How many polls a press has to show its effect before it is sent again.
+        warp_polls: How many polls the confirmed warp has to begin loading.
     """
 
     modes: GameModes
@@ -353,8 +356,11 @@ class Navigation:
     menu_start_world: int
     menu_scenes: int
     menu_row_stride: int
+    menu_slot_stride: int
     cheats: Cheats
     warp_delay_frames: int
+    action_polls: int
+    warp_polls: int
 
 
 class Ready(StrEnum):

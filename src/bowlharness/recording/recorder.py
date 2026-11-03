@@ -322,6 +322,15 @@ class Recorder:
         return self._scene
 
     @property
+    def counter(self) -> int | None:
+        """The load counter of the latest scene init."""
+        return self._counter
+
+    def log_event(self, event: str, **fields: object) -> int:
+        """Logs an event of the harness's own, such as a step of a route. It doesn't mark the run attended."""
+        return self._emit(event, **fields)
+
+    @property
     def presses(self) -> int:
         """How many presses are in the input ledger."""
         return len(self._manifest.input_ledger)
@@ -337,7 +346,9 @@ class Recorder:
         ]
         self._manifest.write(self._manifest_path)
 
-    def record_step(self, index: int, status: str, reason: str | None = None, presses: int = 0) -> None:
+    def record_step(
+        self, index: int, status: str, reason: str | None = None, presses: int = 0, signal: str | None = None
+    ) -> None:
         """Logs how a step of the route ended, as a ``step`` event and in the manifest's ``steps``.
 
         Args:
@@ -345,10 +356,12 @@ class Recorder:
             status: ``reached`` or ``failed``.
             reason: Why a step failed.
             presses: How many presses the harness gave during it.
+            signal: What said a reached step's player was ready.
         """
         row = self._manifest.steps[index]
-        seq = self._emit("step", index=index, scene=row["scene"], status=status, reason=reason)
-        row |= {"status": status, "reason": reason, "frame": self.frame(), "seq": seq, "presses": presses}
+        seq = self._emit("step", index=index, scene=row["scene"], status=status, reason=reason, signal=signal)
+        row |= {"status": status, "reason": reason, "signal": signal}
+        row |= {"frame": self.frame(), "seq": seq, "presses": presses}
         self._manifest.write(self._manifest_path)
 
     def attend(self) -> None:

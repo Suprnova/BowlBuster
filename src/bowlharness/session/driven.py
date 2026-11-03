@@ -86,6 +86,7 @@ class DrivenSession(Session):
             release=self._request.release,
             on_poll=self._navigator.on_poll,
         )
+        self._navigator.use(self._driver)
         self._driver.arm()
         recorder.listen(self._navigator.on_event)
         self._navigator.start()

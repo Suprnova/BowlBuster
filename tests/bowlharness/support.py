@@ -1,10 +1,14 @@
 import json
 from pathlib import Path
+from typing import Any
 
 from scripted import ScriptedGame
 
 from bowlharness.backends.mock import MockTarget
+from bowlharness.driving.request import RecordRequest, parse_request
+from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.recording.recorder import Options, Recorder
+from bowlharness.session.driven import DrivenSession
 
 
 def run(game: ScriptedGame, directory: Path, options: Options | None = None) -> tuple[Recorder, MockTarget]:
@@ -41,3 +45,46 @@ def three_loads() -> ScriptedGame:
     game.scene_init("TARG", 4, cheats=0x10000000)
     game.drawn()
     return game
+
+
+DIGEST = "ab" * 32
+
+
+def route(*steps: str | tuple[str, int, int], start: str = "booted") -> RecordRequest:
+    """A record request through ``steps``: a scene, or a scene with its menu world and slot (numbered from 1)."""
+    parsed = []
+    for index, step in enumerate(steps):
+        scene, *menu = (step,) if isinstance(step, str) else step
+        entry: dict[str, Any] = {"scene": scene}
+        if index:
+            world, slot = menu or (index + 1, 1)
+            entry["menu"] = {"world": world, "slot": slot}
+        parsed.append(entry)
+    document = {
+        "schema_version": 1,
+        "request_id": "route-1",
+        "kind": "record",
+        "start": {"from": start},
+        "steps": parsed,
+    }
+    return parse_request(document, XBOX_NTSC_U)
+
+
+def drive(game: ScriptedGame, directory: Path, request: RecordRequest) -> tuple[DrivenSession, dict[str, Any]]:
+    """Drives the scripted game along the request and returns the session and the recording's manifest."""
+    target = MockTarget(game.script, {**game.kernel_image(), game.profile.globals.frame: bytes(4)})
+    session = DrivenSession(
+        target,
+        game.profile,
+        directory / "out",
+        request,
+        DIGEST,
+        run_stem="s",
+        environment={"emulator": {"name": "xemu"}, "disc": {"image": "disc.iso"}},
+    )
+    session.run()
+    return session, json.loads((directory / "out" / "s-1" / "manifest.json").read_text())
+
+
+def driven_events(directory: Path) -> list[dict]:
+    return [json.loads(line) for line in (directory / "out" / "s-1" / "events.jsonl").read_text().splitlines()]

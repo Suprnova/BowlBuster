@@ -42,6 +42,8 @@ class ScriptedGame:
         self._profile = profile
         self._steps: list[Step] = []
         self.frame = 0
+        self.cursor = (0, 0)
+        self._menu: dict[int, bytes] = {}
 
     @property
     def script(self) -> list[Step]:
@@ -200,6 +202,7 @@ class ScriptedGame:
         state: int = 1,
         control_off: int = 0,
         gate: int = 1,
+        movie: int = 2,
         wait: Wait | None = None,
     ) -> None:
         """A poll of the pad: the button dword holds ``physical`` and the pad record shows ``pressed`` as the edge.
@@ -218,9 +221,52 @@ class ScriptedGame:
             profile.globals.play_state: struct.pack("<I", state),
             navigation.control_off: struct.pack("<I", control_off),
             navigation.render_gate: bytes([gate]),
+            navigation.movie_flag: struct.pack("<I", movie),
+            navigation.menu_world: struct.pack("<I", self.cursor[0]),
+            navigation.menu_slot: struct.pack("<I", self.cursor[1]),
+            **self._menu,
         }
         words = (PAD_RECORD, PAD_BUFFER, 0, 0, 0, port)
         self._step(profile.points.pad_read.entry[0], words, eax=result, memory=memory, wait=wait)
+
+    def menu_scenes(self, rows: dict[tuple[int, int], str]) -> None:
+        """The scenes the pause menu holds, by world and slot (both from 0), as the game fills its table at boot."""
+        navigation = self._profile.navigation
+        self._menu = {
+            navigation.menu_scenes
+            + world * navigation.menu_row_stride
+            + slot * navigation.menu_slot_stride: scene.encode()
+            for (world, slot), scene in rows.items()
+        }
+
+    def await_press(
+        self,
+        button: str,
+        *,
+        cursor: tuple[int, int] | None = None,
+        mode: int | None = None,
+        after: int | None = None,
+        polls: int = 30,
+    ) -> None:
+        """A poll that repeats until the harness presses ``button``, then the polls that finish the press.
+
+        The game is in ``mode`` until the press arrives and in ``after`` (by default the same) from then on, and the
+        pause menu's cursor moves to ``cursor``.
+        The polls after the press are the rest of its hold and its release, so the next wait sees only its own press.
+        """
+        pad = self._profile.input
+        navigation = self._profile.navigation
+        then = {}
+        if cursor is not None:
+            then = {
+                navigation.menu_world: struct.pack("<I", cursor[0]),
+                navigation.menu_slot: struct.pack("<I", cursor[1]),
+            }
+        self.pad_poll(mode=mode, wait=Wait(PAD_BUFFER, getattr(pad.buttons, button), polls, then))
+        if cursor is not None:
+            self.cursor = cursor
+        for _ in range(pad.hold_polls - 1 + pad.release_polls):
+            self.pad_poll(mode=mode if after is None else after)
 
     def stop(self, pc: int, words: tuple[int | bytes, ...], *, esp: int = STACK, eax: int = 0) -> None:
         """A stop at ``pc`` with the given stack words, at a stack pointer that may be unreadable."""

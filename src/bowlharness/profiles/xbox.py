@@ -180,6 +180,7 @@ XBOX_NTSC_U = PlatformProfile(
         menu_start_world=4,
         menu_scenes=0x2E5C64,
         menu_row_stride=0x54,
+        menu_slot_stride=8,
         cheats=Cheats(
             held=0x1100,
             count=0x309438,
@@ -194,6 +195,8 @@ XBOX_NTSC_U = PlatformProfile(
             toggle_flag=1,
         ),
         warp_delay_frames=180,
+        action_polls=60,
+        warp_polls=900,
     ),
     scene_classes=SceneClasses(
         classes=(
