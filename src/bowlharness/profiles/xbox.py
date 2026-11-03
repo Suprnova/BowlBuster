@@ -66,7 +66,7 @@ XBOX_NTSC_U = PlatformProfile(
         scene_id=Point(returns=(0x74326,)),
         first_stale_write=Point(entry=(0x95295,)),
         reset=Point(entry=(0x701E0,)),
-        pad_read=Point(entry=(0x18DF8C,)),
+        pad_read=Point(entry=(0x18DF8C,), args=5),
     ),
     heap=Heap(
         descriptors=0x413718,

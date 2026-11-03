@@ -69,6 +69,7 @@
   ],
   "captures_dropped": [],
   "write_ledger": [],
+  "input_ledger": [],
   "crash": null,
   "hang": null,
   "complete": true,

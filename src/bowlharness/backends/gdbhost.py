@@ -185,7 +185,10 @@ def _connect(port: int, process: subprocess.Popen[bytes] | None) -> None:
 
 def _tell(state: str) -> None:
     if state == PAUSED:
-        print("paused: bowl capture <label> | bowl read <address> <length> | bowl resume | bowl stop")
+        print(
+            "paused: bowl capture <label> | bowl read <address> <length> | bowl press <button> [<polls>] | "
+            "bowl resume | bowl stop"
+        )
     else:
         print(f"ended: {_session.recordings if _session else 0} recording(s) in {_session_out}")
 
@@ -248,6 +251,16 @@ def _read(args: Sequence[str]) -> None:
         print(f"{address + offset:08x}  {data[offset : offset + 16].hex(' ')}")
 
 
+def _press(args: Sequence[str]) -> None:
+    if not 1 <= len(args) <= 2:
+        raise gdb.GdbError("usage: bowl press <button> [<polls>]")
+    try:
+        _live().press(args[0], int(args[1]) if len(args) == 2 else None)
+    except ValueError as error:
+        raise gdb.GdbError(str(error)) from error
+    print(f"queued: {args[0]}")
+
+
 def _resume(_: Sequence[str]) -> None:
     _tell(_live().resume())
 
@@ -262,13 +275,14 @@ _COMMANDS: dict[str, Callable[[Sequence[str]], None]] = {
     "record": _record,
     "capture": _capture,
     "read": _read,
+    "press": _press,
     "resume": _resume,
     "stop": _stop,
 }
 
 
 class _Bowl(gdb.Command):
-    """The harness's commands: bowl smoke|record|capture|read|resume|stop."""
+    """The harness's commands: bowl smoke|record|capture|read|press|resume|stop."""
 
     def __init__(self) -> None:
         super().__init__("bowl", gdb.COMMAND_USER)

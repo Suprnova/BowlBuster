@@ -107,7 +107,8 @@ def stack_words(read: Read, esp: int, count: int) -> tuple[int, ...]:
 class Watchdog:
     """Declares a hang when the guest shows no progress for longer than its liveness window.
 
-    Progress is the frame counter advancing or the recorder logging any event, since a load runs no frames. The
+    Progress is the frame counter advancing, the recorder logging any event or the controller being polled, since a
+    load runs no frames and a menu runs none either. The
     session calls :meth:`check` each time the guest has run for ``liveness`` seconds and been stopped; a stall
     during a load is given ``load_limit`` seconds, and nothing counts while the guest is held for a person.
 
@@ -122,7 +123,7 @@ class Watchdog:
         self.liveness = liveness
         self._load_limit = load_limit
         self._held = False
-        self._seen: tuple[int, int] | None = None
+        self._seen: tuple[int, int, int] | None = None
         self._stalled = 0.0
 
     def hold(self) -> None:
@@ -139,7 +140,7 @@ class Watchdog:
         """Looks for progress since the last check, and reports a hang if there has been none for too long."""
         if self._held or self._recorder.ended:
             return False
-        seen = (self._recorder.frame(), self._recorder.event_count)
+        seen = (self._recorder.frame(), self._recorder.event_count, self._recorder.polls)
         self._stalled = self._stalled + self.liveness if seen == self._seen else 0.0
         self._seen = seen
         limit = self._load_limit if self._recorder.loading else self.liveness

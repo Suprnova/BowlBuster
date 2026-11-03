@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bowlharness.backends.mock import MockTarget, Step
+from bowlharness.backends.mock import MockTarget, Step, Wait
 from bowlharness.target import Stop, TargetError
 
 
@@ -112,3 +112,30 @@ def test_run_with_a_timeout_is_not_stopped_while_stops_keep_coming() -> None:
     expired = target.run(timeout=5)
 
     assert expired is False
+
+
+def test_a_waiting_step_repeats_until_the_press_arrives_and_then_applies_its_memory() -> None:
+    wait = Wait(0x100, 0x2, polls=5, then={0x200: b"\x07"})
+    polled: list[int] = []
+    target = MockTarget([Step(0x50, memory={0x100: bytes(4)}, wait=wait)], {0x200: b"\x00"})
+
+    def press_on_the_third(_: Stop) -> None:
+        polled.append(1)
+        if len(polled) == 3:
+            target.write(0x100, b"\x02\x00\x00\x00")
+
+    target.set_breakpoint(0x50, press_on_the_third)
+    target.run()
+
+    assert (len(polled), target.read(0x200, 1)) == (3, b"\x07")
+
+
+def test_a_waiting_step_gives_up_when_its_polls_run_out() -> None:
+    polled: list[int] = []
+    wait = Wait(0x100, 0x2, polls=4, then={0x200: b"\x07"})
+    target = MockTarget([Step(0x50, memory={0x100: bytes(4)}, wait=wait)], {0x200: b"\x00"})
+    target.set_breakpoint(0x50, lambda _: polled.append(1))
+
+    target.run()
+
+    assert (len(polled), target.read(0x200, 1)) == (5, b"\x00")

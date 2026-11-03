@@ -1,7 +1,8 @@
 # bowlharness
 
 Records a run of the game under [xemu](https://xemu.app), as a person plays it. It only observes: it writes nothing to
-the guest's memory, and its recording says so.
+the guest's memory, and its recording says so. The one thing it can give the game is a button press, when a person
+asks for one.
 
 ## Setting up
 
@@ -43,6 +44,7 @@ Press Ctrl-C in the gdb window to pause the guest, then:
 |---|---|
 | `bowl capture <label>` | take a labelled capture |
 | `bowl read <address> <length>` | print guest memory (the log keeps the range, not the bytes) |
+| `bowl press <button> [<polls>]` | give the game a button on the next resume, for 6 polls unless told (`a`, `b`, `x`, `y`, `start`, `back`, `l`, `r`, `up`, `down`, `left`, `right`) |
 | `bowl resume` | let the guest run again |
 | `bowl stop` | end the session and close the xemu the harness started |
 

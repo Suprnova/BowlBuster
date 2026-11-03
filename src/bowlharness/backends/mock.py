@@ -8,6 +8,26 @@ from bowlharness.target import Capability, Handle, Handler, Registers, Stop, Tar
 
 
 @dataclass(frozen=True)
+class Wait:
+    """A step that repeats until the harness has given the guest a button.
+
+    The step repeats as a poll, arriving again each time, until the dword at ``address`` holds all of ``mask`` or the
+    guest has polled ``polls`` times, and only then applies ``then``.
+
+    Attributes:
+        address: The dword the harness presses into.
+        mask: The buttons it must hold.
+        polls: How many times the step may repeat before the guest goes on without the press.
+        then: The memory that takes effect once the press arrives.
+    """
+
+    address: int
+    mask: int
+    polls: int
+    then: Mapping[int, bytes] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class Step:
     """One point of a scripted guest's execution.
 
@@ -17,6 +37,7 @@ class Step:
         memory: Bytes that take effect in guest memory on arriving, by address.
         written: The address the instruction writes, if any.
         seconds: How long the guest runs before arriving.
+        wait: What the step waits for before the guest goes on, if anything.
     """
 
     pc: int
@@ -24,6 +45,7 @@ class Step:
     memory: Mapping[int, bytes] = field(default_factory=dict)
     written: int | None = None
     seconds: float = 0.0
+    wait: Wait | None = None
 
 
 @dataclass
@@ -90,6 +112,8 @@ class MockTarget:
             self._position += 1
             elapsed += step.seconds
             fired = self._arrive(step)
+            if step.wait:
+                fired |= self._wait(step, step.wait)
             if timeout is not None and elapsed >= timeout and not self._interrupted:
                 return True
             if fired:
@@ -109,6 +133,22 @@ class MockTarget:
 
     def _store(self, address: int, data: bytes) -> None:
         self._memory.update(enumerate(data, address))
+
+    def _wait(self, step: Step, wait: Wait) -> bool:
+        """Repeats a step until its press arrives or its polls run out; returns whether any handler ran."""
+        fired = False
+        for repeat in range(wait.polls + 1):
+            if int.from_bytes(self.read(wait.address, 4), "little") & wait.mask == wait.mask:
+                self._store_all(wait.then)
+                break
+            if repeat == wait.polls or self._interrupted:
+                break
+            fired |= self._arrive(step)
+        return fired
+
+    def _store_all(self, memory: Mapping[int, bytes]) -> None:
+        for address, data in memory.items():
+            self._store(address, data)
 
     def _arrive(self, step: Step) -> bool:
         """Applies a step and calls the handlers it reaches; returns whether any ran."""

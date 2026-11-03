@@ -57,6 +57,7 @@ class RunManifest:
     crash: dict[str, Any] | None = None
     hang: dict[str, Any] | None = None
     loads: list[dict[str, Any]] = field(default_factory=list)
+    input_ledger: list[dict[str, Any]] = field(default_factory=list)
     events_dropped: int = 0
     duplicates_discarded: int = 0
     complete: bool = False
@@ -81,6 +82,7 @@ class RunManifest:
             "captures": self.captures,
             "captures_dropped": self.captures_dropped,
             "write_ledger": [],
+            "input_ledger": self.input_ledger,
             "crash": self.crash,
             "hang": self.hang,
             "complete": self.complete,

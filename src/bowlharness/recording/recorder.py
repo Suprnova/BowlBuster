@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from bowlharness.profiles.profile import PlatformProfile, Point
 from bowlharness.recording import EventWriter, RunManifest
@@ -144,7 +145,7 @@ class Recorder:
             observation=options.to_json(),
             environment=environment or {},
         )
-        self._duplicates = DuplicateFilter(frozenset(profile.points.frame.entry))
+        self._duplicates = DuplicateFilter(frozenset((*profile.points.frame.entry, *profile.points.pad_read.entry)))
         self._heap_handles: list[Handle] = []
         self._handles: set[Handle] = set()
         self._armed: dict[Handle, tuple[int, Callable[[Stop], None]]] = {}
@@ -158,6 +159,8 @@ class Recorder:
         self._capture_ids: Counter[str] = Counter()
         self._last_event: dict[str, object] | None = None
         self._ending: str | None = None
+        self._listeners: list[Callable[[str], None]] = []
+        self.polls = 0
         self.loading = False
 
     def start(self, reason: str) -> None:
@@ -294,7 +297,39 @@ class Recorder:
     def _emit(self, event: str, **fields: object) -> int:
         seq = self._events.emit(event, self.frame(), **fields)
         self._last_event = {"seq": seq, "event": event}
+        for listener in self._listeners:
+            listener(event)
         return seq
+
+    def listen(self, listener: Callable[[str], None]) -> None:
+        """Calls ``listener`` with the name of each event as it is logged."""
+        self._listeners.append(listener)
+
+    def arm_pad_read(self, handler: Callable[[Hit], None]) -> None:
+        """Observes the game's pad read: ``handler`` gets each stop there, in the order the guest reaches them.
+
+        Stops at the pad read are never discarded as duplicates, and one the guest was interrupted at is replayed.
+        """
+        self._arm(self._profile.points.pad_read, handler)
+
+    def count_poll(self) -> None:
+        """Counts a poll of the controller, which is progress for the watchdog."""
+        self.polls += 1
+
+    def attend(self) -> None:
+        """Marks the run attended: a person took part."""
+        self._manifest.attended = True
+
+    def log_press(self, row: dict[str, Any]) -> None:
+        """Logs a press the harness gave or a person made: in the input ledger and as a ``press`` event.
+
+        A press that is not the harness's own marks the run attended.
+        """
+        if row["source"] != "harness":
+            self.attend()
+        self._manifest.input_ledger.append(row)
+        self._emit("press", button=row["button"], mask=row["mask"], source=row["source"], polls=row["polls"])
+        self._manifest.write(self._manifest_path)
 
     def _arm_crash_detection(self) -> None:
         """Breaks on the bugcheck functions, as soon as the kernel is loaded: at once, or when the title starts."""

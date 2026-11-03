@@ -3,7 +3,7 @@
 import struct
 from dataclasses import replace
 
-from bowlharness.backends.mock import MockTarget, Step
+from bowlharness.backends.mock import MockTarget, Step, Wait
 from bowlharness.profiles import XBOX_NTSC_U, PlatformProfile
 
 STACK = 0x1000
@@ -13,6 +13,8 @@ ARCHIVE = 0x4000
 ARRAY = 0x4400
 LAYER_OBJECTS = 0x4800
 SCENE_OBJECT = 0x5000
+PAD_RECORD = 0x6000
+PAD_BUFFER = 0x6200
 BUGCHECK_RVAS = (0x94B0, 0x9442)
 
 
@@ -187,6 +189,37 @@ class ScriptedGame:
     def drawn(self) -> None:
         self._step(self._profile.points.drawn.entry[0], (0x9000,))
 
+    def pad_poll(
+        self,
+        physical: int = 0,
+        *,
+        port: int = 0,
+        result: int = 1,
+        pressed: int = 0,
+        mode: int | None = None,
+        state: int = 1,
+        control_off: int = 0,
+        wait: Wait | None = None,
+    ) -> None:
+        """A poll of the pad: the button dword holds ``physical`` and the pad record shows ``pressed`` as the edge.
+
+        The game is in play unless ``mode`` says otherwise. A ``wait`` makes the poll repeat until a press arrives.
+        """
+        profile = self._profile
+        pad, navigation = profile.input, profile.navigation
+        record = bytearray(pad.record_stride)
+        struct.pack_into("<I", record, pad.pressed_offset, pressed)
+        memory = {
+            PAD_RECORD: bytes(record),
+            PAD_BUFFER: struct.pack("<I", physical),
+            profile.globals.active_port: bytes(1),
+            profile.globals.game_mode: struct.pack("<I", navigation.modes.play if mode is None else mode),
+            profile.globals.play_state: struct.pack("<I", state),
+            navigation.control_off: struct.pack("<I", control_off),
+        }
+        words = (PAD_RECORD, PAD_BUFFER, 0, 0, 0, port)
+        self._step(profile.points.pad_read.entry[0], words, eax=result, memory=memory, wait=wait)
+
     def stop(self, pc: int, words: tuple[int | bytes, ...], *, esp: int = STACK, eax: int = 0) -> None:
         """A stop at ``pc`` with the given stack words, at a stack pointer that may be unreadable."""
         self._step(pc, words, esp=esp, eax=eax)
@@ -201,12 +234,20 @@ class ScriptedGame:
         memory: dict[int, bytes] | None = None,
         written: int | None = None,
         seconds: float = 0.0,
+        wait: Wait | None = None,
     ) -> None:
         stack = b"".join(word if isinstance(word, bytes) else struct.pack("<I", word) for word in words)
         self.frame += 1
         frame = {self._profile.globals.frame: struct.pack("<I", self.frame)}
         self._steps.append(
-            Step(pc, {"esp": esp, "eax": eax, "eip": pc}, {STACK: stack, **frame, **(memory or {})}, written, seconds)
+            Step(
+                pc,
+                {"esp": esp, "eax": eax, "eip": pc},
+                {STACK: stack, **frame, **(memory or {})},
+                written,
+                seconds,
+                wait,
+            )
         )
 
     def _capturable(self, depth: int) -> dict[int, bytes]:

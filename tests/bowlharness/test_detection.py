@@ -261,3 +261,28 @@ def test_a_released_guest_is_watched_again_from_a_fresh_baseline(tmp_path: Path)
     _, manifest = finished(recorder, tmp_path)
 
     assert manifest["hang"]["stalled"] == 5.0
+
+
+def test_a_silent_guest_that_is_polled_is_not_hung(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.idle(1, 10)
+    recorder, target, watchdog = watched(game, tmp_path)
+    target.run()
+
+    results = []
+    for _ in range(3):
+        recorder.count_poll()
+        results.append(watchdog.check())
+
+    assert results == [False, False, False]
+
+
+def test_a_silent_guest_that_is_not_polled_is_hung(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.idle(1, 10)
+    recorder, target, watchdog = watched(game, tmp_path)
+    target.run()
+
+    results = [watchdog.check() for _ in range(2)]
+
+    assert results == [False, True]

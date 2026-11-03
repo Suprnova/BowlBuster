@@ -5,6 +5,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from bowlharness.driving.input import MANUAL, InputDriver
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.detection import Watchdog
 from bowlharness.recording.recorder import Options, Recorder
@@ -19,7 +20,8 @@ class Session:
 
     A session opens a recording at its start and another at each reboot of the guest, each in its own folder of
     ``out``. :meth:`run` and :meth:`resume` return when the person pauses the guest or the session ends; while it is
-    paused the person can :meth:`capture`, :meth:`read` and :meth:`resume`, and each of those marks the run attended.
+    paused the person can :meth:`capture`, :meth:`read`, :meth:`press` and :meth:`resume`, and each of those marks the
+    run attended.
 
     Args:
         target: The guest to record.
@@ -59,6 +61,7 @@ class Session:
         self._on_end = on_end
         self._recordings = 0
         self._state = "new"
+        self._driver: InputDriver | None = None
         out.mkdir(parents=True)
         self._recorder, self._watchdog = self._open("attach" if boot_path == "attached" else "boot", boot_path)
 
@@ -111,6 +114,19 @@ class Session:
         self._recorder.note("read", address=address, length=length)
         return data
 
+    def press(self, button: str, polls: int | None = None) -> None:
+        """Queues a press for the paused guest, given when it resumes. The run is attended.
+
+        Raises:
+            ValueError: ``button`` names no button, or ``polls`` is below 1.
+        """
+        self._require_paused()
+        if self._driver is None:
+            self._driver = InputDriver(self._target, self._profile, self._recorder)
+            self._driver.arm()
+        self._driver.press(button, source=MANUAL, hold=polls)
+        self._recorder.attend()
+
     def stop(self) -> str:
         """Ends the session, completing the recording."""
         return self._end(ended="stopped")
@@ -133,6 +149,7 @@ class Session:
         """The guest rebooted, which broke the heap's continuity: ends the recording and opens another."""
         self._recorder.finish(ended="reboot")
         self._recorder.detach()
+        self._driver = None
         self._recorder, self._watchdog = self._open("reboot", "reboot")
         self._recorder.replay_scene_init()
 

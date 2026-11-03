@@ -1,8 +1,9 @@
 import json
+import struct
 from pathlib import Path
 
 import pytest
-from scripted import ScriptedGame
+from scripted import PAD_BUFFER, ScriptedGame
 from support import names
 
 from bowlharness.backends.mock import MockTarget
@@ -190,3 +191,29 @@ def test_a_session_folder_that_exists_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         open_session(one_load(), tmp_path)
+
+
+def test_a_press_a_person_queues_is_given_when_the_guest_resumes(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.pad_poll()
+    steps = game.script
+    target = MockTarget(steps)
+    session = open_session(game, tmp_path, target)
+    session.run()
+
+    session.press("start", 1)
+    game.pad_poll()
+    steps.append(game.script[-1])
+    session.resume()
+    session.stop()
+
+    row = manifest_of(tmp_path, 1)["input_ledger"][0]
+    assert (target.writes, row["button"], row["source"]) == ([(PAD_BUFFER, struct.pack("<I", 1))], "start", "manual")
+    assert manifest_of(tmp_path, 1)["attended"] is True
+
+
+def test_a_press_needs_a_paused_guest(tmp_path: Path) -> None:
+    session = open_session(one_load(), tmp_path)
+
+    with pytest.raises(RuntimeError):
+        session.press("start")
