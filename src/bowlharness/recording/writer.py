@@ -37,7 +37,10 @@ class EventWriter:
 
 @dataclass
 class RunManifest:
-    """The run manifest of a passive recording, rewritten whole as the recording grows.
+    """The run manifest of a recording, rewritten whole as the recording grows.
+
+    A driven recording is not ``passive`` and also holds the request it followed, the hash of the request's file and
+    the state of each of its steps.
 
     The manifest says the recording is incomplete until it ends, so a reader can tell one still being written.
     """
@@ -58,6 +61,10 @@ class RunManifest:
     hang: dict[str, Any] | None = None
     loads: list[dict[str, Any]] = field(default_factory=list)
     input_ledger: list[dict[str, Any]] = field(default_factory=list)
+    passive: bool = True
+    request: dict[str, Any] | None = None
+    request_sha256: str | None = None
+    steps: list[dict[str, Any]] = field(default_factory=list)
     events_dropped: int = 0
     duplicates_discarded: int = 0
     complete: bool = False
@@ -72,7 +79,12 @@ class RunManifest:
             "disc": {"platform": self.platform, **self.environment.get("disc", {})},
             "profile": self.profile,
             "counter_basis": {"boot_scene": self.boot_scene, "boot_counter": self.boot_counter},
-            "passive": True,
+            "passive": self.passive,
+            **(
+                {"request": self.request, "request_sha256": self.request_sha256, "steps": self.steps}
+                if not self.passive
+                else {}
+            ),
             "attended": self.attended,
             "observation": self.observation,
             "events_dropped": self.events_dropped,

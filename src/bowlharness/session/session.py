@@ -77,7 +77,11 @@ class Session:
 
     def run(self) -> str:
         """Runs the guest until a person pauses it or the session ends; returns which."""
+        if self.ended:
+            return ENDED
         self._state = "running"
+        if (reason := self._concluded()) is not None:
+            return self._end(ended=reason)
         while True:
             try:
                 expired = self._target.run(timeout=self._watchdog.liveness)
@@ -91,7 +95,11 @@ class Session:
                 return self._end()
             if self._recorder.rebooted:
                 self._reopen()
+                if self.ended:
+                    return ENDED
             elif not expired:
+                if (reason := self._concluded()) is not None:
+                    return self._end(ended=reason)
                 return self._pause()
 
     def resume(self) -> str:
@@ -152,6 +160,10 @@ class Session:
         self._driver = None
         self._recorder, self._watchdog = self._open("reboot", "reboot")
         self._recorder.replay_scene_init()
+
+    def _concluded(self) -> str | None:
+        """Why the session is over without anyone stopping it, or ``None`` while it goes on."""
+        return None
 
     def _pause(self) -> str:
         self._state = PAUSED

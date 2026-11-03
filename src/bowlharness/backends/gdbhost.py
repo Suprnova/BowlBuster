@@ -10,12 +10,15 @@ import time
 from collections.abc import Callable, Sequence
 from contextlib import suppress
 from pathlib import Path
+from typing import Any
 
 import gdb
 
 from bowlharness.backends.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
+from bowlharness.driving.request import read_request
 from bowlharness.profiles import XBOX_NTSC_U
-from bowlharness.session.commands import parse_record_arguments
+from bowlharness.session.commands import LaunchArguments, parse_drive_arguments, parse_record_arguments
+from bowlharness.session.driven import DrivenSession
 from bowlharness.session.session import ENDED, PAUSED, Session
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
 
@@ -191,22 +194,21 @@ def _tell(state: str) -> None:
         )
     else:
         print(f"ended: {_session.recordings if _session else 0} recording(s) in {_session_out}")
+        if isinstance(_session, DrivenSession) and _session.result:
+            print(f"route {_session.result}")
 
 
-def _record(args: Sequence[str]) -> None:
+def _launch(
+    verb: str, arguments: LaunchArguments, open_session: Callable[[dict[str, Any], Callable[[], None] | None], Session]
+) -> None:
+    """Starts or attaches to the emulator and runs the session ``open_session`` makes, until it pauses or ends."""
     global _session, _session_out
-    if _session is not None and not _session.ended:
-        raise gdb.GdbError("a session is recording, end it with bowl stop")
-    try:
-        arguments = parse_record_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
-    except ValueError as error:
-        raise gdb.GdbError(str(error)) from error
     if arguments.out.exists():
         raise gdb.GdbError(f"{arguments.out} already exists")
     config = arguments.config or default_config()
     process = None
     if not arguments.attach and (failures := preconditions(load_config(config), running_xemu())):
-        raise gdb.GdbError("cannot record: " + "; ".join(failures))
+        raise gdb.GdbError(f"cannot {verb}: " + "; ".join(failures))
     environment = describe(arguments.xemu, config, gdb.VERSION)
     if not arguments.attach:
         assert arguments.xemu is not None
@@ -216,19 +218,63 @@ def _record(args: Sequence[str]) -> None:
     if process is not None:
         gdb.execute("monitor system_reset", to_string=True)
     _session_out = arguments.out
-    _session = Session(
-        GdbTarget(XBOX_NTSC_U.registers),
-        XBOX_NTSC_U,
-        arguments.out,
-        arguments.options,
-        run_stem=arguments.name,
-        environment=environment,
-        boot_path="attached" if arguments.attach else "boot",
-        liveness=arguments.liveness,
-        on_end=(lambda: stop(process)) if process else None,
-    )
-    print(f"recording to {arguments.out}")
+    _session = open_session(environment, (lambda: stop(process)) if process else None)
     _tell(_session.run())
+
+
+def _require_no_session() -> None:
+    if _session is not None and not _session.ended:
+        raise gdb.GdbError("a session is recording, end it with bowl stop")
+
+
+def _record(args: Sequence[str]) -> None:
+    _require_no_session()
+    try:
+        arguments = parse_record_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
+    except ValueError as error:
+        raise gdb.GdbError(str(error)) from error
+
+    def open_session(environment: dict[str, Any], on_end: Callable[[], None] | None) -> Session:
+        print(f"recording to {arguments.out}")
+        return Session(
+            GdbTarget(XBOX_NTSC_U.registers),
+            XBOX_NTSC_U,
+            arguments.out,
+            arguments.options,
+            run_stem=arguments.name,
+            environment=environment,
+            boot_path="attached" if arguments.attach else "boot",
+            liveness=arguments.liveness,
+            on_end=on_end,
+        )
+
+    _launch("record", arguments, open_session)
+
+
+def _drive(args: Sequence[str]) -> None:
+    _require_no_session()
+    try:
+        arguments = parse_drive_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
+        request, request_sha256 = read_request(arguments.request, XBOX_NTSC_U)
+    except (OSError, ValueError) as error:
+        raise gdb.GdbError(str(error)) from error
+
+    def open_session(environment: dict[str, Any], on_end: Callable[[], None] | None) -> Session:
+        print(f"driving {request.request_id} to {arguments.out}")
+        return DrivenSession(
+            GdbTarget(XBOX_NTSC_U.registers),
+            XBOX_NTSC_U,
+            arguments.out,
+            request,
+            request_sha256,
+            run_stem=arguments.name,
+            environment=environment,
+            boot_path="attached" if arguments.attach else "boot",
+            liveness=arguments.liveness,
+            on_end=on_end,
+        )
+
+    _launch("drive", arguments, open_session)
 
 
 def _live() -> Session:
@@ -279,6 +325,7 @@ def _stop(_: Sequence[str]) -> None:
 _COMMANDS: dict[str, Callable[[Sequence[str]], None]] = {
     "smoke": _smoke,
     "record": _record,
+    "drive": _drive,
     "capture": _capture,
     "read": _read,
     "press": _press,
@@ -288,7 +335,7 @@ _COMMANDS: dict[str, Callable[[Sequence[str]], None]] = {
 
 
 class _Bowl(gdb.Command):
-    """The harness's commands: bowl smoke|record|capture|read|press|resume|stop."""
+    """The harness's commands: bowl smoke|record|drive|capture|read|press|resume|stop."""
 
     def __init__(self) -> None:
         super().__init__("bowl", gdb.COMMAND_USER)

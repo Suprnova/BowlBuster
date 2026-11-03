@@ -2,6 +2,7 @@
 
 import struct
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field, fields
 from typing import Any
 
@@ -52,15 +53,29 @@ class InputDriver:
         profile: The platform's addresses and constants.
         recorder: The recorder that logs the presses and gets the polls.
         watch_person: Whether to log the physical controller's presses, which marks the run attended.
+        hold: How many polls a press is held for by default, or ``None`` for the profile's.
+        release: How many polls a press is released for, or ``None`` for the profile's.
+        on_poll: Called after each poll is counted and its press advanced.
     """
 
     def __init__(
-        self, target: Target, profile: PlatformProfile, recorder: Recorder, *, watch_person: bool = False
+        self,
+        target: Target,
+        profile: PlatformProfile,
+        recorder: Recorder,
+        *,
+        watch_person: bool = False,
+        hold: int | None = None,
+        release: int | None = None,
+        on_poll: Callable[[], None] | None = None,
     ) -> None:
         self._target = target
         self._profile = profile
         self._recorder = recorder
         self._watch_person = watch_person
+        self._hold = hold or profile.input.hold_polls
+        self._release = release or profile.input.release_polls
+        self._on_poll = on_poll
         self._queue: deque[_Press] = deque()
         self._current: _Press | None = None
         self._person: _Press | None = None
@@ -93,7 +108,7 @@ class InputDriver:
             raise ValueError(f"invalid button {button!r}, options are {names}")
         if hold is not None and hold < 1:
             raise ValueError("a press must be held for at least 1 poll")
-        self._queue.append(_Press(button, mask, source, hold or profile.hold_polls))
+        self._queue.append(_Press(button, mask, source, hold or self._hold))
 
     def _poll(self, hit: Hit) -> None:
         profile = self._profile.input
@@ -107,6 +122,8 @@ class InputDriver:
         if self._watch_person:
             self._follow_person(physical)
         self._advance(hit, buffer, physical)
+        if self._on_poll:
+            self._on_poll()
 
     def _advance(self, hit: Hit, buffer: int, physical: int) -> None:
         if self._current is None and self._queue:
@@ -125,7 +142,7 @@ class InputDriver:
             self._look_for_the_edge(hit, press)
             self._recorder.log_press({**press.row, "cancelled": False})
         press.released += 1
-        if press.released >= self._profile.input.release_polls:
+        if press.released >= self._release:
             self._current = None
 
     def _context(self) -> dict[str, Any]:

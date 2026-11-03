@@ -316,6 +316,41 @@ class Recorder:
         """Counts a poll of the controller, which is progress for the watchdog."""
         self.polls += 1
 
+    @property
+    def scene(self) -> str | None:
+        """The scene of the latest scene init."""
+        return self._scene
+
+    @property
+    def presses(self) -> int:
+        """How many presses are in the input ledger."""
+        return len(self._manifest.input_ledger)
+
+    def drive(self, request: dict[str, Any], request_sha256: str) -> None:
+        """Makes this a driven recording of ``request``, whose steps all begin as not reached."""
+        self._manifest.passive = False
+        self._manifest.request = request
+        self._manifest.request_sha256 = request_sha256
+        self._manifest.steps = [
+            {"index": index, "scene": step["scene"], "status": "not reached"}
+            for index, step in enumerate(request["steps"])
+        ]
+        self._manifest.write(self._manifest_path)
+
+    def record_step(self, index: int, status: str, reason: str | None = None, presses: int = 0) -> None:
+        """Logs how a step of the route ended, as a ``step`` event and in the manifest's ``steps``.
+
+        Args:
+            index: The step's place in the route.
+            status: ``reached`` or ``failed``.
+            reason: Why a step failed.
+            presses: How many presses the harness gave during it.
+        """
+        row = self._manifest.steps[index]
+        seq = self._emit("step", index=index, scene=row["scene"], status=status, reason=reason)
+        row |= {"status": status, "reason": reason, "frame": self.frame(), "seq": seq, "presses": presses}
+        self._manifest.write(self._manifest_path)
+
     def attend(self) -> None:
         """Marks the run attended: a person took part."""
         self._manifest.attended = True

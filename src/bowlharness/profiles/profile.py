@@ -98,9 +98,11 @@ class Costumes:
 
     Attributes:
         characters: What a recording calls each character, by the index the table's character field holds.
+        tag_prefixes: How the tags of each character's archives start, in the order of ``characters``.
     """
 
     characters: tuple[str, ...]
+    tag_prefixes: tuple[str, ...]
     table: int
     count: int
     stride: int

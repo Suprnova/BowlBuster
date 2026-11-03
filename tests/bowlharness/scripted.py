@@ -199,6 +199,7 @@ class ScriptedGame:
         mode: int | None = None,
         state: int = 1,
         control_off: int = 0,
+        gate: int = 1,
         wait: Wait | None = None,
     ) -> None:
         """A poll of the pad: the button dword holds ``physical`` and the pad record shows ``pressed`` as the edge.
@@ -216,6 +217,7 @@ class ScriptedGame:
             profile.globals.game_mode: struct.pack("<I", navigation.modes.play if mode is None else mode),
             profile.globals.play_state: struct.pack("<I", state),
             navigation.control_off: struct.pack("<I", control_off),
+            navigation.render_gate: bytes([gate]),
         }
         words = (PAD_RECORD, PAD_BUFFER, 0, 0, 0, port)
         self._step(profile.points.pad_read.entry[0], words, eax=result, memory=memory, wait=wait)

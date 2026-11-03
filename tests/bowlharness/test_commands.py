@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from bowlharness.session.commands import parse_record_arguments, scene_selection
+from bowlharness.session.commands import parse_drive_arguments, parse_record_arguments, scene_selection
 
 OUT = str(Path.cwd() / "recordings-test")
 
@@ -61,3 +61,25 @@ def test_captures_and_budget_become_options() -> None:
 def test_bad_arguments_are_refused_with_a_message(arguments: list[str]) -> None:
     with pytest.raises(ValueError):
         parse_record_arguments(arguments, "run")
+
+
+def test_driving_takes_a_request_and_the_same_launch_arguments_as_recording() -> None:
+    arguments = parse_drive_arguments(["--out", OUT, "--xemu", "xemu.exe", "--request", "route.json"], "run")
+
+    assert (arguments.request, arguments.xemu, arguments.port, arguments.attach, arguments.name) == (
+        Path("route.json"),
+        Path("xemu.exe"),
+        1234,
+        False,
+        "run",
+    )
+
+
+def test_driving_needs_a_request() -> None:
+    with pytest.raises(ValueError, match="--request"):
+        parse_drive_arguments(["--out", OUT, "--xemu", "xemu.exe"], "run")
+
+
+def test_driving_needs_an_emulator_or_a_port_to_attach_to() -> None:
+    with pytest.raises(ValueError, match="--xemu"):
+        parse_drive_arguments(["--out", OUT, "--request", "route.json"], "run")

@@ -9,8 +9,8 @@ from bowlharness.recording.recorder import Options
 
 
 @dataclass(frozen=True)
-class RecordArguments:
-    """What ``bowl record`` was asked to do.
+class LaunchArguments:
+    """What every command that starts a session is told about the emulator and where to record.
 
     Attributes:
         out: The folder for the session's recordings; it must not exist.
@@ -18,7 +18,6 @@ class RecordArguments:
         config: The emulator's configuration file, or ``None`` for its default.
         port: The port of the emulator's debugger stub.
         attach: Whether to attach to a running emulator instead of starting one.
-        options: What to observe.
         liveness: How long play may stall before it is a hang, in seconds.
         name: What the run ids start with.
     """
@@ -28,9 +27,30 @@ class RecordArguments:
     config: Path | None
     port: int
     attach: bool
-    options: Options
     liveness: float
     name: str
+
+
+@dataclass(frozen=True)
+class RecordArguments(LaunchArguments):
+    """What ``bowl record`` was asked to do.
+
+    Attributes:
+        options: What to observe.
+    """
+
+    options: Options
+
+
+@dataclass(frozen=True)
+class DriveArguments(LaunchArguments):
+    """What ``bowl drive`` was asked to do.
+
+    Attributes:
+        request: The file holding the record request to follow.
+    """
+
+    request: Path
 
 
 class _Parser(argparse.ArgumentParser):
@@ -54,38 +74,56 @@ def scene_selection(text: str) -> bool | frozenset[str]:
     return scenes
 
 
-def parse_record_arguments(arguments: list[str], run_name: str) -> RecordArguments:
-    """Reads the arguments of ``bowl record``. Raises ``ValueError`` with a message for the person."""
-    parser = _Parser(prog="bowl record", add_help=False)
+def _launch_parser(prog: str, run_name: str) -> _Parser:
+    parser = _Parser(prog=prog, add_help=False)
     parser.add_argument("--out", type=Path, required=True, help="a folder that does not exist yet")
     parser.add_argument("--xemu", type=Path, help="the emulator to start")
     parser.add_argument("--config", type=Path, help="the emulator's configuration file")
     parser.add_argument("--port", type=int, default=1234)
     parser.add_argument("--attach", type=int, metavar="PORT", help="attach to a running emulator's stub")
-    parser.add_argument("--heap", default="all", help="all, none, or scenes")
-    parser.add_argument("--captures", default="none", help="cutoff:all, cutoff:none or cutoff:scenes")
-    parser.add_argument("--budget", type=int)
     parser.add_argument("--liveness", type=float, default=5.0)
     parser.add_argument("--name", default=run_name)
-    found = parser.parse_args(arguments)
+    return parser
 
+
+def _launch(found: argparse.Namespace) -> LaunchArguments:
     if not found.out.is_absolute():
         raise ValueError(f"--out must be an absolute path, got {found.out}")
     if found.attach is None and found.xemu is None:
         raise ValueError("give --xemu to start an emulator, or --attach PORT to attach to a running one")
     if found.attach is not None and found.xemu is not None:
         raise ValueError("--xemu and --attach are alternatives")
-    return RecordArguments(
+    return LaunchArguments(
         out=found.out,
         xemu=found.xemu,
         config=found.config,
         port=found.attach if found.attach is not None else found.port,
         attach=found.attach is not None,
+        liveness=found.liveness,
+        name=found.name,
+    )
+
+
+def parse_record_arguments(arguments: list[str], run_name: str) -> RecordArguments:
+    """Reads the arguments of ``bowl record``. Raises ``ValueError`` with a message for the person."""
+    parser = _launch_parser("bowl record", run_name)
+    parser.add_argument("--heap", default="all", help="all, none, or scenes")
+    parser.add_argument("--captures", default="none", help="cutoff:all, cutoff:none or cutoff:scenes")
+    parser.add_argument("--budget", type=int)
+    found = parser.parse_args(arguments)
+    return RecordArguments(
+        **vars(_launch(found)),
         options=Options(
             heap_events=scene_selection(found.heap),
             cutoff_captures=scene_selection(found.captures.removeprefix("cutoff:")),
             capture_budget=found.budget,
         ),
-        liveness=found.liveness,
-        name=found.name,
     )
+
+
+def parse_drive_arguments(arguments: list[str], run_name: str) -> DriveArguments:
+    """Reads the arguments of ``bowl drive``. Raises ``ValueError`` with a message for the person."""
+    parser = _launch_parser("bowl drive", run_name)
+    parser.add_argument("--request", type=Path, required=True, help="the record request to follow")
+    found = parser.parse_args(arguments)
+    return DriveArguments(**vars(_launch(found)), request=found.request)

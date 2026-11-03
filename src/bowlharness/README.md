@@ -36,6 +36,17 @@ Starting xemu runs it in its own console, so Ctrl-C in the gdb window can never 
 and the game boots as if freshly started. Play as usual; do not load xemu's own snapshots during a recording, since the
 stream can't show one and the heap's continuity breaks silently.
 
+## Driving
+
+```
+uv run python -m bowlharness drive --request <request.json> --xemu <xemu.exe> --config <xemu.toml> --out <new folder>
+```
+
+Follows a record request instead of waiting for a person to play: it takes the same `--out`, `--xemu`, `--config`,
+`--port`, `--attach` and `--liveness` options as `record`, and the request owns what is observed. Hands off the
+controller: a button pressed on it is logged as a person's press and marks the run attended. The run ends when the
+route is done or a step fails, and closes the xemu the harness started.
+
 ## Taking control
 
 Press Ctrl-C in the gdb window to pause the guest, then:
