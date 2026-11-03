@@ -45,8 +45,10 @@ class InputDriver:
 
     The game rebuilds that dword at every poll, so a press touches no game state: it goes in the input ledger and the
     ``press`` events, never in the write ledger. A press is held for its polls and released for the profile's
-    ``release_polls`` before the next begins, and a scene init cancels a press in progress, since no press is held
-    across a load. A poll is a stop at the pad read of the active pad that read a pad; every such stop counts.
+    ``release_polls`` before the next begins, and a scene init cancels a press in progress and drops the queued ones,
+    since no press is held across a load. A poll is a stop at the pad read of the active pad that read a pad; every such
+    stop counts, except one that finds the dword holding what the driver wrote at the previous stop, which is the
+    debugger reporting the same poll twice.
 
     Args:
         target: The guest to give input to.
@@ -79,6 +81,7 @@ class InputDriver:
         self._queue: deque[_Press] = deque()
         self._current: _Press | None = None
         self._person: _Press | None = None
+        self._written: tuple[int, int] | None = None
         self.polls = 0
 
     def arm(self) -> None:
@@ -115,10 +118,13 @@ class InputDriver:
         active = struct.unpack("b", self._target.read(self._profile.globals.active_port, 1))[0]
         if hit.result == 0 or hit.words[profile.port_word] != active:
             return
-        self.polls += 1
-        self._recorder.count_poll()
         buffer = hit.words[profile.buffer_word]
         physical = u32(self._target.read, buffer)
+        if self._written == (buffer, physical):
+            return
+        self._written = None
+        self.polls += 1
+        self._recorder.count_poll()
         if self._watch_person:
             self._follow_person(physical)
         self._advance(hit, buffer, physical)
@@ -136,6 +142,7 @@ class InputDriver:
             else:
                 self._look_for_the_edge(hit, press)
             self._target.write(buffer, struct.pack("<I", physical | press.mask))
+            self._written = (buffer, physical | press.mask)
             press.held += 1
             return
         if press.released == 0:
@@ -177,7 +184,10 @@ class InputDriver:
             self._recorder.log_press({**person.row, "cancelled": False})
 
     def _event(self, event: str) -> None:
-        if event != "scene_init" or (press := self._current) is None:
+        if event != "scene_init":
+            return
+        self._queue.clear()
+        if (press := self._current) is None:
             return
         self._current = None
         if 0 < press.held <= press.hold and press.released == 0:

@@ -214,3 +214,35 @@ def test_a_press_needs_a_button_and_a_hold(tmp_path: Path, button: str, hold: in
 
     with pytest.raises(ValueError, match="invalid button|must be held"):
         driver.press(button, hold=hold)
+
+
+def test_a_scene_init_drops_the_presses_still_queued(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    polls(game, 3)
+    game.scene_init("ORIG", 2)
+    polls(game, 30)
+    recorder, target, driver = start(game, tmp_path)
+    for button in ("a", "b", "x"):
+        driver.press(button)
+
+    target.run()
+
+    assert (len(target.writes), driver.idle) == (3, True)
+
+
+def test_a_poll_the_debugger_reports_twice_is_not_a_persons_press_or_a_second_poll(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.pad_poll()
+    game.pad_poll(physical=BUTTONS.a)
+    polls(game, 12)
+    recorder, target, driver = start(game, tmp_path, watch_person=True)
+    driver.press("a", hold=1)
+
+    target.run()
+
+    document = manifest(recorder, tmp_path)
+    assert ([row["source"] for row in document["input_ledger"]], document["attended"], driver.polls) == (
+        ["harness"],
+        False,
+        13,
+    )
