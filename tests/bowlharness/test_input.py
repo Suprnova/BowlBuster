@@ -212,5 +212,5 @@ def test_a_manual_press_marks_the_run_attended(tmp_path: Path) -> None:
 def test_a_press_needs_a_button_and_a_hold(tmp_path: Path, button: str, hold: int | None) -> None:
     _, _, driver = start(ScriptedGame(), tmp_path)
 
-    with pytest.raises(ValueError, match="button|held"):
+    with pytest.raises(ValueError, match="invalid button|must be held"):
         driver.press(button, hold=hold)

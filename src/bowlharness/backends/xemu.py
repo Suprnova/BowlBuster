@@ -37,11 +37,10 @@ def preconditions(config: dict[str, Any], running: list[str]) -> list[str]:
     """
     failures = []
     if not config.get("input", {}).get("bindings", {}).get("port1"):
-        failures.append(
-            "no controller is bound to port 1: without one the game's first frame of play crashes in the input read"
-        )
+        failures.append("no controller is bound to port 1 in xemu")
     if running:
-        failures.append(f"xemu is already running (process {', '.join(running)}), and holds the storage image")
+        image = Path(config.get("sys", {}).get("files", {}).get("hdd_path", "")).name or "the storage image"
+        failures.append(f"xemu is already running (process {', '.join(running)}), and holds the storage image {image}")
     return failures
 
 

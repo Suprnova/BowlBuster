@@ -90,9 +90,9 @@ class InputDriver:
         profile = self._profile.input
         if (mask := getattr(profile.buttons, button, None)) is None:
             names = ", ".join(f.name for f in fields(profile.buttons))
-            raise ValueError(f"no button {button!r}; the buttons are {names}")
+            raise ValueError(f"invalid button {button!r}, options are {names}")
         if hold is not None and hold < 1:
-            raise ValueError("a press is held for at least 1 poll")
+            raise ValueError("a press must be held for at least 1 poll")
         self._queue.append(_Press(button, mask, source, hold or profile.hold_polls))
 
     def _poll(self, hit: Hit) -> None:

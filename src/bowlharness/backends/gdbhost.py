@@ -174,7 +174,7 @@ def _connect(port: int, process: subprocess.Popen[bytes] | None) -> None:
     """Connects to the emulator's stub, retrying while a started emulator opens it."""
     for _ in range(120):
         if process is not None and process.poll() is not None:
-            raise gdb.GdbError(f"xemu exited with code {process.returncode}; see its log in the recording folder")
+            raise gdb.GdbError(f"xemu exited with code {process.returncode}")
         try:
             gdb.execute(f"target remote :{port}", to_string=True)
             return
@@ -196,13 +196,13 @@ def _tell(state: str) -> None:
 def _record(args: Sequence[str]) -> None:
     global _session, _session_out
     if _session is not None and not _session.ended:
-        raise gdb.GdbError("a session is recording: bowl stop ends it")
+        raise gdb.GdbError("a session is recording, end it with bowl stop")
     try:
         arguments = parse_record_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
     except ValueError as error:
         raise gdb.GdbError(str(error)) from error
     if arguments.out.exists():
-        raise gdb.GdbError(f"{arguments.out} exists; give a folder that does not")
+        raise gdb.GdbError(f"{arguments.out} already exists")
     config = arguments.config or default_config()
     process = None
     if not arguments.attach and (failures := preconditions(load_config(config), running_xemu())):
@@ -233,20 +233,26 @@ def _record(args: Sequence[str]) -> None:
 
 def _live() -> Session:
     if _session is None or _session.ended:
-        raise gdb.GdbError("no session is recording: bowl record starts one")
+        raise gdb.GdbError("no session is recording, start it with bowl record")
     return _session
 
 
 def _capture(args: Sequence[str]) -> None:
     label = " ".join(args) or "manual"
-    print(f"capture: {_live().capture(label) or 'refused by the budget'}")
+    try:
+        print(f"capture: {_live().capture(label) or 'refused by the budget'}")
+    except RuntimeError as error:
+        raise gdb.GdbError(str(error)) from error
 
 
 def _read(args: Sequence[str]) -> None:
     if len(args) != 2:
         raise gdb.GdbError("usage: bowl read <address> <length>")
     address, length = int(args[0], 0), int(args[1], 0)
-    data = _live().read(address, length)
+    try:
+        data = _live().read(address, length)
+    except RuntimeError as error:
+        raise gdb.GdbError(str(error)) from error
     for offset in range(0, len(data), 16):
         print(f"{address + offset:08x}  {data[offset : offset + 16].hex(' ')}")
 
@@ -256,7 +262,7 @@ def _press(args: Sequence[str]) -> None:
         raise gdb.GdbError("usage: bowl press <button> [<polls>]")
     try:
         _live().press(args[0], int(args[1]) if len(args) == 2 else None)
-    except ValueError as error:
+    except (RuntimeError, ValueError) as error:
         raise gdb.GdbError(str(error)) from error
     print(f"queued: {args[0]}")
 

@@ -43,3 +43,9 @@ def test_xemu_is_started_under_a_cmd_that_keeps_quoted_paths_whole() -> None:
         r'cmd.exe /s /c ""C:\Program Files\xemu\xemu.exe" -config_path "D:\my games\xemu.toml" -gdb tcp::2345 -S"'
     )
     assert command == expected
+
+
+def test_a_running_xemu_fails_naming_the_storage_image() -> None:
+    config = {**BOUND, "sys": {"files": {"hdd_path": "D:/Games/xemu/inst3/xbox_hdd.qcow2"}}}
+
+    assert preconditions(config, ["4242"])[0].endswith("holds the storage image xbox_hdd.qcow2")
