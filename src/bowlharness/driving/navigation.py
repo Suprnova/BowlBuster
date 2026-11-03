@@ -29,6 +29,16 @@ class Phase(StrEnum):
     SLOT = "slot"
     WARPING = "warping"
     CHEATS = "cheats"
+    MAIN_MENU = "main menu"
+
+
+class Screen(StrEnum):
+    """Where the route is between boot and a new game's first scene."""
+
+    LOGOS = "logos"
+    TITLE = "title"
+    MENU = "menu"
+    NEW_GAME = "new game"
 
 
 class Stage(StrEnum):
@@ -92,6 +102,7 @@ class Navigator:
         self._request = request
         self._driver: InputDriver | None = None
         self._phase = Phase.LOADING
+        self._screen = Screen.LOGOS
         self._index = 0
         self._polls = 0
         self._players_frame: int | None = None
@@ -125,8 +136,11 @@ class Navigator:
     def start(self) -> None:
         """Checks that the route can be driven at all, and fails it if not."""
         needed = {Capability.BREAKPOINTS, Capability.MEMORY_WRITE}
-        if not needed <= self._target.capabilities or self._request.start != "booted":
+        if not needed <= self._target.capabilities:
             self._fail("unsupported")
+        elif self._request.start == "new-game":
+            self._phase = Phase.MAIN_MENU
+            self._enter(Screen.LOGOS)
 
     def on_event(self, event: str) -> None:
         """Follows the recorder's events."""
@@ -157,6 +171,8 @@ class Navigator:
                 self._warping()
             case Phase.CHEATS:
                 self._cheats()
+            case Phase.MAIN_MENU:
+                self._main_menu()
 
     def _read(self, address: int) -> int:
         return u32(self._target.read, address)
@@ -171,7 +187,9 @@ class Navigator:
         self._driver.press(button)
 
     def _scene_init(self) -> None:
-        if self._phase not in (Phase.LOADING, Phase.WARPING) or (
+        if self._phase is Phase.MAIN_MENU and self._recorder.scene == self._profile.boot_scene:
+            return
+        if self._phase not in (Phase.LOADING, Phase.WARPING, Phase.MAIN_MENU) or (
             self._recorder.scene != self._request.steps[self._index].scene
         ):
             self._fail("scene change")
@@ -376,6 +394,40 @@ class Navigator:
             self._retries += 1
             self._quiet = 0
             self._press("a")
+
+    def _enter(self, screen: Screen) -> None:
+        self._screen = screen
+        self._menu_opened = time.monotonic()
+        self._pending = None
+        self._recorder.log_event("screen", name=screen.value)
+
+    def _main_menu(self) -> None:
+        """Takes the game from its boot logos to the load of a new game: A through the logos, Start at the title, and A
+        until the load begins. Each screen is left on the game's signal, and a screen that never is ends the step
+        ``stalled``, the last ``screen`` event naming it."""
+        navigation = self._profile.navigation
+        match self._screen:
+            case Screen.LOGOS:
+                if self._read(self._profile.globals.game_mode) == navigation.modes.menu:
+                    self._enter(Screen.TITLE)
+                elif self._read(navigation.movie_flag) == navigation.movie_playing and self._driver_idle:
+                    self._press("a")
+            case Screen.TITLE:
+                if self._pending is None:
+                    before = self._read(navigation.title_start)
+                    self._begin("title", "start", navigation.title_start, lambda now: now != before)
+                elif self._confirmed():
+                    self._enter(Screen.MENU)
+                    return
+            case Screen.MENU:
+                if self._read(navigation.menu_active):
+                    self._enter(Screen.NEW_GAME)
+                    return
+            case Screen.NEW_GAME:
+                if self._driver_idle:
+                    self._press("a")
+        if self._menu_late():
+            self._fail("stalled")
 
     def _menu_late(self) -> bool:
         """Whether the wait for a menu has outlasted the time the profile allows."""

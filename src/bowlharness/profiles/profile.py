@@ -345,6 +345,7 @@ class Navigation:
         menu_row_stride: The size of a row.
         menu_slot_stride: The size of a slot in a row, which starts with the scene's four characters.
         cheats: The cheat entry.
+        title_start: The dword that changes when the title takes Start.
         menu_active: The dword holding a pointer to the active menu: zero when the pause menu opens, and non-zero once
             it accepts input.
         ready_seconds: The most time, in seconds, a menu may take to become active or to change. Menu transitions
@@ -373,6 +374,7 @@ class Navigation:
     menu_row_stride: int
     menu_slot_stride: int
     cheats: Cheats
+    title_start: int
     menu_active: int
     ready_seconds: float
     menu_screens: int

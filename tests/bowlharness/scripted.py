@@ -61,6 +61,7 @@ class ScriptedGame:
         self.menu_lag = 0
         self.held = 0
         self.options_open = False
+        self.main_menu_ready = False
         self._menu: dict[int, bytes] = {}
 
     @property
@@ -231,7 +232,9 @@ class ScriptedGame:
         profile = self._profile
         pad, navigation = profile.input, profile.navigation
         mode = navigation.modes.play if mode is None else mode
-        active = mode == navigation.modes.pause_menu and self.menu_lag == 0
+        active = (mode == navigation.modes.pause_menu and self.menu_lag == 0) or (
+            mode == navigation.modes.menu and self.main_menu_ready
+        )
         if mode == navigation.modes.pause_menu and self.menu_lag:
             self.menu_lag -= 1
         record = bytearray(pad.record_stride)
@@ -397,7 +400,12 @@ class ScriptedGame:
     def _cheat_table(self) -> dict[int, bytes]:
         cheats = self._profile.navigation.cheats
         buttons = self._profile.input.buttons
-        memory = {cheats.count: bytes(4), self._profile.navigation.menu_screens: struct.pack("<I", 5)}
+        navigation = self._profile.navigation
+        memory = {
+            cheats.count: bytes(4),
+            navigation.menu_screens: struct.pack("<I", 5),
+            navigation.title_start: struct.pack("<I", 1),
+        }
         for index, (code, bit, toggles) in enumerate(CHEATS):
             sequence = SEQUENCES + 4 * cheats.history_length * index
             presses = [buttons.x if press == "X" else buttons.y for press in code.split()]

@@ -80,12 +80,6 @@ def test_a_scene_in_a_class_with_its_own_settle_count_is_ready_by_it(tmp_path: P
     assert manifest["steps"][0]["status"] == "reached"
 
 
-def test_a_new_game_start_fails_as_unsupported(tmp_path: Path) -> None:
-    session, manifest = drive(loaded(), tmp_path, route("ORIG", start="new-game"))
-
-    assert (session.result, manifest["steps"][0]["status"]) == ("failed: step 0 (ORIG), unsupported", "failed")
-
-
 def test_a_crash_ends_the_recording_as_a_crash_and_leaves_the_step_unreached(tmp_path: Path) -> None:
     game = ScriptedGame()
     game.scene_init("ORIG", 1)

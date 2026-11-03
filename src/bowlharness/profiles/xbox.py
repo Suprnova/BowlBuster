@@ -197,6 +197,7 @@ XBOX_NTSC_U = PlatformProfile(
             toggle_flag=1,
             clear_polls=150,
         ),
+        title_start=0x309530,
         menu_active=0x309560,
         ready_seconds=60.0,
         menu_screens=0x2D2384,
