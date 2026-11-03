@@ -43,6 +43,7 @@ class ScriptedGame:
         self._steps: list[Step] = []
         self.frame = 0
         self.cursor = (0, 0)
+        self.menu_lag = 0
         self._menu: dict[int, bytes] = {}
 
     @property
@@ -211,13 +212,18 @@ class ScriptedGame:
         """
         profile = self._profile
         pad, navigation = profile.input, profile.navigation
+        mode = navigation.modes.play if mode is None else mode
+        active = mode == navigation.modes.pause_menu and self.menu_lag == 0
+        if mode == navigation.modes.pause_menu and self.menu_lag:
+            self.menu_lag -= 1
         record = bytearray(pad.record_stride)
         struct.pack_into("<I", record, pad.pressed_offset, pressed)
         memory = {
             PAD_RECORD: bytes(record),
             PAD_BUFFER: struct.pack("<I", physical),
             profile.globals.active_port: bytes(1),
-            profile.globals.game_mode: struct.pack("<I", navigation.modes.play if mode is None else mode),
+            profile.globals.game_mode: struct.pack("<I", mode),
+            navigation.menu_active: struct.pack("<I", 0xB94EE0 if active else 0),
             profile.globals.play_state: struct.pack("<I", state),
             navigation.control_off: struct.pack("<I", control_off),
             navigation.render_gate: bytes([gate]),

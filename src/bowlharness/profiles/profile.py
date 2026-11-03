@@ -330,6 +330,7 @@ class Navigation:
         modes: The game mode values.
         playing: The play state (``Globals.play_state``) of a level in play.
         control_off: The dword holding the mask of what owns the player's control; zero when the player has it.
+        talk_box: The bit of that mask that a conversation holds.
         render_gate: The byte that is non-zero once the player is drawn.
         movie_flag: The dword that is ``movie_playing`` while a Bink movie plays.
         movie_playing: The movie flag's value while a movie plays.
@@ -340,14 +341,19 @@ class Navigation:
         menu_row_stride: The size of a row.
         menu_slot_stride: The size of a slot in a row, which starts with the scene's four characters.
         cheats: The cheat entry.
-        warp_delay_frames: How long a level must have been in play before the harness warps out of it.
+        menu_active: The dword holding a pointer to the active menu: zero when the pause menu opens, and non-zero once
+            it accepts input.
+        menu_ready_polls: The most polls the pause menu may take to become active.
         action_polls: How many polls a press has to show its effect before it is sent again.
+        confirm_presses: How many times A is pressed to select a task and confirm its warp.
+        warp_wait_polls: How many polls a confirmed warp normally takes to begin after the last A.
         warp_polls: How many polls the confirmed warp has to begin loading.
     """
 
     modes: GameModes
     playing: int
     control_off: int
+    talk_box: int
     render_gate: int
     movie_flag: int
     movie_playing: int
@@ -358,8 +364,11 @@ class Navigation:
     menu_row_stride: int
     menu_slot_stride: int
     cheats: Cheats
-    warp_delay_frames: int
+    menu_active: int
+    menu_ready_polls: int
     action_polls: int
+    confirm_presses: int
+    warp_wait_polls: int
     warp_polls: int
 
 

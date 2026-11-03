@@ -21,7 +21,6 @@ class Phase(StrEnum):
 
     LOADING = "loading"
     READY = "ready"
-    WARP_WAIT = "warp_wait"
     PAUSE = "pause"
     WORLD = "world"
     SLOT = "slot"
@@ -45,11 +44,11 @@ class Navigator:
     """Follows a request's steps through the game, one step at a time.
 
     A step is reached once its scene has initialised and its player is ready, by the signal of the scene's class, for
-    the class's settle count of frames. Until then the navigator presses A through whatever can be skipped, and never
-    in play afterwards. From a reached step it goes to the next through the pause menu: Start, the world, the slot,
-    then A to select the task and confirm it. Each press is confirmed by a global the game changes, and a press the
-    game didn't take is sent again, up to the profile's resend limit. The navigator is clocked by the driver's polls
-    and the recorder's events.
+    the class's settle count of frames. Until then the navigator presses A through whatever can be skipped, and never in
+    play afterwards. From a reached step it goes to the next through the pause menu: Start, the world, the slot, then A
+    to select the task and confirm it, once the menu has become active. Each press is confirmed by a global the game
+    changes, and a press the game didn't take is sent again, up to the profile's resend limit. The navigator is clocked
+    by the driver's polls and the recorder's events.
 
     The route ends ``done`` when every step is reached, or ``failed`` at the first step that isn't, which it logs with
     the reason: ``scene change`` (another scene initialised), ``stalled`` (a press never took effect),
@@ -74,14 +73,15 @@ class Navigator:
         self._polls = 0
         self._players_frame: int | None = None
         self._since: int | None = None
-        self._last_frame: int | None = None
-        self._play_frames = 0
         self._undrawn = False
         self._presses = 0
         self._game_opened = False
         self._trusted = False
         self._pending: _Pending | None = None
+        self._menu_opened = 0
         self._confirm: tuple[int, int] | None = None
+        self._retries = 0
+        self._quiet = 0
         self._exit: tuple[int, int] | None = None
         self.outcome: str | None = None
         self.result: str | None = None
@@ -93,8 +93,12 @@ class Navigator:
     def start(self) -> None:
         """Checks that the route can be driven at all, and fails it if not."""
         needed = {Capability.BREAKPOINTS, Capability.MEMORY_WRITE}
-        first = self._request.steps[0]
-        if not needed <= self._target.capabilities or self._request.start != "booted" or first.cheats or first.costumes:
+        steps = self._request.steps
+        if (
+            not needed <= self._target.capabilities
+            or self._request.start != "booted"
+            or any(step.cheats or step.costumes for step in steps)
+        ):
             self._fail("unsupported")
 
     def on_event(self, event: str) -> None:
@@ -113,12 +117,9 @@ class Navigator:
         if self.outcome is not None:
             return
         self._polls += 1
-        self._count_play_frames()
         match self._phase:
             case Phase.READY:
                 self._ready()
-            case Phase.WARP_WAIT:
-                self._warp_wait()
             case Phase.PAUSE:
                 self._pause()
             case Phase.WORLD:
@@ -140,16 +141,6 @@ class Navigator:
         assert self._driver is not None
         self._driver.press(button)
 
-    def _count_play_frames(self) -> None:
-        frame = self._recorder.frame()
-        in_play = (
-            self._read(self._profile.globals.game_mode) == self._profile.navigation.modes.play
-            and self._read(self._profile.globals.play_state) == self._profile.navigation.playing
-        )
-        if in_play and self._last_frame is not None and frame > self._last_frame:
-            self._play_frames += frame - self._last_frame
-        self._last_frame = frame
-
     def _scene_init(self) -> None:
         if self._phase not in (Phase.LOADING, Phase.WARPING) or (
             self._recorder.scene != self._request.steps[self._index].scene
@@ -161,7 +152,6 @@ class Navigator:
         self._phase = Phase.READY
         self._players_frame = None
         self._since = None
-        self._play_frames = 0
         self._undrawn = False
         self._game_opened = False
         self._presses = self._recorder.presses
@@ -173,9 +163,10 @@ class Navigator:
         movie = self._read(navigation.movie_flag) == navigation.movie_playing
         cutscene = self._players_frame is not None and mode == modes.play and control_off != 0
         if (movie or cutscene) and self._driver_idle:
-            self._press("a")
+            self._press("b" if control_off & navigation.talk_box else "a")
         if mode == modes.pause_menu:
             self._game_opened = True
+            self._menu_opened = self._polls
             self._reached("pause_menu")
         elif self._players_frame is not None:
             self._wait_for_the_player(control_off)
@@ -224,20 +215,12 @@ class Navigator:
             self._fail("menu unreachable")
             return
         self._trusted = False
-        self._phase = Phase.WORLD if self._game_opened else Phase.WARP_WAIT
+        self._phase = Phase.WORLD if self._game_opened else Phase.PAUSE
 
     def _menu_scene(self, world: int, slot: int) -> str:
         navigation = self._profile.navigation
         address = navigation.menu_scenes + world * navigation.menu_row_stride + slot * navigation.menu_slot_stride
         return self._target.read(address, 4).decode("ascii", "replace")
-
-    def _warp_wait(self) -> None:
-        navigation = self._profile.navigation
-        if self._read(self._profile.globals.game_mode) == navigation.modes.pause_menu:
-            self._game_opened = True
-            self._phase = Phase.WORLD
-        elif self._play_frames >= navigation.warp_delay_frames:
-            self._phase = Phase.PAUSE
 
     def _begin(self, action: str, button: str, address: int, satisfied: Callable[[int], bool]) -> None:
         self._pending = _Pending(action, button, address, satisfied, self._polls, self._recorder.frame())
@@ -266,6 +249,7 @@ class Navigator:
             self._begin("pause", "start", self._profile.globals.game_mode, lambda mode: mode == modes.pause_menu)
         elif self._confirmed():
             self._trusted = True
+            self._menu_opened = self._polls
             self._phase = Phase.WORLD
 
     def _world(self) -> None:
@@ -275,6 +259,10 @@ class Navigator:
         if self._pending is not None:
             if self._confirmed():
                 self._trusted = True
+            return
+        if self._read(navigation.menu_active) == 0:
+            if self._polls - self._menu_opened >= navigation.menu_ready_polls:
+                self._fail("stalled")
             return
         world, target = self._read(navigation.menu_world), menu.world - 1
         if self._trusted and world == target:
@@ -294,17 +282,32 @@ class Navigator:
         slot, target = self._read(navigation.menu_slot), menu.slot - 1
         if slot == target:
             self._confirm = (self._recorder.frame(), self._polls)
-            for _ in range(3):
-                self._press("a")
+            self._retries = 0
+            self._quiet = 0
             self._exit = None
+            for _ in range(self._profile.navigation.confirm_presses):
+                self._press("a")
             self._phase = Phase.WARPING
             return
         self._begin("slot", "right" if slot < target else "left", navigation.menu_slot, lambda now: now != slot)
 
     def _warping(self) -> None:
+        """Waits for the warp to begin, pressing A again only after the time it normally takes has passed."""
         assert self._confirm is not None
-        if self._exit is None and self._polls - self._confirm[1] >= self._profile.navigation.warp_polls:
+        navigation = self._profile.navigation
+        if self._exit is not None:
+            return
+        self._quiet = self._quiet + 1 if self._driver_idle else 0
+        if self._polls - self._confirm[1] >= navigation.warp_polls:
             self._fail("menu unreachable")
+        elif (
+            self._quiet >= navigation.warp_wait_polls
+            and self._retries < self._profile.input.resend_limit
+            and self._read(self._profile.globals.game_mode) == navigation.modes.pause_menu
+        ):
+            self._retries += 1
+            self._quiet = 0
+            self._press("a")
 
     def _log_navigation(self, action: str, button: str, sent: tuple[int, int], taken: tuple[int, int] | None) -> None:
         taken_frame, taken_poll = taken or (self._recorder.frame(), self._polls)

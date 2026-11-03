@@ -10,7 +10,7 @@ BUTTONS = XBOX_NTSC_U.input.buttons
 PAUSE_MENU = XBOX_NTSC_U.navigation.modes.pause_menu
 FAST = replace(
     COMPACT,
-    navigation=replace(COMPACT.navigation, warp_delay_frames=3, action_polls=15),
+    navigation=replace(COMPACT.navigation, menu_ready_polls=20, action_polls=15),
     scene_classes=replace(COMPACT.scene_classes, stall_frames=20),
 )
 
@@ -24,7 +24,7 @@ def level(game: ScriptedGame, scene: str, counter: int) -> None:
     """A scene loading and settling into play, with a few frames of play to spare."""
     game.scene_init(scene, counter)
     game.players_done()
-    polls(game, 18)
+    polls(game, 11)
 
 
 def warp(game: ScriptedGame, presses: list[tuple[str, tuple[int, int]]], scene: str, counter: int, old: str) -> None:
@@ -254,3 +254,103 @@ def test_a_player_that_never_gets_control_logs_control_off_and_stops_waiting(tmp
 
     assert "control_off" in [e["event"] for e in driven_events(tmp_path)]
     assert (manifest["steps"][0]["status"], manifest["steps"][0]["signal"]) == ("reached", "control_off")
+
+
+def test_nothing_is_pressed_in_the_pause_menu_until_it_is_active(tmp_path: Path) -> None:
+    slow = replace(FAST, navigation=replace(FAST.navigation, menu_ready_polls=100))
+    game = ScriptedGame(slow)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.menu_lag = 30
+    game.await_press("start", after=PAUSE_MENU)
+    polls(game, 19, mode=PAUSE_MENU)
+    for _ in range(3):
+        game.await_press("a", mode=PAUSE_MENU, polls=100)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    start, first_a = manifest["input_ledger"][:2]
+    assert (session.result, first_a["sent_poll"] - start["sent_poll"] >= 30) == ("done", True)
+
+
+def test_a_pause_menu_that_never_becomes_active_fails_the_step_as_stalled(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.menu_lag = 1000
+    game.await_press("start", after=PAUSE_MENU)
+    polls(game, 60, mode=PAUSE_MENU)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    assert (session.result, [row["button"] for row in manifest["input_ledger"]]) == (
+        "failed: step 1 (ORIG), stalled",
+        ["start"],
+    )
+
+
+def test_a_conversation_is_pressed_through_with_b_and_a_cutscene_with_a(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    game.scene_init("ORIG", 1)
+    game.players_done()
+    polls(game, 14, control_off=XBOX_NTSC_U.navigation.talk_box)
+    polls(game, 14, control_off=2)
+    polls(game, 14)
+
+    _, manifest = drive(game, tmp_path, route("ORIG"))
+
+    assert [row["button"] for row in manifest["input_ledger"]] == ["b", "b", "a"]
+
+
+def test_a_confirm_that_does_not_begin_the_warp_is_pressed_again_after_the_time_it_normally_takes(
+    tmp_path: Path,
+) -> None:
+    quick = replace(FAST, navigation=replace(FAST.navigation, warp_wait_polls=20))
+    game = ScriptedGame(quick)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.await_press("start", after=PAUSE_MENU)
+    game.await_press("a", mode=PAUSE_MENU)
+    game.await_press("a", mode=PAUSE_MENU)
+    polls(game, 12, mode=PAUSE_MENU)
+    game.await_press("a", mode=PAUSE_MENU, polls=100)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    presses = [row["button"] for row in manifest["input_ledger"]]
+    assert (session.result, presses) == ("done", ["start", "a", "a", "a", "a"])
+
+
+def test_a_confirm_is_not_pressed_again_once_the_menu_has_closed(tmp_path: Path) -> None:
+    quick = replace(FAST, navigation=replace(FAST.navigation, warp_wait_polls=20))
+    game = ScriptedGame(quick)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.await_press("start", after=PAUSE_MENU)
+    for _ in range(3):
+        game.await_press("a", mode=PAUSE_MENU, after=XBOX_NTSC_U.navigation.modes.play)
+    polls(game, 100)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    assert (session.result, [row["button"] for row in manifest["input_ledger"]].count("a")) == ("done", 3)
+
+
+def test_a_confirm_that_never_works_is_pressed_again_a_limited_number_of_times(tmp_path: Path) -> None:
+    quick = replace(FAST, navigation=replace(FAST.navigation, warp_wait_polls=20, warp_polls=300))
+    game = ScriptedGame(quick)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.await_press("start", after=PAUSE_MENU)
+    polls(game, 400, mode=PAUSE_MENU)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    presses = [row["button"] for row in manifest["input_ledger"]]
+    assert (session.result, presses.count("a")) == ("failed: step 1 (ORIG), menu unreachable", 6)
