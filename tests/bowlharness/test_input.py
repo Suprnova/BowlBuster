@@ -246,3 +246,53 @@ def test_a_poll_the_debugger_reports_twice_is_not_a_persons_press_or_a_second_po
         False,
         13,
     )
+
+
+def test_a_chord_is_held_at_every_poll_across_the_presses_queued_while_it_is_held(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    polls(game, 12)
+    recorder, target, driver = start(game, tmp_path)
+    chord = BUTTONS.l | BUTTONS.r
+    driver.hold_chord("l", "r")
+    driver.press("x", hold=2)
+    driver.press("y", hold=2)
+
+    target.run()
+    driver.release_chord()
+
+    expected = [chord | BUTTONS.x] * 2 + [chord] * 6 + [chord | BUTTONS.y] * 2 + [chord] * 2
+    assert target.writes == [(PAD_BUFFER, dword(value)) for value in expected]
+    chord_row = manifest(recorder, tmp_path)["input_ledger"][-1]
+    assert (chord_row["button"], chord_row["mask"], chord_row["polls"], chord_row["cancelled"]) == (
+        "l+r",
+        chord,
+        12,
+        False,
+    )
+
+
+def test_a_chord_a_scene_init_finds_is_cancelled(tmp_path: Path) -> None:
+    game = ScriptedGame()
+    polls(game, 5)
+    game.scene_init("TARG", 2)
+    polls(game, 5)
+    recorder, target, driver = start(game, tmp_path)
+    driver.hold_chord("l", "r")
+
+    target.run()
+
+    rows = manifest(recorder, tmp_path)["input_ledger"]
+    assert ([(row["button"], row["polls"], row["cancelled"]) for row in rows], len(target.writes)) == (
+        [("l+r", 5, True)],
+        5,
+    )
+
+
+def test_a_second_chord_or_a_chord_of_no_button_is_refused(tmp_path: Path) -> None:
+    _, _, driver = start(ScriptedGame(), tmp_path)
+
+    with pytest.raises(ValueError, match="invalid button"):
+        driver.hold_chord("l", "z")
+    driver.hold_chord("l")
+    with pytest.raises(ValueError, match="already held"):
+        driver.hold_chord("r")

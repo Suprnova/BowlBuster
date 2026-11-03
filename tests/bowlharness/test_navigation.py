@@ -1,41 +1,10 @@
 from dataclasses import replace
 from pathlib import Path
 
-from scripted import COMPACT, ScriptedGame
-from support import drive, driven_events, route
+from scripted import ScriptedGame
+from support import FAST, PAUSE_MENU, drive, driven_events, level, polls, route, warp
 
 from bowlharness.profiles import XBOX_NTSC_U
-
-BUTTONS = XBOX_NTSC_U.input.buttons
-PAUSE_MENU = XBOX_NTSC_U.navigation.modes.pause_menu
-FAST = replace(
-    COMPACT,
-    navigation=replace(COMPACT.navigation, menu_ready_polls=20, action_polls=15),
-    scene_classes=replace(COMPACT.scene_classes, stall_frames=20),
-)
-
-
-def polls(game: ScriptedGame, count: int, **kwargs: int) -> None:
-    for _ in range(count):
-        game.pad_poll(**kwargs)
-
-
-def level(game: ScriptedGame, scene: str, counter: int) -> None:
-    """A scene loading and settling into play, with a few frames of play to spare."""
-    game.scene_init(scene, counter)
-    game.players_done()
-    polls(game, 11)
-
-
-def warp(game: ScriptedGame, presses: list[tuple[str, tuple[int, int]]], scene: str, counter: int, old: str) -> None:
-    """Start, the cursor presses, A three times, and the load of ``scene``."""
-    game.await_press("start", after=PAUSE_MENU)
-    for button, cursor in presses:
-        game.await_press(button, cursor=cursor, mode=PAUSE_MENU)
-    for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU, after=PAUSE_MENU)
-    game.scene_exit(old, counter - 1)
-    level(game, scene, counter)
 
 
 def three_warps() -> ScriptedGame:
@@ -257,8 +226,7 @@ def test_a_player_that_never_gets_control_logs_control_off_and_stops_waiting(tmp
 
 
 def test_nothing_is_pressed_in_the_pause_menu_until_it_is_active(tmp_path: Path) -> None:
-    slow = replace(FAST, navigation=replace(FAST.navigation, menu_ready_polls=100))
-    game = ScriptedGame(slow)
+    game = ScriptedGame(FAST)
     game.menu_scenes({(0, 0): "ORIG"})
     level(game, "ORIG", 1)
     game.menu_lag = 30
@@ -279,9 +247,9 @@ def test_a_pause_menu_that_never_becomes_active_fails_the_step_as_stalled(tmp_pa
     game = ScriptedGame(FAST)
     game.menu_scenes({(0, 0): "ORIG"})
     level(game, "ORIG", 1)
-    game.menu_lag = 1000
+    game.menu_lag = 100000
     game.await_press("start", after=PAUSE_MENU)
-    polls(game, 60, mode=PAUSE_MENU)
+    polls(game, 20000, mode=PAUSE_MENU)
 
     session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
 

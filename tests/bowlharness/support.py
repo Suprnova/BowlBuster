@@ -1,8 +1,9 @@
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from scripted import ScriptedGame
+from scripted import COMPACT, ScriptedGame
 
 from bowlharness.backends.mock import MockTarget
 from bowlharness.driving.request import RecordRequest, parse_request
@@ -48,6 +49,35 @@ def three_loads() -> ScriptedGame:
 
 
 DIGEST = "ab" * 32
+PAUSE_MENU = XBOX_NTSC_U.navigation.modes.pause_menu
+FAST = replace(
+    COMPACT,
+    navigation=replace(COMPACT.navigation, ready_seconds=0.2, action_polls=15),
+    scene_classes=replace(COMPACT.scene_classes, stall_frames=20),
+)
+
+
+def polls(game: ScriptedGame, count: int, **kwargs: int) -> None:
+    for _ in range(count):
+        game.pad_poll(**kwargs)
+
+
+def level(game: ScriptedGame, scene: str, counter: int) -> None:
+    """A scene loading and settling into play, with a few frames of play to spare."""
+    game.scene_init(scene, counter)
+    game.players_done()
+    polls(game, 11)
+
+
+def warp(game: ScriptedGame, presses: list[tuple[str, tuple[int, int]]], scene: str, counter: int, old: str) -> None:
+    """Start, the cursor presses, A three times, and the load of ``scene``."""
+    game.await_press("start", after=PAUSE_MENU)
+    for button, cursor in presses:
+        game.await_press(button, cursor=cursor, mode=PAUSE_MENU)
+    for _ in range(3):
+        game.await_press("a", mode=PAUSE_MENU, after=PAUSE_MENU)
+    game.scene_exit(old, counter - 1)
+    level(game, scene, counter)
 
 
 def route(*steps: str | tuple[str, int, int], start: str = "booted") -> RecordRequest:
@@ -60,12 +90,17 @@ def route(*steps: str | tuple[str, int, int], start: str = "booted") -> RecordRe
             world, slot = menu or (index + 1, 1)
             entry["menu"] = {"world": world, "slot": slot}
         parsed.append(entry)
+    return request(parsed, start)
+
+
+def request(steps: list[dict[str, Any]], start: str = "booted") -> RecordRequest:
+    """A record request through steps written as the request file writes them."""
     document = {
         "schema_version": 1,
         "request_id": "route-1",
         "kind": "record",
         "start": {"from": start},
-        "steps": parsed,
+        "steps": steps,
     }
     return parse_request(document, XBOX_NTSC_U)
 

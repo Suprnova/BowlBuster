@@ -44,7 +44,8 @@ class InputDriver:
     """Gives the game buttons by ORing them into the button dword its pad read has just filled.
 
     The game rebuilds that dword at every poll, so a press touches no game state: it goes in the input ledger and the
-    ``press`` events, never in the write ledger. A press is held for its polls and released for the profile's
+    ``press`` events, never in the write ledger. A chord (:meth:`hold_chord`) is held at every poll until it is
+    released, across the presses queued while it is held. A press is held for its polls and released for the profile's
     ``release_polls`` before the next begins, and a scene init cancels a press in progress and drops the queued ones,
     since no press is held across a load. A poll is a stop at the pad read of the active pad that read a pad; every such
     stop counts, except one that finds the dword holding what the driver wrote at the previous stop, which is the
@@ -81,6 +82,7 @@ class InputDriver:
         self._queue: deque[_Press] = deque()
         self._current: _Press | None = None
         self._person: _Press | None = None
+        self._chord: _Press | None = None
         self._written: tuple[int, int] | None = None
         self.polls = 0
 
@@ -105,13 +107,34 @@ class InputDriver:
         Raises:
             ValueError: ``button`` names no button, or ``hold`` is below 1.
         """
+        mask = self._mask(button)
+        if hold is not None and hold < 1:
+            raise ValueError("a press must be held for at least 1 poll")
+        self._queue.append(_Press(button, mask, source, hold or self._hold))
+
+    def hold_chord(self, *buttons: str) -> None:
+        """Holds ``buttons`` at every poll from the next, across the presses that follow, until :meth:`release_chord`.
+
+        Raises:
+            ValueError: A name is not a button, or a chord is already held.
+        """
+        if self._chord is not None:
+            raise ValueError("a chord is already held")
+        masks = [self._mask(button) for button in buttons]
+        self._chord = _Press("+".join(buttons), sum(masks), HARNESS, 0)
+
+    def release_chord(self) -> None:
+        """Lets go of the chord and logs it as one press. Does nothing when none is held."""
+        if (chord := self._chord) is not None:
+            self._chord = None
+            self._recorder.log_press({**chord.row, "cancelled": False})
+
+    def _mask(self, button: str) -> int:
         profile = self._profile.input
         if (mask := getattr(profile.buttons, button, None)) is None:
             names = ", ".join(f.name for f in fields(profile.buttons))
             raise ValueError(f"invalid button {button!r}, options are {names}")
-        if hold is not None and hold < 1:
-            raise ValueError("a press must be held for at least 1 poll")
-        self._queue.append(_Press(button, mask, source, hold or self._hold))
+        return mask
 
     def _poll(self, hit: Hit) -> None:
         profile = self._profile.input
@@ -132,25 +155,36 @@ class InputDriver:
             self._on_poll()
 
     def _advance(self, hit: Hit, buffer: int, physical: int) -> None:
+        value = physical
+        if (chord := self._chord) is not None:
+            if chord.held == 0:
+                chord.context = self._context()
+            chord.held += 1
+            value |= chord.mask
         if self._current is None and self._queue:
             self._current = self._queue.popleft()
-        if (press := self._current) is None:
-            return
+        if (press := self._current) is not None:
+            value |= self._step(hit, press)
+        if value != physical:
+            self._target.write(buffer, struct.pack("<I", value))
+            self._written = (buffer, value)
+
+    def _step(self, hit: Hit, press: _Press) -> int:
+        """Moves a press one poll on and returns the buttons it gives at this poll."""
         if press.held < press.hold:
             if press.held == 0:
                 press.context = self._context()
             else:
                 self._look_for_the_edge(hit, press)
-            self._target.write(buffer, struct.pack("<I", physical | press.mask))
-            self._written = (buffer, physical | press.mask)
             press.held += 1
-            return
+            return press.mask
         if press.released == 0:
             self._look_for_the_edge(hit, press)
             self._recorder.log_press({**press.row, "cancelled": False})
         press.released += 1
         if press.released >= self._release:
             self._current = None
+        return 0
 
     def _context(self) -> dict[str, Any]:
         read = self._target.read
@@ -187,6 +221,9 @@ class InputDriver:
         if event != "scene_init":
             return
         self._queue.clear()
+        if (chord := self._chord) is not None:
+            self._chord = None
+            self._recorder.log_press({**chord.row, "cancelled": True})
         if (press := self._current) is None:
             return
         self._current = None

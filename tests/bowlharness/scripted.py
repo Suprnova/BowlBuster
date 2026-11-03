@@ -15,6 +15,9 @@ LAYER_OBJECTS = 0x4800
 SCENE_OBJECT = 0x5000
 PAD_RECORD = 0x6000
 PAD_BUFFER = 0x6200
+SEQUENCES = 0x7000
+PAUSE_MENU = 0xB94EE0
+OPTIONS_MENU = 0xB94E40
 BUGCHECK_RVAS = (0x94B0, 0x9442)
 
 
@@ -33,6 +36,18 @@ CHEAT_ARCHIVES = [
     (_tag("PLPC"), 1, 0x8000000),
 ]
 
+CHEATS = [
+    ("X Y X Y X Y X Y", 0x800000, False),
+    ("X X X X Y Y Y Y", 0x2000000, True),
+    ("Y Y Y Y X X X X", 0x4000000, True),
+    ("X Y Y X X Y Y X", 0x8000000, True),
+    ("Y X X Y Y X X Y", 0x10000000, True),
+    ("X X Y Y X X Y Y", 0x1000, False),
+    ("Y Y X X Y Y X X", 0x2000, False),
+    ("X Y Y Y Y Y Y X", 0x4000, False),
+    ("Y X X X X X X Y", 0x8000, False),
+]
+
 
 class ScriptedGame:
     """Collects the steps of a guest's run, one call per stop the game would give."""
@@ -44,6 +59,8 @@ class ScriptedGame:
         self.frame = 0
         self.cursor = (0, 0)
         self.menu_lag = 0
+        self.held = 0
+        self.options_open = False
         self._menu: dict[int, bytes] = {}
 
     @property
@@ -208,7 +225,8 @@ class ScriptedGame:
     ) -> None:
         """A poll of the pad: the button dword holds ``physical`` and the pad record shows ``pressed`` as the edge.
 
-        The game is in play unless ``mode`` says otherwise. A ``wait`` makes the poll repeat until a press arrives.
+        The game is in play unless ``mode`` says otherwise, and the record shows the buttons the game has seen held
+        (:attr:`held`). A ``wait`` makes the poll repeat until a press arrives.
         """
         profile = self._profile
         pad, navigation = profile.input, profile.navigation
@@ -218,12 +236,16 @@ class ScriptedGame:
             self.menu_lag -= 1
         record = bytearray(pad.record_stride)
         struct.pack_into("<I", record, pad.pressed_offset, pressed)
+        struct.pack_into("<I", record, pad.held_offset, self.held)
         memory = {
+            pad.active_record: struct.pack("<I", PAD_RECORD),
             PAD_RECORD: bytes(record),
             PAD_BUFFER: struct.pack("<I", physical),
             profile.globals.active_port: bytes(1),
             profile.globals.game_mode: struct.pack("<I", mode),
-            navigation.menu_active: struct.pack("<I", 0xB94EE0 if active else 0),
+            navigation.menu_active: struct.pack(
+                "<I", (OPTIONS_MENU if self.options_open else PAUSE_MENU) if active else 0
+            ),
             profile.globals.play_state: struct.pack("<I", state),
             navigation.control_off: struct.pack("<I", control_off),
             navigation.render_gate: bytes([gate]),
@@ -253,18 +275,20 @@ class ScriptedGame:
         mode: int | None = None,
         after: int | None = None,
         polls: int = 30,
+        memory: dict[int, int] | None = None,
     ) -> None:
         """A poll that repeats until the harness presses ``button``, then the polls that finish the press.
 
         The game is in ``mode`` until the press arrives and in ``after`` (by default the same) from then on, and the
         pause menu's cursor moves to ``cursor``.
         The polls after the press are the rest of its hold and its release, so the next wait sees only its own press.
+        ``memory`` gives dwords that take their values once the press arrives.
         """
         pad = self._profile.input
         navigation = self._profile.navigation
-        then = {}
+        then = {address: struct.pack("<I", value) for address, value in (memory or {}).items()}
         if cursor is not None:
-            then = {
+            then |= {
                 navigation.menu_world: struct.pack("<I", cursor[0]),
                 navigation.menu_slot: struct.pack("<I", cursor[1]),
             }
@@ -273,6 +297,32 @@ class ScriptedGame:
             self.cursor = cursor
         for _ in range(pad.hold_polls - 1 + pad.release_polls):
             self.pad_poll(mode=mode if after is None else after)
+
+    def await_chord(self, *buttons: str, polls: int = 30) -> None:
+        """A poll that repeats until the harness holds ``buttons``; the pad record shows them held after it."""
+        pad = self._profile.input
+        mask = sum(getattr(pad.buttons, button) for button in buttons)
+        self.pad_poll(mode=self._profile.navigation.modes.pause_menu, wait=Wait(PAD_BUFFER, mask, polls))
+        self.held = mask
+
+    def enter_code(
+        self, code: str, *, mask_before: int = 0, polls: int = 30, count_stops_at: int | None = None
+    ) -> None:
+        """The presses of a cheat code: each raises the history's count, and the last sets or toggles its row's bit.
+
+        A code that stops at ``count_stops_at`` presses leaves the count there and takes no more.
+        """
+        navigation = self._profile.navigation
+        mask_address = self._profile.costumes.cheat_mask
+        bit, toggles = next((bit, toggles) for text, bit, toggles in CHEATS if text == code)
+        buttons = code.lower().split()
+        for number, button in enumerate(buttons, 1):
+            if count_stops_at is not None and number > count_stops_at:
+                break
+            last = number == len(buttons)
+            after = mask_before ^ bit if toggles else mask_before | bit
+            memory = {navigation.cheats.count: 0, mask_address: after} if last else {navigation.cheats.count: number}
+            self.await_press(button, mode=navigation.modes.pause_menu, polls=polls, memory=memory)
 
     def stop(self, pc: int, words: tuple[int | bytes, ...], *, esp: int = STACK, eax: int = 0) -> None:
         """A stop at ``pc`` with the given stack words, at a stack pointer that may be unreadable."""
@@ -336,9 +386,25 @@ class ScriptedGame:
         table = b"".join(struct.pack("<4sII", *entry) for entry in entries)
         rows = b"".join(bytes([costumes.extra_kind, extra_id, 0, state]) for extra_id, state in extras.items())
         return {
+            **self._cheat_table(),
             costumes.count: struct.pack("<I", len(entries)),
             costumes.table: table,
             costumes.extras_count: struct.pack("<I", len(extras)),
             costumes.extras: rows,
             costumes.cheat_mask: struct.pack("<I", cheats),
         }
+
+    def _cheat_table(self) -> dict[int, bytes]:
+        cheats = self._profile.navigation.cheats
+        buttons = self._profile.input.buttons
+        memory = {cheats.count: bytes(4), self._profile.navigation.menu_screens: struct.pack("<I", 5)}
+        for index, (code, bit, toggles) in enumerate(CHEATS):
+            sequence = SEQUENCES + 4 * cheats.history_length * index
+            presses = [buttons.x if press == "X" else buttons.y for press in code.split()]
+            memory[sequence] = struct.pack(f"<{cheats.history_length}I", *[0] * len(presses), *presses)
+            row = bytearray(cheats.row_stride)
+            struct.pack_into("<I", row, cheats.sequence_offset, sequence)
+            struct.pack_into("<I", row, cheats.mask_offset, bit)
+            struct.pack_into("<I", row, cheats.flags_offset, cheats.toggle_flag if toggles else 0)
+            memory[cheats.table + index * cheats.row_stride] = bytes(row)
+        return memory

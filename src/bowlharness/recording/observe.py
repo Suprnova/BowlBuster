@@ -2,6 +2,7 @@
 
 import struct
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from bowlharness.profiles.profile import Costumes, Globals, Heap, Layers
@@ -41,25 +42,50 @@ def heap0_state(read: Read, heap: Heap) -> dict[str, Any]:
     return {"depth": depth, "states": states, "last_block": last_block}
 
 
-def worn_archives(read: Read, costumes: Costumes) -> dict[str, str | None]:
-    """The player archive tag worn by each character: the first enabled entry of the costume table."""
+@dataclass(frozen=True)
+class CostumeEntry:
+    """An entry of the costume table.
+
+    Attributes:
+        tag: The player archive's tag.
+        character: What a recording calls the character, or ``None`` for a character it doesn't name.
+        mask: The cheat-mask bits that enable it.
+        extra: Whether a row of the extras table enables it instead of the cheat mask.
+        enabled: Whether it is enabled now.
+    """
+
+    tag: str
+    character: str | None
+    mask: int
+    extra: bool
+    enabled: bool
+
+
+def costume_entries(read: Read, costumes: Costumes) -> list[CostumeEntry]:
+    """The costume table, in order, each entry with whether it is enabled now."""
     count = u32(read, costumes.count)
     table = read(costumes.table, count * costumes.stride)
     extras = read(costumes.extras, u32(read, costumes.extras_count) * costumes.extra_stride)
     cheats = u32(read, costumes.cheat_mask)
-    worn: dict[str, str | None] = dict.fromkeys(costumes.characters)
-
+    entries = []
     for index in range(count):
         offset = index * costumes.stride
         (archive,) = struct.unpack_from("<I", table, offset)
         (character,) = struct.unpack_from("<I", table, offset + costumes.character_offset)
         (mask,) = struct.unpack_from("<I", table, offset + costumes.mask_offset)
-        if index < costumes.extra_entries:
-            enabled = _extra_state(extras, costumes, index + 1) != 0
-        else:
-            enabled = mask & cheats != 0
-        if enabled and character < len(costumes.characters) and worn[costumes.characters[character]] is None:
-            worn[costumes.characters[character]] = tag(archive)
+        extra = index < costumes.extra_entries
+        enabled = _extra_state(extras, costumes, index + 1) != 0 if extra else mask & cheats != 0
+        name = costumes.characters[character] if character < len(costumes.characters) else None
+        entries.append(CostumeEntry(tag(archive), name, mask, extra, enabled))
+    return entries
+
+
+def worn_archives(read: Read, costumes: Costumes) -> dict[str, str | None]:
+    """The player archive tag worn by each character: the first enabled entry of the costume table."""
+    worn: dict[str, str | None] = dict.fromkeys(costumes.characters)
+    for entry in costume_entries(read, costumes):
+        if entry.enabled and entry.character is not None and worn[entry.character] is None:
+            worn[entry.character] = entry.tag
     return worn
 
 

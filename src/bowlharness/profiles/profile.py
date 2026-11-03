@@ -302,11 +302,13 @@ class Cheats:
         history: The first of the history's dwords.
         history_length: How many dwords the history has.
         table: The first row of the cheat table.
+        rows: How many rows the table has.
         row_stride: The size of a row.
         sequence_offset: Where a row holds the address of its sequence.
         mask_offset: Where it holds its mask bit.
         flags_offset: Where it holds its flags.
         toggle_flag: The flag that makes the row toggle its bit.
+        clear_polls: How many polls a half-entered history takes to clear: its timeout, with room to spare.
     """
 
     held: int
@@ -315,11 +317,13 @@ class Cheats:
     history: int
     history_length: int
     table: int
+    rows: int
     row_stride: int
     sequence_offset: int
     mask_offset: int
     flags_offset: int
     toggle_flag: int
+    clear_polls: int
 
 
 @dataclass(frozen=True)
@@ -343,10 +347,15 @@ class Navigation:
         cheats: The cheat entry.
         menu_active: The dword holding a pointer to the active menu: zero when the pause menu opens, and non-zero once
             it accepts input.
-        menu_ready_polls: The most polls the pause menu may take to become active.
+        ready_seconds: The most time, in seconds, a menu may take to become active or to change. Menu transitions
+            run on real time, so their length in polls depends on how fast the run is; the wait is for the game's
+            signal, and this only ends a run whose signal never comes.
+        menu_screens: The dword that counts the menu screens opened and closed: it rises by 1 when Options opens and
+            by 2 when it closes.
         action_polls: How many polls a press has to show its effect before it is sent again.
         confirm_presses: How many times A is pressed to select a task and confirm its warp.
-        warp_wait_polls: How many polls a confirmed warp normally takes to begin after the last A.
+        warp_wait_polls: How many polls a confirmed warp normally takes to begin after the last A. Nothing in the game
+            says whether an A was taken, so this is the one wait that has no signal.
         warp_polls: How many polls the confirmed warp has to begin loading.
     """
 
@@ -365,7 +374,8 @@ class Navigation:
     menu_slot_stride: int
     cheats: Cheats
     menu_active: int
-    menu_ready_polls: int
+    ready_seconds: float
+    menu_screens: int
     action_polls: int
     confirm_presses: int
     warp_wait_polls: int

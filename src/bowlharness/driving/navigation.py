@@ -1,14 +1,17 @@
 """Walks a route's steps, giving the input each needs and confirming each against the game."""
 
 import struct
+import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
+from bowlharness.driving.cheats import Code, plan_codes
 from bowlharness.driving.input import InputDriver
 from bowlharness.driving.request import RecordRequest
 from bowlharness.profiles.profile import PlatformProfile, Ready
-from bowlharness.recording.observe import u32
+from bowlharness.recording.observe import u32, worn_archives
 from bowlharness.recording.recorder import Recorder
 from bowlharness.target import Capability, Target
 
@@ -25,6 +28,21 @@ class Phase(StrEnum):
     WORLD = "world"
     SLOT = "slot"
     WARPING = "warping"
+    CHEATS = "cheats"
+
+
+class Stage(StrEnum):
+    """Where the entry of a step's cheat codes is."""
+
+    MENU = "menu"
+    OPEN = "open"
+    HOLD = "hold"
+    SETTLE = "settle"
+    CODE = "code"
+    LEAVE = "leave"
+    OPTIONS = "options"
+    CLOSE = "close"
+    RETURN = "return"
 
 
 @dataclass
@@ -45,15 +63,20 @@ class Navigator:
 
     A step is reached once its scene has initialised and its player is ready, by the signal of the scene's class, for
     the class's settle count of frames. Until then the navigator presses A through whatever can be skipped, and never in
-    play afterwards. From a reached step it goes to the next through the pause menu: Start, the world, the slot, then A
-    to select the task and confirm it, once the menu has become active. Each press is confirmed by a global the game
-    changes, and a press the game didn't take is sent again, up to the profile's resend limit. The navigator is clocked
-    by the driver's polls and the recorder's events.
+    play afterwards. A reached step then enters its cheat codes, and those that leave the next step's costumes worn, in
+    the Options menu: X from the pause menu, then L and R held, then the code's X and Y presses, each confirmed by the
+    game's count of them and the code by its bit in the cheat mask. A code that doesn't take is entered again from a
+    cleared history, up to the profile's resend limit. B leaves Options once the game has made it active, and the
+    navigator waits for the pause menu to be active again. From the step it goes to the next through the pause menu:
+    Start, the world, the slot, then A to select the task and confirm it, once the menu has become active. Each press is
+    confirmed by a global the game changes, and a press the game didn't take is sent again, up to the profile's resend
+    limit. The navigator is clocked by the driver's polls and the recorder's events.
 
     The route ends ``done`` when every step is reached, or ``failed`` at the first step that isn't, which it logs with
-    the reason: ``scene change`` (another scene initialised), ``stalled`` (a press never took effect),
-    ``menu unreachable`` (the menu doesn't hold the step's scene at its world and slot, or the confirmed warp never
-    began) or ``unsupported``.
+    the reason: ``scene change`` (another scene initialised), ``costume mismatch`` (the load wears other costumes than
+    the step names), ``stalled`` (a press never took effect), ``menu unreachable`` (the menu doesn't hold the step's
+    scene at its world and slot, or the confirmed warp never began) or ``unsupported`` (a code or costume no cheat
+    gives, or a route the target can't be driven along).
 
     Args:
         target: The guest, which the navigator interrupts when the route ends.
@@ -78,11 +101,20 @@ class Navigator:
         self._game_opened = False
         self._trusted = False
         self._pending: _Pending | None = None
-        self._menu_opened = 0
+        self._menu_opened = 0.0
+        self._pause_menu = 0
         self._confirm: tuple[int, int] | None = None
+        self._exit: tuple[int, int] | None = None
         self._retries = 0
         self._quiet = 0
-        self._exit: tuple[int, int] | None = None
+        self._signal = ""
+        self._codes: deque[Code] = deque()
+        self._stage = Stage.MENU
+        self._number = 0
+        self._attempt = 0
+        self._mark = 0
+        self._expected = 0
+        self._after_pause = Phase.WORLD
         self.outcome: str | None = None
         self.result: str | None = None
 
@@ -93,12 +125,7 @@ class Navigator:
     def start(self) -> None:
         """Checks that the route can be driven at all, and fails it if not."""
         needed = {Capability.BREAKPOINTS, Capability.MEMORY_WRITE}
-        steps = self._request.steps
-        if (
-            not needed <= self._target.capabilities
-            or self._request.start != "booted"
-            or any(step.cheats or step.costumes for step in steps)
-        ):
+        if not needed <= self._target.capabilities or self._request.start != "booted":
             self._fail("unsupported")
 
     def on_event(self, event: str) -> None:
@@ -128,6 +155,8 @@ class Navigator:
                 self._slot()
             case Phase.WARPING:
                 self._warping()
+            case Phase.CHEATS:
+                self._cheats()
 
     def _read(self, address: int) -> int:
         return u32(self._target.read, address)
@@ -149,6 +178,10 @@ class Navigator:
             return
         if self._phase is Phase.WARPING and self._confirm and self._exit:
             self._log_navigation("confirm", "a", self._confirm, self._exit)
+        worn = {archive for archive in worn_archives(self._target.read, self._profile.costumes).values() if archive}
+        if worn != set(self._request.steps[self._index].costumes):
+            self._fail("costume mismatch")
+            return
         self._phase = Phase.READY
         self._players_frame = None
         self._since = None
@@ -166,7 +199,7 @@ class Navigator:
             self._press("b" if control_off & navigation.talk_box else "a")
         if mode == modes.pause_menu:
             self._game_opened = True
-            self._menu_opened = self._polls
+            self._menu_opened = time.monotonic()
             self._reached("pause_menu")
         elif self._players_frame is not None:
             self._wait_for_the_player(control_off)
@@ -201,8 +234,28 @@ class Navigator:
             self._reached(scene_class.ready.value)
 
     def _reached(self, signal: str) -> None:
+        self._signal = signal
+        last = self._index + 1 == len(self._request.steps)
+        following = None if last else self._request.steps[self._index + 1].costumes
+        try:
+            self._codes = deque(
+                plan_codes(self._target.read, self._profile, self._request.steps[self._index].cheats, following)
+            )
+        except ValueError:
+            self._fail("unsupported")
+            return
+        if not self._codes:
+            self._finish_step(menu_open=self._game_opened)
+            return
+        self._stage = Stage.MENU
+        self._number = self._attempt = 0
+        self._after_pause = Phase.CHEATS
+        self._menu_opened = time.monotonic()
+        self._phase = Phase.CHEATS if self._game_opened else Phase.PAUSE
+
+    def _finish_step(self, *, menu_open: bool) -> None:
         self._recorder.record_step(
-            self._index, "reached", presses=self._recorder.presses - self._presses, signal=signal
+            self._index, "reached", presses=self._recorder.presses - self._presses, signal=self._signal
         )
         if self._index + 1 == len(self._request.steps):
             self._end(DONE)
@@ -214,8 +267,10 @@ class Navigator:
         if self._menu_scene(step.menu.world - 1, step.menu.slot - 1) != step.scene:
             self._fail("menu unreachable")
             return
-        self._trusted = False
-        self._phase = Phase.WORLD if self._game_opened else Phase.PAUSE
+        self._after_pause = Phase.WORLD
+        self._menu_opened = time.monotonic()
+        self._trusted = menu_open and not self._game_opened
+        self._phase = Phase.WORLD if menu_open else Phase.PAUSE
 
     def _menu_scene(self, world: int, slot: int) -> str:
         navigation = self._profile.navigation
@@ -226,15 +281,28 @@ class Navigator:
         self._pending = _Pending(action, button, address, satisfied, self._polls, self._recorder.frame())
         self._press(button)
 
-    def _confirmed(self) -> bool:
-        """Whether the pending press took effect; sends it again when it hasn't, and fails the step if that keeps up."""
+    def _taken(self) -> bool:
+        """Whether the pending press took effect, which is then logged."""
         pending = self._pending
         assert pending is not None
-        if pending.satisfied(self._read(pending.address)):
-            self._log_navigation(pending.action, pending.button, (pending.queued_frame, pending.queued_poll), None)
-            self._pending = None
+        if not pending.satisfied(self._read(pending.address)):
+            return False
+        self._log_navigation(pending.action, pending.button, (pending.queued_frame, pending.queued_poll), None)
+        self._pending = None
+        return True
+
+    def _overdue(self) -> bool:
+        """Whether the pending press has had its polls to show an effect and the driver has nothing left to give."""
+        assert self._pending is not None
+        return self._polls - self._pending.queued_poll >= self._profile.navigation.action_polls and self._driver_idle
+
+    def _confirmed(self) -> bool:
+        """Whether the pending press took effect; sends it again when it hasn't, and fails the step if that keeps up."""
+        if self._taken():
             return True
-        if self._polls - pending.queued_poll >= self._profile.navigation.action_polls and self._driver_idle:
+        if self._overdue():
+            pending = self._pending
+            assert pending is not None
             if pending.attempts > self._profile.input.resend_limit:
                 self._fail("stalled")
             else:
@@ -249,8 +317,8 @@ class Navigator:
             self._begin("pause", "start", self._profile.globals.game_mode, lambda mode: mode == modes.pause_menu)
         elif self._confirmed():
             self._trusted = True
-            self._menu_opened = self._polls
-            self._phase = Phase.WORLD
+            self._menu_opened = time.monotonic()
+            self._phase = self._after_pause
 
     def _world(self) -> None:
         navigation = self._profile.navigation
@@ -261,7 +329,7 @@ class Navigator:
                 self._trusted = True
             return
         if self._read(navigation.menu_active) == 0:
-            if self._polls - self._menu_opened >= navigation.menu_ready_polls:
+            if self._menu_late():
                 self._fail("stalled")
             return
         world, target = self._read(navigation.menu_world), menu.world - 1
@@ -308,6 +376,103 @@ class Navigator:
             self._retries += 1
             self._quiet = 0
             self._press("a")
+
+    def _menu_late(self) -> bool:
+        """Whether the wait for a menu has outlasted the time the profile allows."""
+        return time.monotonic() - self._menu_opened >= self._profile.navigation.ready_seconds
+
+    def _cheats(self) -> None:
+        """Enters the step's codes in the Options menu, then leaves it for the pause menu."""
+        navigation = self._profile.navigation
+        match self._stage:
+            case Stage.MENU:
+                if menu := self._read(navigation.menu_active):
+                    self._pause_menu = menu
+                    self._press_for_screen("x")
+                    self._stage = Stage.OPEN
+                elif self._menu_late():
+                    self._fail("stalled")
+            case Stage.OPEN:
+                if self._confirmed():
+                    self._stage = Stage.HOLD
+            case Stage.HOLD if self._driver_idle:
+                assert self._driver is not None
+                self._driver.hold_chord("l", "r")
+                self._mark = self._polls
+                self._stage = Stage.SETTLE
+            case Stage.SETTLE:
+                held = self._read(self._read(self._profile.input.active_record) + self._profile.input.held_offset)
+                if held & navigation.cheats.held == navigation.cheats.held:
+                    self._mark = self._polls
+                    self._stage = Stage.CODE
+                elif self._polls - self._mark >= navigation.action_polls:
+                    self._fail("stalled")
+            case Stage.CODE:
+                self._enter_code()
+            case Stage.LEAVE if self._driver_idle:
+                assert self._driver is not None
+                self._driver.release_chord()
+                if self._index + 1 == len(self._request.steps):
+                    self._finish_step(menu_open=True)
+                    return
+                self._menu_opened = time.monotonic()
+                self._stage = Stage.OPTIONS
+            case Stage.OPTIONS:
+                if self._read(navigation.menu_active) not in (0, self._pause_menu):
+                    self._press_for_screen("b")
+                    self._stage = Stage.CLOSE
+                elif self._menu_late():
+                    self._fail("stalled")
+            case Stage.CLOSE:
+                if self._confirmed():
+                    self._menu_opened = time.monotonic()
+                    self._stage = Stage.RETURN
+            case Stage.RETURN:
+                if self._read(navigation.menu_active) == self._pause_menu:
+                    self._finish_step(menu_open=True)
+                elif self._menu_late():
+                    self._fail("stalled")
+
+    def _press_for_screen(self, button: str) -> None:
+        """Presses a button that opens or closes a menu screen, confirmed by the screen count changing."""
+        address = self._profile.navigation.menu_screens
+        before = self._read(address)
+        self._begin("options", button, address, lambda now: now != before)
+
+    def _enter_code(self) -> None:
+        """Presses the first code's buttons one at a time, each confirmed by the game's count of them.
+
+        The last press is confirmed by the cheat mask taking the code's bit. A press that shows no effect abandons the
+        attempt: the history is let clear, and the code is entered again from its start.
+        """
+        cheats, mask = self._profile.navigation.cheats, self._profile.costumes.cheat_mask
+        code = self._codes[0]
+        if self._pending is not None:
+            if self._taken():
+                self._number += 1
+                if self._number == len(code.presses):
+                    self._codes.popleft()
+                    self._number = self._attempt = 0
+                    self._stage = Stage.CODE if self._codes else Stage.LEAVE
+            elif self._overdue():
+                self._pending = None
+                self._number = 0
+                self._mark = self._polls
+                self._attempt += 1
+                if self._attempt > self._profile.input.resend_limit:
+                    self._fail("stalled")
+            return
+        if self._number == 0:
+            if self._read(cheats.count):
+                if self._polls - self._mark >= cheats.clear_polls:
+                    self._fail("stalled")
+                return
+            self._expected = code.apply(self._read(mask))
+        number, expected = self._number + 1, self._expected
+        if number == len(code.presses):
+            self._begin("cheat", code.presses[self._number], mask, lambda now: now == expected)
+        else:
+            self._begin("cheat", code.presses[self._number], cheats.count, lambda now: now == number)
 
     def _log_navigation(self, action: str, button: str, sent: tuple[int, int], taken: tuple[int, int] | None) -> None:
         taken_frame, taken_poll = taken or (self._recorder.frame(), self._polls)

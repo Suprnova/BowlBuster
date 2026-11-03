@@ -3,7 +3,6 @@ from pathlib import Path
 from scripted import ScriptedGame
 from support import DIGEST, drive, driven_events, route
 
-from bowlharness.driving.request import parse_request
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.session.session import ENDED
 
@@ -128,20 +127,3 @@ def test_a_session_that_ended_runs_no_further(tmp_path: Path) -> None:
     session, _ = drive(loaded(), tmp_path, route("ORIG"))
 
     assert session.run() == ENDED
-
-
-def test_cheats_or_costumes_on_any_step_fail_the_route_as_unsupported(tmp_path: Path) -> None:
-    request = parse_request(
-        {
-            "schema_version": 1,
-            "request_id": "route-1",
-            "kind": "record",
-            "start": {"from": "booted"},
-            "steps": [{"scene": "ORIG"}, {"scene": "TARG", "menu": {"world": 2, "slot": 1}, "costumes": ["PLSA"]}],
-        },
-        XBOX_NTSC_U,
-    )
-
-    session, manifest = drive(loaded(), tmp_path, request)
-
-    assert (session.result, manifest["input_ledger"]) == ("failed: step 0 (ORIG), unsupported", [])
