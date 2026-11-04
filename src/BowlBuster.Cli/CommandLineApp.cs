@@ -75,6 +75,7 @@ internal static class CommandLineApp
         Command recordings = new("recordings", "Work with the harness's recordings.");
         recordings.Subcommands.Add(ValidateCommand.Build(output, error, LoadVocabulary));
         root.Subcommands.Add(recordings);
+        root.Subcommands.Add(PlaceCommand.Build(output, error));
 
         return root;
     }

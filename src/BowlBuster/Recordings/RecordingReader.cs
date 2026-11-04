@@ -67,6 +67,29 @@ public static class RecordingReader
         return new Recording(run.Id, run.Platform, run.Basis, run.EventsDropped, builder.Finish());
     }
 
+    /// <summary>
+    /// Reads a heap state spelled as a <c>scene_init</c> event's <c>heap</c> spells it: <c>depth</c>, <c>states</c>
+    /// (each <c>cursor</c>, <c>blocks</c>, <c>used</c>) and <c>last_block</c> (<c>address</c> and <c>size</c>, or
+    /// <see langword="null"/>).
+    /// </summary>
+    /// <param name="heap">The heap state, one JSON document.</param>
+    /// <returns>The heap state.</returns>
+    /// <exception cref="FormatException">The document isn't valid JSON, or lacks a field or holds one of the wrong kind.</exception>
+    public static HeapSnapshot ReadHeap(TextReader heap)
+    {
+        ArgumentNullException.ThrowIfNull(heap);
+
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(heap.ReadToEnd());
+            return ReadHeap(document.RootElement);
+        }
+        catch (JsonException exception)
+        {
+            throw new FormatException($"The heap state is not valid JSON: {exception.Message}", exception);
+        }
+    }
+
     private static Manifest ReadManifest(TextReader manifest, Vocabulary vocabulary)
     {
         try
