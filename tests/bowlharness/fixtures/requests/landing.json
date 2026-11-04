@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "request_id": "landing-targ-1",
+  "kind": "landing",
+  "start": { "from": "new-game" },
+  "steps": [
+    { "scene": "ORIG", "cheats": ["all-tasks", "all-moves-upgraded"] },
+    { "scene": "TARG", "menu": { "world": 2, "slot": 1 } },
+    { "scene": "EXIT", "menu": { "world": 1, "slot": 1 } }
+  ],
+  "tests": [
+    {
+      "step": 1,
+      "recipe": { "recording": "route-1-1", "segment": 0, "load": 3 },
+      "op": 12,
+      "delta": -24,
+      "expected": { "offset": 48, "bytes": "00112233445566778899aabbccddeeff" },
+      "min_match": 0.9
+    }
+  ],
+  "windows": {
+    "render": { "unit": "guest-frames", "value": 1200 },
+    "reset": { "unit": "guest-frames", "value": 900 },
+    "write_timeout": { "unit": "wall-seconds", "value": 120 }
+  },
+  "observe": { "heap_events": "none", "cutoff_captures": "none", "capture_budget": 8 },
+  "input": { "hold": 6, "release": 6 },
+  "client": null
+}

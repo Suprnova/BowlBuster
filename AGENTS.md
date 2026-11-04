@@ -12,6 +12,8 @@ BowlBuster studies Bowl Storage, a memory-corruption glitch in *The SpongeBob Sq
 | `src/bowlharness/` | The Python harness that records emulator runs. |
 | `tests/bowlharness/` | pytest tests for the harness. |
 | `catalog/` | The rule catalog: YAML files, licensed CC0. |
+| `schema/` | The JSON schemas of requests and results, which the harness's contract types are generated from. |
+| `scripts/` | Development scripts, such as `generate_contract.py`. |
 
 Run these from the repository root:
 

@@ -47,6 +47,18 @@ Follows a record request instead of waiting for a person to play: it takes the s
 controller: a button pressed on it is logged as a person's press and marks the run attended. The run ends when the
 route is done or a step fails, and closes the xemu the harness started.
 
+## Requests and results
+
+A request's and a result's spelling is the JSON schemas in `schema/` at the repository root. The types the harness
+reads them into, in `contract/generated/`, are generated from those files and never edited by hand. After changing a
+schema, run
+
+```
+uv run python scripts/generate_contract.py
+```
+
+and commit the schema and the generated files together; a test fails while they disagree.
+
 ## Taking control
 
 Press Ctrl-C in the gdb window to pause the guest, then:

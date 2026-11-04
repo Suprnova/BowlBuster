@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "Common",
+  "description": "Definitions that requests and results share.",
+  "$defs": {
+    "Scene": {
+      "description": "A scene's four-character tag, as the game names it.",
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 4
+    },
+    "Hex": {
+      "description": "Bytes as lower-case hexadecimal, two digits per byte.",
+      "type": "string",
+      "pattern": "^([0-9a-f]{2})*$"
+    },
+    "Sha256": {
+      "description": "A SHA-256 digest as lower-case hexadecimal.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "SceneSelection": {
+      "description": "Which scenes something applies to: all, none, or the listed scenes.",
+      "oneOf": [
+        { "enum": ["all", "none"] },
+        { "type": "array", "items": { "$ref": "#/$defs/Scene" } }
+      ]
+    },
+    "Observe": {
+      "description": "What a recording logs.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "heap_events": {
+          "description": "The scenes whose heap events are logged. Every scene init logs its heap state.",
+          "$ref": "#/$defs/SceneSelection"
+        },
+        "cutoff_captures": {
+          "description": "The scenes captured at their cutoff.",
+          "$ref": "#/$defs/SceneSelection"
+        },
+        "capture_budget": {
+          "description": "The most captures a run takes, or null for no limit. A crash or a hang is always captured.",
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "InputPolicy": {
+      "description": "How long the harness holds and releases each press, in polls of the controller.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hold": { "description": "Polls a press is held for.", "type": "integer", "minimum": 1 },
+        "release": { "description": "Polls a press is released for before the next.", "type": "integer", "minimum": 1 }
+      }
+    },
+    "Window": {
+      "description": "A length of time, in guest frames or in wall-clock seconds.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "value"],
+      "properties": {
+        "unit": { "description": "What the value counts.", "enum": ["guest-frames", "wall-seconds"] },
+        "value": { "description": "How many of the unit.", "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "DepthState": {
+      "description": "One depth state of a heap descriptor.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cursor", "blocks", "used", "wasted"],
+      "properties": {
+        "cursor": { "description": "The next free address.", "type": "integer" },
+        "blocks": { "description": "How many blocks it holds.", "type": "integer" },
+        "used": { "description": "The bytes used.", "type": "integer" },
+        "wasted": { "description": "The bytes wasted.", "type": "integer" }
+      }
+    },
+    "Block": {
+      "description": "A heap block: its address and size.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "size"],
+      "properties": {
+        "address": { "description": "Where the block starts.", "type": "integer" },
+        "size": { "description": "The block's size in bytes.", "type": "integer" }
+      }
+    },
+    "HeapState": {
+      "description": "Heap 0 as a scene init found it, spelled as the scene_init event spells it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["depth", "states", "last_block"],
+      "properties": {
+        "depth": { "description": "The current depth.", "type": "integer", "minimum": 0 },
+        "states": {
+          "description": "The depth states up to the current depth.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/DepthState" }
+        },
+        "last_block": {
+          "description": "The block last allocated, or null when there is none.",
+          "oneOf": [{ "$ref": "#/$defs/Block" }, { "type": "null" }]
+        }
+      }
+    },
+    "Top": {
+      "description": "Heap 0's cursor and depth.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cursor", "depth"],
+      "properties": {
+        "cursor": { "description": "The cursor.", "type": "integer" },
+        "depth": { "description": "The depth.", "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

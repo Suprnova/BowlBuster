@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "request_id": "control-targ-1",
+  "kind": "control",
+  "start": { "from": "new-game" },
+  "steps": [
+    { "scene": "ORIG", "cheats": ["all-tasks", "all-moves-upgraded"] },
+    { "scene": "TARG", "menu": { "world": 2, "slot": 1 } },
+    { "scene": "EXIT", "menu": { "world": 1, "slot": 1 } }
+  ],
+  "tests": [{ "step": 1 }]
+}

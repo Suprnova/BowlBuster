@@ -6,13 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from bowlharness.contract.documents import read_document
+from bowlharness.contract.generated import common_schema, request_schema
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.recorder import Options
 
 SCHEMA_VERSION = 1
 KIND = "record"
-STARTS = ("new-game", "booted")
-_FIELDS = {"schema_version", "request_id", "kind", "start", "steps", "observe", "input", "client"}
+UNSUPPORTED_KINDS = ("landing", "control")
 
 
 @dataclass(frozen=True)
@@ -112,111 +113,80 @@ def read_request(path: Path, profile: PlatformProfile) -> tuple[RecordRequest, s
 
 
 def parse_request(document: Any, profile: PlatformProfile) -> RecordRequest:
-    """Checks a request document. Raises ``ValueError`` naming the field at fault."""
-    fields = _object(document, "request", _FIELDS)
-    if fields.get("schema_version") != SCHEMA_VERSION:
-        raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
-    if fields.get("kind") != KIND:
-        raise ValueError(f"kind {fields.get('kind')!r} is not supported, only {KIND!r}")
-    if not isinstance(request_id := fields.get("request_id"), str) or not request_id:
+    """Checks a request document. Raises ``ValueError`` naming the field at fault.
+
+    The document is read into the schema's types first; what follows checks what the types don't state.
+    """
+    if isinstance(document, dict) and (kind := document.get("kind")) in UNSUPPORTED_KINDS:
+        raise ValueError(f"kind {kind!r} is not supported, only {KIND!r}")
+    request = read_document(request_schema.RecordRequest, document, "request")
+    if not request.request_id:
         raise ValueError("request_id must be a non-empty string")
-    start = _object(fields.get("start"), "start", {"from"}).get("from")
-    if start not in STARTS:
-        raise ValueError(f"start.from must be one of {', '.join(STARTS)}")
-    raw_steps = fields.get("steps")
-    if not isinstance(raw_steps, list) or not raw_steps:
+    if not request.steps:
         raise ValueError("steps must be a non-empty list")
-    steps = tuple(_step(raw, index, profile) for index, raw in enumerate(raw_steps))
-    observe = _object(fields.get("observe", {}), "observe", {"heap_events", "cutoff_captures", "capture_budget"})
-    budget = observe.get("capture_budget")
-    if budget is not None and (not isinstance(budget, int) or isinstance(budget, bool) or budget < 0):
+    steps = tuple(_step(step, index, profile) for index, step in enumerate(request.steps))
+    observe = request.observe or common_schema.Observe()
+    budget = observe.capture_budget
+    if budget is not None and budget < 0:
         raise ValueError("observe.capture_budget must be null or a count")
     options = Options(
-        heap_events=_scenes(observe.get("heap_events", "all"), "observe.heap_events"),
-        cutoff_captures=_scenes(observe.get("cutoff_captures", "none"), "observe.cutoff_captures"),
+        heap_events=_scenes(observe.heap_events or "all", "observe.heap_events"),
+        cutoff_captures=_scenes(observe.cutoff_captures or "none", "observe.cutoff_captures"),
         capture_budget=budget,
     )
-    pad = _object(fields.get("input", {}), "input", {"hold", "release"})
+    pad = request.input or common_schema.InputPolicy()
     return RecordRequest(
-        request_id,
-        start,
+        request.request_id,
+        request.start.from_,
         steps,
         options,
-        _polls(pad.get("hold", profile.input.hold_polls), "input.hold"),
-        _polls(pad.get("release", profile.input.release_polls), "input.release"),
-        fields.get("client"),
+        _polls(profile.input.hold_polls if pad.hold is None else pad.hold, "input.hold"),
+        _polls(profile.input.release_polls if pad.release is None else pad.release, "input.release"),
+        request.client,
     )
 
 
-def _object(value: Any, name: str, allowed: set[str]) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ValueError(f"{name} must be an object")
-    if unknown := sorted(set(value) - allowed):
-        raise ValueError(f"{name} has an unknown field {unknown[0]!r}")
-    return value
-
-
-def _polls(value: Any, name: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+def _polls(value: int, name: str) -> int:
+    if value < 1:
         raise ValueError(f"{name} must be at least 1 poll")
     return value
 
 
-def _tag(value: Any, name: str) -> str:
-    if not isinstance(value, str) or len(value) != 4:
+def _tag(value: str, name: str) -> str:
+    if len(value) != 4:
         raise ValueError(f"{name} must be a four-character tag")
     return value.upper()
 
 
-def _scenes(value: Any, name: str) -> bool | frozenset[str]:
-    match value:
-        case "all":
-            return True
-        case "none":
-            return False
-        case list():
-            return frozenset(_tag(item, name) for item in value)
-    raise ValueError(f'{name} must be "all", "none" or a list of scenes')
+def _scenes(value: common_schema.SceneSelection, name: str) -> bool | frozenset[str]:
+    if isinstance(value, list):
+        return frozenset(_tag(item, name) for item in value)
+    return value == "all"
 
 
-def _step(raw: Any, index: int, profile: PlatformProfile) -> Step:
+def _step(step: request_schema.Step, index: int, profile: PlatformProfile) -> Step:
     name = f"steps[{index}]"
-    fields = _object(raw, name, {"scene", "menu", "costumes", "cheats"})
-    menu = None
-    if "menu" in fields:
-        if index == 0:
-            raise ValueError(f"{name}.menu is not allowed: the start loads the first step")
-        menu = _menu(fields["menu"], f"{name}.menu")
-    elif index > 0:
+    if step.menu is not None and index == 0:
+        raise ValueError(f"{name}.menu is not allowed: the start loads the first step")
+    if step.menu is None and index > 0:
         raise ValueError(f"{name}.menu is required: the pause menu warps to every step after the first")
-    costumes = tuple(_tag(tag, f"{name}.costumes") for tag in _list(fields.get("costumes", []), f"{name}.costumes"))
+    menu = None if step.menu is None else _menu(step.menu, f"{name}.menu")
+    costumes = tuple(_tag(tag, f"{name}.costumes") for tag in step.costumes or ())
     prefixes = [tag[:3] for tag in costumes if tag[:3] in profile.costumes.tag_prefixes]
     if len(set(prefixes)) != len(prefixes):
         raise ValueError(f"{name}.costumes has more than one costume for a character")
-    cheats = tuple(
-        _cheat(cheat, f"{name}.cheats", profile) for cheat in _list(fields.get("cheats", []), f"{name}.cheats")
-    )
-    return Step(_tag(fields.get("scene"), f"{name}.scene"), menu, costumes, cheats)
+    cheats = tuple(_cheat(cheat, f"{name}.cheats", profile) for cheat in step.cheats or ())
+    return Step(_tag(step.scene, f"{name}.scene"), menu, costumes, cheats)
 
 
-def _list(value: Any, name: str) -> list[Any]:
-    if not isinstance(value, list):
-        raise ValueError(f"{name} must be a list")
-    return value
-
-
-def _menu(raw: Any, name: str) -> Menu:
-    fields = _object(raw, name, {"world", "slot"})
-    world, slot = fields.get("world"), fields.get("slot")
-    for label, number in (("world", world), ("slot", slot)):
-        if not isinstance(number, int) or isinstance(number, bool) or number < 1:
+def _menu(menu: request_schema.Menu, name: str) -> Menu:
+    for label, number in (("world", menu.world), ("slot", menu.slot)):
+        if number < 1:
             raise ValueError(f"{name}.{label} must be a number from 1")
-    return Menu(world, slot)
+    return Menu(menu.world, menu.slot)
 
 
-def _cheat(cheat: Any, name: str, profile: PlatformProfile) -> str:
-    if not isinstance(cheat, str):
-        raise ValueError(f"{name} must be a list of cheat names")
+def _cheat(cheat: str, name: str, profile: PlatformProfile) -> str:
     if profile.navigation.cheats.bit(cheat) is None:
         raise ValueError(f"{name} has an unknown cheat {cheat!r}")
     return cheat

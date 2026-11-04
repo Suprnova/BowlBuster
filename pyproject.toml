@@ -8,7 +8,13 @@ requires-python = ">=3.14"
 dependencies = []
 
 [dependency-groups]
-dev = ["pytest", "pytest-cov", "ruff"]
+dev = [
+    "datamodel-code-generator==0.86.0",
+    "jsonschema==4.26.0",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]
@@ -27,3 +33,4 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+per-file-ignores = { "src/bowlharness/contract/generated/*" = ["E501"] }

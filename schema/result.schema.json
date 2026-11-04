@@ -1,0 +1,494 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "result.schema.json",
+  "title": "Result",
+  "description": "What one attempt at a request did, written once when the run ends and never changed. A field that doesn't apply is null, or sits in a group that says why.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run", "request", "attempt", "kind", "instance", "started", "ended", "outcome", "cause",
+    "manifest", "placement", "stages", "crash", "hang", "resets", "integrity", "effects", "write_ledger",
+    "input_ledger", "attended", "captures", "captures_dropped", "client", "memory"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "run": { "description": "The run's id: the request's id and the attempt, <request>-a<attempt>.", "type": "string" },
+    "request": { "description": "The id of the request the run attempted.", "type": "string" },
+    "attempt": { "description": "Which attempt at the request this is, from 1.", "type": "integer", "minimum": 1 },
+    "kind": { "description": "The request's kind.", "enum": ["record", "landing", "control"] },
+    "instance": {
+      "description": "The emulator instance that ran it, or null for a run no queue claimed.",
+      "type": ["string", "null"]
+    },
+    "started": { "$ref": "#/$defs/Moment" },
+    "ended": { "$ref": "#/$defs/Moment" },
+    "outcome": { "$ref": "#/$defs/Outcome" },
+    "cause": {
+      "description": "Why an interrupted run was cut short (stopped, lost, a harness fault); null for any other outcome.",
+      "type": ["string", "null"]
+    },
+    "manifest": { "$ref": "#/$defs/Manifest" },
+    "placement": {
+      "description": "The landing's placement; null in a record or a control.",
+      "oneOf": [{ "$ref": "#/$defs/Placement" }, { "type": "null" }]
+    },
+    "stages": {
+      "description": "The stages the target load went through, in order, each time it entered one; empty in a record.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Stage" }
+    },
+    "crash": {
+      "description": "The crash record when the outcome is crash, else null.",
+      "oneOf": [{ "$ref": "#/$defs/Crash" }, { "type": "null" }]
+    },
+    "hang": {
+      "description": "The hang record when the outcome is hang, else null.",
+      "oneOf": [{ "$ref": "#/$defs/Hang" }, { "type": "null" }]
+    },
+    "resets": {
+      "description": "Every scene reset of the target load, in order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Reset" }
+    },
+    "integrity": { "$ref": "#/$defs/Integrity" },
+    "effects": { "$ref": "#/$defs/Effects" },
+    "write_ledger": {
+      "description": "Every write the harness made to guest memory, in order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Write" }
+    },
+    "input_ledger": {
+      "description": "Every press, in the order they were given.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/Press" }
+    },
+    "attended": { "description": "Whether a person took part in the run.", "type": "boolean" },
+    "captures": { "description": "The captures the run took.", "type": "array", "items": { "$ref": "#/$defs/Capture" } },
+    "captures_dropped": {
+      "description": "The captures the budget refused.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/DroppedCapture" }
+    },
+    "client": { "description": "The request's client value, as received." },
+    "memory": { "$ref": "#/$defs/Memory" }
+  },
+  "$defs": {
+    "Moment": {
+      "description": "A point in the run, in wall-clock time and in guest frames.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall", "frame"],
+      "properties": {
+        "wall": { "description": "UTC, as an ISO 8601 timestamp.", "type": "string", "format": "date-time" },
+        "frame": { "description": "The guest's frame counter, or null when the guest couldn't be read.", "type": ["integer", "null"] }
+      }
+    },
+    "Outcome": {
+      "description": "How the run ended, from what the harness observed.",
+      "enum": [
+        "survived", "crash", "hang", "stalled", "no write", "no control", "layout mismatch", "not placed",
+        "scene change", "costume mismatch", "menu unreachable", "unsupported", "interrupted"
+      ]
+    },
+    "Manifest": {
+      "description": "Everything a reproduction of the run must restore.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "harness", "platform", "profile", "counter_basis", "emulator", "disc", "storage", "gdb", "host", "boot_path",
+        "request_sha256", "setup", "observation", "input", "windows", "placement_tool", "recordings", "steps",
+        "loads", "events_dropped"
+      ],
+      "properties": {
+        "harness": { "description": "The harness's version.", "type": "string" },
+        "platform": { "description": "The platform, as the profile names it.", "type": "string" },
+        "profile": { "description": "The hash of the platform profile.", "$ref": "common.schema.json#/$defs/Sha256" },
+        "counter_basis": { "$ref": "#/$defs/CounterBasis" },
+        "emulator": { "$ref": "#/$defs/Emulator" },
+        "disc": { "$ref": "#/$defs/Disc" },
+        "storage": { "$ref": "#/$defs/Storage" },
+        "gdb": { "description": "The version of the gdb that hosted the harness.", "type": "string" },
+        "host": { "description": "The host's operating system.", "type": "string" },
+        "boot_path": { "description": "How the run's first recording began.", "enum": ["boot", "attached"] },
+        "request_sha256": { "description": "The hash of the request file's bytes.", "$ref": "common.schema.json#/$defs/Sha256" },
+        "setup": { "description": "How the game was set up: the request's start.", "enum": ["new-game", "booted"] },
+        "observation": { "$ref": "common.schema.json#/$defs/Observe" },
+        "input": { "$ref": "common.schema.json#/$defs/InputPolicy" },
+        "windows": {
+          "description": "The test step's windows; null in a record.",
+          "oneOf": [{ "$ref": "#/$defs/Windows" }, { "type": "null" }]
+        },
+        "placement_tool": {
+          "description": "The placement tool the session pinned; null when it had none.",
+          "oneOf": [{ "$ref": "#/$defs/PlacementTool" }, { "type": "null" }]
+        },
+        "recordings": {
+          "description": "The run ids of the recordings the run made, in order: a reboot ends one and opens the next.",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "steps": { "description": "How each step of the route went.", "type": "array", "items": { "$ref": "#/$defs/StepRecord" } },
+        "loads": { "description": "Every load the run saw.", "type": "array", "items": { "$ref": "#/$defs/Load" } },
+        "events_dropped": { "description": "How many events the recordings lost.", "type": "integer", "minimum": 0 }
+      }
+    },
+    "CounterBasis": {
+      "description": "The boot scene and the load counter it has, which turn a counter into a load number.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boot_scene", "boot_counter"],
+      "properties": {
+        "boot_scene": { "$ref": "common.schema.json#/$defs/Scene" },
+        "boot_counter": { "type": "integer" }
+      }
+    },
+    "Emulator": {
+      "description": "The emulator and its configuration.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "commit", "date", "executable_sha256", "config_sha256", "controller"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": ["string", "null"] },
+        "commit": { "type": ["string", "null"] },
+        "date": { "type": ["string", "null"] },
+        "executable_sha256": {
+          "description": "Null when the harness attached to an emulator it didn't start.",
+          "oneOf": [{ "$ref": "common.schema.json#/$defs/Sha256" }, { "type": "null" }]
+        },
+        "config_sha256": { "$ref": "common.schema.json#/$defs/Sha256" },
+        "controller": { "description": "The controller bound to port 1.", "type": ["string", "null"] }
+      }
+    },
+    "Disc": {
+      "description": "The disc image.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "image_sha256"],
+      "properties": {
+        "image": { "type": ["string", "null"] },
+        "image_sha256": { "oneOf": [{ "$ref": "common.schema.json#/$defs/Sha256" }, { "type": "null" }] }
+      }
+    },
+    "Storage": {
+      "description": "The storage image.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image", "bytes"],
+      "properties": {
+        "image": { "type": ["string", "null"] },
+        "bytes": { "type": ["integer", "null"] }
+      }
+    },
+    "Windows": {
+      "description": "Each window as configured and as taken.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["render", "reset", "write_timeout"],
+      "properties": {
+        "render": { "$ref": "#/$defs/WindowRecord" },
+        "reset": { "$ref": "#/$defs/WindowRecord" },
+        "write_timeout": { "$ref": "#/$defs/WindowRecord" }
+      }
+    },
+    "WindowRecord": {
+      "description": "A window as configured, and the frames and seconds it took; both null when it never opened.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configured", "frames", "seconds"],
+      "properties": {
+        "configured": { "$ref": "common.schema.json#/$defs/Window" },
+        "frames": { "type": ["integer", "null"] },
+        "seconds": { "type": ["number", "null"] }
+      }
+    },
+    "PlacementTool": {
+      "description": "The published copy of bowlbuster that placed the landings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "build", "sha256"],
+      "properties": {
+        "path": { "description": "Where the pinned copy is.", "type": "string" },
+        "build": { "description": "What its --version printed.", "type": "string" },
+        "sha256": { "description": "The hash of its executable.", "$ref": "common.schema.json#/$defs/Sha256" }
+      }
+    },
+    "StepRecord": {
+      "description": "How a step of the route went.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "scene", "status", "reason", "signal", "frame", "presses"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "scene": { "$ref": "common.schema.json#/$defs/Scene" },
+        "status": { "enum": ["reached", "failed", "not reached"] },
+        "reason": { "description": "Why a failed step failed.", "type": ["string", "null"] },
+        "signal": { "description": "What said a reached step's player was ready.", "type": ["string", "null"] },
+        "frame": { "description": "The frame the step ended at; null when it wasn't reached.", "type": ["integer", "null"] },
+        "presses": { "description": "How many presses the harness gave during it.", "type": "integer", "minimum": 0 }
+      }
+    },
+    "Load": {
+      "description": "A load the run saw.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording", "segment", "counter", "scene", "costumes"],
+      "properties": {
+        "recording": { "type": "string" },
+        "segment": { "type": "integer", "minimum": 0 },
+        "counter": { "type": "integer" },
+        "scene": { "$ref": "common.schema.json#/$defs/Scene" },
+        "costumes": {
+          "description": "The tag of the player archive each character wore, by character; null for none.",
+          "type": "object",
+          "additionalProperties": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "Placement": {
+      "description": "Where the landing was placed, and whether the game wrote where it was placed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s", "heap", "match", "first_write", "predicted_top", "live_top"],
+      "properties": {
+        "s": { "description": "The sphere written; null when place placed nothing.", "type": ["integer", "null"] },
+        "heap": { "description": "The live heap handed to place.", "$ref": "common.schema.json#/$defs/HeapState" },
+        "match": {
+          "description": "The fraction of the expected window that matched; null when it wasn't checked.",
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "first_write": {
+          "description": "The game's first stale write; null when none came.",
+          "oneOf": [{ "$ref": "#/$defs/StaleWrite" }, { "type": "null" }]
+        },
+        "predicted_top": {
+          "description": "The cursor and depth place --top predicted; null when the recipe has no cutoff.",
+          "oneOf": [{ "$ref": "common.schema.json#/$defs/Top" }, { "type": "null" }]
+        },
+        "live_top": {
+          "description": "The live cursor and depth at the first stale write; null when none came.",
+          "oneOf": [{ "$ref": "common.schema.json#/$defs/Top" }, { "type": "null" }]
+        }
+      }
+    },
+    "StaleWrite": {
+      "description": "A stale write: the pointer the game wrote through, and when.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s", "frame"],
+      "properties": {
+        "s": { "type": "integer" },
+        "frame": { "type": "integer" }
+      }
+    },
+    "Stage": {
+      "description": "A stage of the target load's timeline.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "from", "to", "status", "reason"],
+      "properties": {
+        "stage": { "enum": ["loading", "held", "in control", "render", "reset", "exit", "paused"] },
+        "from": { "description": "The frame it began at.", "type": "integer" },
+        "to": { "description": "The frame it ended at; null when the run ended inside it.", "type": ["integer", "null"] },
+        "status": {
+          "description": "complete; cut when the run ended inside it; failed when the harness couldn't finish it.",
+          "enum": ["complete", "cut", "failed"]
+        },
+        "reason": { "description": "Why a failed stage failed.", "type": ["string", "null"] }
+      }
+    },
+    "Crash": {
+      "description": "A bugcheck. Its registers and stack words are in memory.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "code", "params", "arch", "return_addresses", "instruction", "access", "accessed", "scene",
+        "counter", "capture", "stage"
+      ],
+      "properties": {
+        "kind": { "enum": ["KeBugCheck", "KeBugCheckEx"] },
+        "code": { "type": "integer" },
+        "params": { "type": "array", "items": { "type": "integer" } },
+        "arch": { "type": "string" },
+        "return_addresses": { "type": "array", "items": { "type": "integer" } },
+        "instruction": { "description": "The faulting instruction of an unhandled exception.", "type": ["integer", "null"] },
+        "access": { "description": "An access violation's kind.", "enum": ["read", "write", null] },
+        "accessed": { "description": "The address an access violation accessed.", "type": ["integer", "null"] },
+        "scene": { "oneOf": [{ "$ref": "common.schema.json#/$defs/Scene" }, { "type": "null" }] },
+        "counter": { "type": ["integer", "null"] },
+        "capture": { "description": "The crash's capture, if it was taken.", "type": ["string", "null"] },
+        "stage": { "description": "The stage it happened in; null in a record.", "type": ["string", "null"] }
+      }
+    },
+    "Hang": {
+      "description": "A guest that made no progress.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stalled", "last_frame", "last_event", "scene", "counter", "capture"],
+      "properties": {
+        "stalled": { "description": "Seconds without progress.", "type": "number" },
+        "last_frame": { "type": "integer" },
+        "last_event": { "oneOf": [{ "$ref": "#/$defs/EventReference" }, { "type": "null" }] },
+        "scene": { "oneOf": [{ "$ref": "common.schema.json#/$defs/Scene" }, { "type": "null" }] },
+        "counter": { "type": ["integer", "null"] },
+        "capture": { "type": ["string", "null"] }
+      }
+    },
+    "EventReference": {
+      "description": "An event of a recording.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seq", "event"],
+      "properties": {
+        "seq": { "type": "integer" },
+        "event": { "type": "string" }
+      }
+    },
+    "Reset": {
+      "description": "A scene reset.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame", "counter", "cause"],
+      "properties": {
+        "frame": { "type": "integer" },
+        "counter": { "type": ["integer", "null"] },
+        "cause": { "description": "Who caused it.", "enum": ["game"] }
+      }
+    },
+    "Integrity": {
+      "description": "What would make the run invalid. A run is valid when it raised no flag.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flags"],
+      "properties": {
+        "flags": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "stage after crash", "not in play at write", "over 240 s", "over 3 resets", "warp retried",
+              "error event", "control never given", "match below 0.9"
+            ]
+          }
+        }
+      }
+    },
+    "Effects": {
+      "description": "What the run changed in the game's state. Not observed until the observed fields are confirmed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed", "reason"],
+      "properties": {
+        "observed": { "description": "Whether the harness looked.", "type": "boolean" },
+        "reason": { "description": "Why it didn't.", "type": ["string", "null"] }
+      }
+    },
+    "Write": {
+      "description": "A write the harness made. The bytes it replaced are in memory, by the row's seq.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording", "seq", "class", "target", "address", "new"],
+      "properties": {
+        "recording": { "type": "string" },
+        "seq": { "description": "The seq of its write event.", "type": "integer" },
+        "class": { "enum": ["bowl-storage"] },
+        "target": { "description": "What was written: sphere, flag or scale.", "type": "string" },
+        "address": { "type": "integer" },
+        "new": { "$ref": "common.schema.json#/$defs/Hex" }
+      }
+    },
+    "Press": {
+      "description": "A press, as the recording's input ledger holds it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "recording", "button", "mask", "source", "step", "game_mode", "play_state", "control_off", "sent_poll",
+        "sent_frame", "polls", "taken_frame", "cancelled"
+      ],
+      "properties": {
+        "recording": { "type": "string" },
+        "button": { "type": "string" },
+        "mask": { "type": "integer" },
+        "source": { "enum": ["harness", "manual", "person"] },
+        "step": { "type": ["integer", "null"] },
+        "game_mode": { "type": "integer" },
+        "play_state": { "type": "integer" },
+        "control_off": { "type": "integer" },
+        "sent_poll": { "type": "integer" },
+        "sent_frame": { "type": "integer" },
+        "polls": { "type": "integer" },
+        "taken_frame": { "type": ["integer", "null"] },
+        "cancelled": { "type": "boolean" }
+      }
+    },
+    "Capture": {
+      "description": "A capture the run took.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording", "id", "trigger", "label", "counter", "scene"],
+      "properties": {
+        "recording": { "type": "string" },
+        "id": { "type": "string" },
+        "trigger": { "type": "string" },
+        "label": { "type": ["string", "null"] },
+        "counter": { "type": "integer" },
+        "scene": { "oneOf": [{ "$ref": "common.schema.json#/$defs/Scene" }, { "type": "null" }] }
+      }
+    },
+    "DroppedCapture": {
+      "description": "A capture the budget refused.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording", "trigger", "label", "scene"],
+      "properties": {
+        "recording": { "type": "string" },
+        "trigger": { "type": "string" },
+        "label": { "type": ["string", "null"] },
+        "scene": { "oneOf": [{ "$ref": "common.schema.json#/$defs/Scene" }, { "type": "null" }] }
+      }
+    },
+    "Memory": {
+      "description": "Every game byte the result holds. The rest of a result can be shared; this block is never committed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live_window", "old_bytes", "crash"],
+      "properties": {
+        "live_window": {
+          "description": "The window at S+expected.offset as players done found it; null when it wasn't read.",
+          "oneOf": [{ "$ref": "common.schema.json#/$defs/Hex" }, { "type": "null" }]
+        },
+        "old_bytes": {
+          "description": "The bytes each write replaced.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/OldBytes" }
+        },
+        "crash": {
+          "description": "The crash's registers and stack words; null without a crash.",
+          "oneOf": [{ "$ref": "#/$defs/CrashMemory" }, { "type": "null" }]
+        }
+      }
+    },
+    "OldBytes": {
+      "description": "The bytes a write replaced.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording", "seq", "bytes"],
+      "properties": {
+        "recording": { "type": "string" },
+        "seq": { "type": "integer" },
+        "bytes": { "$ref": "common.schema.json#/$defs/Hex" }
+      }
+    },
+    "CrashMemory": {
+      "description": "A crash's registers, by name, and its stack words from the stack pointer.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registers", "stack"],
+      "properties": {
+        "registers": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "stack": { "type": "array", "items": { "type": "integer" } }
+      }
+    }
+  }
+}

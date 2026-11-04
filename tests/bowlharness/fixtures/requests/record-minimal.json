@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "request_id": "route-2",
+  "kind": "record",
+  "start": { "from": "booted" },
+  "steps": [{ "scene": "ORIG" }]
+}

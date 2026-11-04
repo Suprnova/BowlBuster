@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "request_id": "route-1",
+  "kind": "record",
+  "start": { "from": "new-game" },
+  "steps": [
+    { "scene": "ORIG", "cheats": ["all-tasks", "all-moves-upgraded"] },
+    { "scene": "TARG", "menu": { "world": 2, "slot": 1 }, "costumes": ["PLSA"] }
+  ],
+  "observe": { "heap_events": "all", "cutoff_captures": ["TARG"], "capture_budget": null },
+  "input": { "hold": 6, "release": 6 },
+  "client": { "id": 7 }
+}

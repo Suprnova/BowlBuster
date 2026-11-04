@@ -1,5 +1,6 @@
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -126,17 +127,25 @@ def test_a_step_names_the_cheats_it_enters() -> None:
     assert request.steps[0].cheats == ("all-tasks", "all-moves-upgraded")
 
 
-def test_a_cheat_the_profile_does_not_name_is_refused() -> None:
+def test_a_cheat_the_schema_does_not_name_is_refused() -> None:
     refused(
         document(steps=[{"scene": "ORIG", "cheats": ["all-coins"]}]),
-        r"steps\[0\]\.cheats has an unknown cheat 'all-coins'",
+        r"steps\[0\]\.cheats\[0\] must be one of all-tasks",
     )
 
 
 def test_a_cheat_is_named_not_spelled_as_its_presses() -> None:
     refused(
-        document(steps=[{"scene": "ORIG", "cheats": ["Y X Y Y X Y X X"]}]), r"steps\[0\]\.cheats has an unknown cheat"
+        document(steps=[{"scene": "ORIG", "cheats": ["Y X Y Y X Y X X"]}]), r"steps\[0\]\.cheats\[0\] must be one of"
     )
+
+
+def test_a_cheat_the_profile_does_not_map_is_refused() -> None:
+    cheats = replace(XBOX_NTSC_U.navigation.cheats, names=(("all-tasks", 0x800000),))
+    profile = replace(XBOX_NTSC_U, navigation=replace(XBOX_NTSC_U.navigation, cheats=cheats))
+
+    with pytest.raises(ValueError, match=r"steps\[0\]\.cheats has an unknown cheat 'all-health'"):
+        parse_request(document(steps=[{"scene": "ORIG", "cheats": ["all-health"]}]), profile)
 
 
 def test_a_scene_is_four_characters() -> None:

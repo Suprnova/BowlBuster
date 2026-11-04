@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "request.schema.json",
+  "title": "Request",
+  "description": "A request for the harness to run: a route to record, a landing test, or a control.",
+  "oneOf": [
+    { "$ref": "#/$defs/RecordRequest" },
+    { "$ref": "#/$defs/LandingRequest" },
+    { "$ref": "#/$defs/ControlRequest" }
+  ],
+  "$defs": {
+    "RequestId": {
+      "description": "The request's durable identity.",
+      "type": "string",
+      "minLength": 1
+    },
+    "Start": {
+      "description": "How the run reaches its first step.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from"],
+      "properties": {
+        "from": {
+          "description": "new-game: the main menu's New Game, then the first step's load. booted: the disc boots straight into the first step's scene.",
+          "enum": ["new-game", "booted"]
+        }
+      }
+    },
+    "Menu": {
+      "description": "Where the pause menu warps to a step: its world and task slot, numbered from 1 as the menu numbers them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["world", "slot"],
+      "properties": {
+        "world": { "description": "The world.", "type": "integer", "minimum": 1 },
+        "slot": { "description": "The task slot.", "type": "integer", "minimum": 1 }
+      }
+    },
+    "CheatName": {
+      "description": "A cheat a step enters, by name. The platform profile gives each name its bit in the cheat mask.",
+      "enum": ["all-tasks", "all-moves", "all-moves-upgraded", "all-health", "double-manliness"]
+    },
+    "Step": {
+      "description": "A scene the route loads.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scene"],
+      "properties": {
+        "scene": { "$ref": "common.schema.json#/$defs/Scene" },
+        "menu": {
+          "description": "Where the pause menu warps to the step. Every step but the first has one; the start loads the first.",
+          "$ref": "#/$defs/Menu"
+        },
+        "costumes": {
+          "description": "The tags of the player archives the step's load wears, at most one per character; none when left out.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/Scene" }
+        },
+        "cheats": {
+          "description": "The cheats entered while the step's level is in play.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/CheatName" }
+        }
+      }
+    },
+    "Steps": {
+      "description": "The scenes to load, in order.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Step" }
+    },
+    "Windows": {
+      "description": "How long a test step is watched. Each left out takes the harness's default.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "render": {
+          "description": "From the first stale write, or a control's draw. Default: 20 s of guest frames.",
+          "$ref": "common.schema.json#/$defs/Window"
+        },
+        "reset": {
+          "description": "From the first reset. Default: 15 s of guest frames.",
+          "$ref": "common.schema.json#/$defs/Window"
+        },
+        "write_timeout": {
+          "description": "From players done, the longest wait for the first stale write or for control. Default: 120 wall seconds.",
+          "$ref": "common.schema.json#/$defs/Window"
+        }
+      }
+    },
+    "Recipe": {
+      "description": "The recorded load whose requests place the landing, as bowlbuster place addresses it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recording", "segment", "load"],
+      "properties": {
+        "recording": {
+          "description": "The run id of the recording, a folder under the harness's recordings root.",
+          "type": "string",
+          "minLength": 1
+        },
+        "segment": { "description": "The segment that holds the load.", "type": "integer", "minimum": 0 },
+        "load": { "description": "The load's counter.", "type": "integer", "minimum": 0 }
+      }
+    },
+    "Expected": {
+      "description": "The window checked at players done before anything is written.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["offset", "bytes"],
+      "properties": {
+        "offset": { "description": "Where the window starts, counted from S.", "type": "integer" },
+        "bytes": {
+          "description": "The bytes the window holds in the recipe's cutoff capture. Their count is the window's length.",
+          "$ref": "common.schema.json#/$defs/Hex",
+          "minLength": 2
+        }
+      }
+    },
+    "LandingTest": {
+      "description": "A landing placed at one step of the route.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step", "recipe", "op", "delta", "expected"],
+      "properties": {
+        "step": { "description": "The index of the target step.", "type": "integer", "minimum": 0 },
+        "recipe": { "$ref": "#/$defs/Recipe" },
+        "op": { "description": "The block's position in the recipe load's request list.", "type": "integer", "minimum": 0 },
+        "delta": { "description": "The signed byte offset of S in the block.", "type": "integer" },
+        "expected": { "$ref": "#/$defs/Expected" },
+        "min_match": {
+          "description": "The fraction of the expected window that must match. Default: 0.9.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "ControlTest": {
+      "description": "A step watched as a landing test's would be, with nothing placed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["step"],
+      "properties": {
+        "step": { "description": "The index of the target step.", "type": "integer", "minimum": 0 }
+      }
+    },
+    "RecordRequest": {
+      "description": "A route to drive and record, load by load.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "request_id", "kind", "start", "steps"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "request_id": { "$ref": "#/$defs/RequestId" },
+        "kind": { "const": "record" },
+        "start": { "$ref": "#/$defs/Start" },
+        "steps": { "$ref": "#/$defs/Steps" },
+        "observe": { "$ref": "common.schema.json#/$defs/Observe" },
+        "input": { "$ref": "common.schema.json#/$defs/InputPolicy" },
+        "client": { "description": "An opaque value the harness returns unread." }
+      }
+    },
+    "LandingRequest": {
+      "description": "A route to a target step, a landing placed there, and an exit step after it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "request_id", "kind", "start", "steps", "tests"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "request_id": { "$ref": "#/$defs/RequestId" },
+        "kind": { "const": "landing" },
+        "start": { "$ref": "#/$defs/Start" },
+        "steps": { "$ref": "#/$defs/Steps" },
+        "tests": {
+          "description": "The one test the request runs.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/LandingTest" }
+        },
+        "windows": { "$ref": "#/$defs/Windows" },
+        "observe": { "$ref": "common.schema.json#/$defs/Observe" },
+        "input": { "$ref": "common.schema.json#/$defs/InputPolicy" },
+        "client": { "description": "An opaque value the harness returns unread." }
+      }
+    },
+    "ControlRequest": {
+      "description": "A route to a target step, watched with nothing placed, and an exit step after it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "request_id", "kind", "start", "steps", "tests"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "request_id": { "$ref": "#/$defs/RequestId" },
+        "kind": { "const": "control" },
+        "start": { "$ref": "#/$defs/Start" },
+        "steps": { "$ref": "#/$defs/Steps" },
+        "tests": {
+          "description": "The one test the request runs.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": { "$ref": "#/$defs/ControlTest" }
+        },
+        "windows": { "$ref": "#/$defs/Windows" },
+        "observe": { "$ref": "common.schema.json#/$defs/Observe" },
+        "input": { "$ref": "common.schema.json#/$defs/InputPolicy" },
+        "client": { "description": "An opaque value the harness returns unread." }
+      }
+    }
+  }
+}
