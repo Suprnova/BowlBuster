@@ -89,6 +89,10 @@ class Navigator:
     scene at its world and slot, or the confirmed warp never began) or ``unsupported`` (a code or costume no cheat
     gives, or a route the target can't be driven along).
 
+    Attributes:
+        warp_retries: How many times a confirmed warp that didn't begin was confirmed again, over the whole route.
+        reason: Why the step that failed failed, once one has.
+
     Args:
         target: The guest, which the navigator interrupts when the route ends.
         profile: The platform's addresses and constants.
@@ -132,6 +136,7 @@ class Navigator:
         self._confirm: tuple[int, int] | None = None
         self._exit: tuple[int, int] | None = None
         self._retries = 0
+        self.warp_retries = 0
         self._quiet = 0
         self._signal = ""
         self._codes: deque[Code] = deque()
@@ -143,6 +148,7 @@ class Navigator:
         self._after_pause = Phase.WORLD
         self.outcome: str | None = None
         self.result: str | None = None
+        self.reason: str | None = None
 
     @property
     def step(self) -> int:
@@ -417,6 +423,7 @@ class Navigator:
             and self._read(self._profile.globals.game_mode) == navigation.modes.pause_menu
         ):
             self._retries += 1
+            self.warp_retries += 1
             self._quiet = 0
             self._press("a")
 
@@ -564,6 +571,7 @@ class Navigator:
 
     def _fail(self, reason: str) -> None:
         self._recorder.record_step(self._index, "failed", reason, presses=self._recorder.presses - self._presses)
+        self.reason = reason
         self._end(FAILED)
         self.result = f"{FAILED}: step {self._index} ({self._request.steps[self._index].scene}), {reason}"
 

@@ -163,35 +163,6 @@ def _top(top: tuple[int, int] | None) -> common_schema.Top | None:
     return None if top is None else common_schema.Top(cursor=top[0], depth=top[1])
 
 
-class FixedHold:
-    """Holds a test step for its render window's frames, counted from the step's players done.
-
-    It stands in for the stage tracker, which decides when a test step's windows have closed.
-
-    Args:
-        recorder: The recorder whose events and frames it follows.
-        step: The test step's index.
-        frames: How many frames to hold it for.
-        current: The navigator's current step.
-    """
-
-    def __init__(self, recorder: Recorder, step: int, frames: int, current: Callable[[], int]) -> None:
-        self._recorder = recorder
-        self._step = step
-        self._frames = frames
-        self._current = current
-        self._from: int | None = None
-
-    def on_event(self, event: str, fields: dict[str, object]) -> None:
-        """Marks the frame of the test step's players done."""
-        if event == "players_done" and self._current() == self._step and self._from is None:
-            self._from = self._recorder.frame()
-
-    def release(self) -> bool:
-        """Whether the test step may be left."""
-        return self._from is not None and self._recorder.frame() - self._from >= self._frames
-
-
 def check_recipe(test: LandingTest, recordings: Path, platform: str) -> None:
     """Checks, before a session starts, that a landing's recipe is a recording made on the session's platform.
 

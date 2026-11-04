@@ -5,17 +5,17 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bowlharness.contract.generated import common_schema
 from bowlharness.contract.generated import result_schema as schema
 from bowlharness.driving.input import InputDriver
-from bowlharness.driving.landing import FixedHold, Landing, check_recipe
+from bowlharness.driving.landing import Landing, check_recipe
 from bowlharness.driving.navigation import Navigator
 from bowlharness.driving.placer import PlacementFault, Placer, ToolPlacer
-from bowlharness.driving.request import GUEST_FRAMES, LandingTest, Request, Window
+from bowlharness.driving.request import LandingTest, Request
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.detection import Watchdog
 from bowlharness.recording.recorder import Recorder
 from bowlharness.recording.result import Ending, build_result, harness_version, moment, write_result
+from bowlharness.recording.stages import StageTracker
 from bowlharness.session.session import ENDED, Session
 from bowlharness.target import Target, TargetError
 
@@ -79,6 +79,7 @@ class DrivenSession(Session):
         self._recipes = recordings
         self._navigator: Navigator | None = None
         self._landing: Landing | None = None
+        self._tracker: StageTracker | None = None
         self.written: schema.Result | None = None
         super().__init__(
             target,
@@ -107,17 +108,33 @@ class DrivenSession(Session):
         recorder, watchdog = super()._open(reason, boot_path)
         recorder.drive(self._request.to_json(), self._request_sha256)
         test, windows = self._request.test, self._request.windows
-        hold = None
         if test is not None and windows is not None:
-            hold = FixedHold(recorder, test.step, self._frames(windows.render), lambda: self._current_step())
+            self._tracker = StageTracker(
+                self._target,
+                self._profile,
+                recorder,
+                self._request.kind,
+                test.step,
+                windows,
+                self._current_step,
+                exits=test.step < len(self._request.steps) - 1,
+            )
+        tracker = self._tracker
         self._navigator = Navigator(
             self._target,
             self._profile,
             recorder,
             self._request,
             held_step=test.step if test else None,
-            release=hold.release if hold else lambda: True,
+            release=tracker.release if tracker else lambda: True,
         )
+        navigator = self._navigator
+
+        def on_poll() -> None:
+            if tracker is not None:
+                tracker.on_poll()
+            navigator.on_poll()
+
         self._driver = InputDriver(
             self._target,
             self._profile,
@@ -125,36 +142,37 @@ class DrivenSession(Session):
             watch_person=True,
             hold=self._request.hold,
             release=self._request.release,
-            on_poll=self._navigator.on_poll,
+            on_poll=on_poll,
         )
-        self._navigator.use(self._driver)
+        navigator.use(self._driver)
         self._driver.arm()
-        recorder.listen(self._navigator.on_event)
-        if hold is not None:
-            recorder.listen(hold.on_event)
+        recorder.listen(navigator.on_event)
+        if tracker is not None:
+            recorder.listen(tracker.on_event)
         if isinstance(test, LandingTest):
             assert self._placer is not None and self._recipes is not None
             self._landing = Landing(
                 self._target, self._profile, recorder, test, self._placer, self._recipes, self._current_step
             )
             recorder.listen(self._landing.on_event)
-        self._navigator.start()
+        navigator.start()
         return recorder, watchdog
 
     def _current_step(self) -> int:
         assert self._navigator is not None
         return self._navigator.step
 
-    def _frames(self, window: Window) -> int:
-        return int(window.value if window.unit == GUEST_FRAMES else window.value * self._profile.frame_rate)
-
     def _reopen(self) -> None:
         self._end(ended="reboot")
 
+    def _verdict(self) -> tuple[str, str | None] | None:
+        for source in (self._landing, self._tracker):
+            if source is not None and source.verdict is not None:
+                return source.verdict
+        return None
+
     def _concluded(self) -> str | None:
-        if self._landing is not None and self._landing.verdict is not None:
-            return LANDED
-        return self.outcome
+        return LANDED if self._verdict() is not None else self.outcome
 
     def _frame(self) -> int | None:
         try:
@@ -166,40 +184,44 @@ class DrivenSession(Session):
         if self.ended:
             return ENDED
         frame = self._frame()
+        landing, tracker, navigator = self._landing, self._tracker, self._navigator
+        if tracker is not None:
+            if ended == "failed" and navigator is not None and navigator.reason is not None:
+                tracker.fail_exit(navigator.reason)
+                ended = "done" if tracker.exit_failed else ended
+            tracker.finish()
         super()._end(interrupted, ended)
         runs = [f"{self._run_stem}-{number}" for number in range(1, self.recordings + 1)]
         manifests = [json.loads((self._out / run / "manifest.json").read_text(encoding="utf-8")) for run in runs]
-        landing = self._landing
+        placement = landing.placement() if landing else None
         tool = self._placer.tool if self._placer else None
+        flags = []
+        if tracker is not None:
+            flags = tracker.flags(
+                match=placement.match if placement else None,
+                events_dropped=sum(manifest["events_dropped"] for manifest in manifests),
+                warp_retries=navigator.warp_retries if navigator else 0,
+            )
         self.written = build_result(
             self._request.to_json(),
             manifests,
-            Ending(interrupted, ended, landing.verdict if landing else None),
+            Ending(interrupted, ended, self._verdict()),
             started=self._started,
             ended=moment(frame),
             harness=self._harness,
-            placement=landing.placement() if landing else None,
+            placement=placement,
             live_window=landing.live_window if landing else None,
             placement_tool=schema.PlacementTool(path=str(tool.path), build=tool.build, sha256=tool.sha256)
             if tool
             else None,
-            windows=self._windows_record(),
+            windows=tracker.windows() if tracker else None,
+            stages=tracker.stages() if tracker else [],
+            resets=tracker.resets if tracker else [],
+            crash_stage=tracker.crash_stage if tracker else None,
+            flags=flags,
         )
         write_result(self._out / "result.json", self.written)
         return ENDED
-
-    def _windows_record(self) -> schema.Windows | None:
-        windows = self._request.windows
-        if windows is None:
-            return None
-
-        def record(window: Window) -> schema.WindowRecord:
-            configured = common_schema.Window(unit=window.unit, value=window.value)
-            return schema.WindowRecord(configured=configured, frames=None, seconds=None)
-
-        return schema.Windows(
-            render=record(windows.render), reset=record(windows.reset), write_timeout=record(windows.write_timeout)
-        )
 
 
 def pin_placer(request: Request, place: Path | None, recordings: Path | None, platform: str) -> Placer | None:

@@ -283,7 +283,7 @@ class Integrity:
             "over 240 s",
             "over 3 resets",
             "warp retried",
-            "error event",
+            "events dropped",
             "control never given",
             "match below 0.9",
         ]

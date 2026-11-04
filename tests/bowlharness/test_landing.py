@@ -80,6 +80,7 @@ def landing_game(*, scale_zero: bool = False, stale: int | None = None) -> Scrip
     if scale_zero:
         game.watch(STORAGE.scale, 0)
     game.players_done()
+    game.drawn()
     game.stale_write(stale)
     polls(game, 40)
     trip(game, (2, 0), "EXIT", 3, "TARG")

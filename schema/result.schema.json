@@ -368,7 +368,7 @@
           "items": {
             "enum": [
               "stage after crash", "not in play at write", "over 240 s", "over 3 resets", "warp retried",
-              "error event", "control never given", "match below 0.9"
+              "events dropped", "control never given", "match below 0.9"
             ]
           }
         }

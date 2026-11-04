@@ -92,6 +92,10 @@ def build_result(
     live_window: str | None = None,
     placement_tool: schema.PlacementTool | None = None,
     windows: schema.Windows | None = None,
+    stages: list[schema.Stage] | None = None,
+    resets: list[schema.Reset] | None = None,
+    crash_stage: str | None = None,
+    flags: list[str] | None = None,
 ) -> schema.Result:
     """The result of a driven run.
 
@@ -108,6 +112,10 @@ def build_result(
         live_window: The expected window as players done found it, in hex.
         placement_tool: The placement tool the session pinned.
         windows: The test step's windows, as configured and as taken.
+        stages: The test step's stages.
+        resets: The test step's resets.
+        crash_stage: The stage a crash happened in.
+        flags: The integrity flags the run raised.
     """
     first = manifests[0]
     storage = first.get("storage", {})
@@ -148,11 +156,11 @@ def build_result(
             events_dropped=sum(manifest["events_dropped"] for manifest in manifests),
         ),
         placement=placement,
-        stages=[],
-        crash=_crash(crash) if crash else None,
+        stages=stages or [],
+        crash=_crash(crash, crash_stage) if crash else None,
         hang=_hang(hang) if hang else None,
-        resets=[],
-        integrity=schema.Integrity(flags=[]),
+        resets=resets or [],
+        integrity=schema.Integrity(flags=flags or []),
         effects=schema.Effects(observed=False, reason=NOT_OBSERVED),
         write_ledger=[
             schema.Write(
@@ -238,7 +246,7 @@ def _load(recording: str, load: dict[str, Any]) -> schema.Load:
     )
 
 
-def _crash(crash: dict[str, Any]) -> schema.Crash:
+def _crash(crash: dict[str, Any], stage: str | None) -> schema.Crash:
     return schema.Crash(
         kind=crash["kind"],
         code=crash["code"],
@@ -251,7 +259,7 @@ def _crash(crash: dict[str, Any]) -> schema.Crash:
         scene=crash["scene"],
         counter=crash["counter"],
         capture=crash["capture"],
-        stage=None,
+        stage=stage,
     )
 
 
