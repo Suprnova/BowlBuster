@@ -118,8 +118,25 @@ def test_a_costume_for_each_character_is_allowed() -> None:
     assert request.steps[1].costumes == ("PLSA", "PLPB")
 
 
-def test_a_cheat_is_eight_presses_of_x_and_y() -> None:
-    refused(document(steps=[{"scene": "ORIG", "cheats": ["X X Y"]}]), r"steps\[0\]\.cheats")
+def test_a_step_names_the_cheats_it_enters() -> None:
+    steps = [{"scene": "ORIG", "cheats": ["all-tasks", "all-moves-upgraded"]}]
+
+    request = parse_request(document(steps=steps), XBOX_NTSC_U)
+
+    assert request.steps[0].cheats == ("all-tasks", "all-moves-upgraded")
+
+
+def test_a_cheat_the_profile_does_not_name_is_refused() -> None:
+    refused(
+        document(steps=[{"scene": "ORIG", "cheats": ["all-coins"]}]),
+        r"steps\[0\]\.cheats has an unknown cheat 'all-coins'",
+    )
+
+
+def test_a_cheat_is_named_not_spelled_as_its_presses() -> None:
+    refused(
+        document(steps=[{"scene": "ORIG", "cheats": ["Y X Y Y X Y X X"]}]), r"steps\[0\]\.cheats has an unknown cheat"
+    )
 
 
 def test_a_scene_is_four_characters() -> None:

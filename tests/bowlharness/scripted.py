@@ -42,10 +42,10 @@ CHEATS = [
     ("Y Y Y Y X X X X", 0x4000000, True),
     ("X Y Y X X Y Y X", 0x8000000, True),
     ("Y X X Y Y X X Y", 0x10000000, True),
-    ("X X Y Y X X Y Y", 0x1000, False),
-    ("Y Y X X Y Y X X", 0x2000, False),
-    ("X Y Y Y Y Y Y X", 0x4000, False),
-    ("Y X X X X X X Y", 0x8000, False),
+    ("X X Y Y X X Y Y", 0x20000, False),
+    ("Y Y X X Y Y X X", 0x400000, False),
+    ("X Y Y Y Y Y Y X", 0x100, False),
+    ("Y X X X X X X Y", 0x40000, True),
 ]
 
 

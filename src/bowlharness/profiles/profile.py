@@ -293,7 +293,8 @@ class Cheats:
 
     The cheat entry takes the pressed X and Y buttons into a history, counted and timed out by its own dwords. A row of
     the cheat table names the history it matches, the callback it calls, the bit it sets in the cheat mask, and flags,
-    one of which makes it toggle the bit.
+    one of which makes it toggle the bit. A request names a cheat that gives no costume, and the profile maps each name
+    to its bit, so the code entered is the table's row with that bit.
 
     Attributes:
         held: The held mask the entry needs and no more: both triggers.
@@ -309,6 +310,7 @@ class Cheats:
         flags_offset: Where it holds its flags.
         toggle_flag: The flag that makes the row toggle its bit.
         clear_polls: How many polls a half-entered history takes to clear: its timeout, with room to spare.
+        names: The cheats a request can name, each with its bit in the cheat mask.
     """
 
     held: int
@@ -324,6 +326,11 @@ class Cheats:
     flags_offset: int
     toggle_flag: int
     clear_polls: int
+    names: tuple[tuple[str, int], ...]
+
+    def bit(self, name: str) -> int | None:
+        """The cheat-mask bit of the cheat called ``name``, or ``None`` when no cheat is."""
+        return dict(self.names).get(name)
 
 
 @dataclass(frozen=True)

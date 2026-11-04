@@ -196,6 +196,13 @@ XBOX_NTSC_U = PlatformProfile(
             flags_offset=0xC,
             toggle_flag=1,
             clear_polls=150,
+            names=(
+                ("all-tasks", 0x800000),
+                ("all-moves", 0x20000),
+                ("all-moves-upgraded", 0x400000),
+                ("all-health", 0x100),
+                ("double-manliness", 0x40000),
+            ),
         ),
         title_start=0x309530,
         menu_active=0x309560,

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +56,7 @@ def test_a_code_holds_l_and_r_across_all_eight_presses(tmp_path: Path) -> None:
     open_options(game)
     game.enter_code(EVERY_TASK[0])
 
-    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": [EVERY_TASK[0]]}]))
+    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     rows = manifest["input_ledger"]
     chord = rows[-1]
@@ -78,7 +79,7 @@ def test_each_press_of_a_code_is_a_navigation_event(tmp_path: Path) -> None:
     open_options(game)
     game.enter_code(EVERY_TASK[0])
 
-    drive(game, tmp_path, request([{"scene": "ORIG", "cheats": [EVERY_TASK[0]]}]))
+    drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     assert cheat_inputs(tmp_path) == EVERY_TASK[0].lower().split()
 
@@ -97,7 +98,7 @@ def test_a_cheat_costume_is_toggled_on_before_its_step_and_off_before_the_next(t
     leave_options(game)
     trip(game, (2, 0), "LAST", 3, "TARG", cheats=EVERY_TASK[1])
     steps = [
-        {"scene": "ORIG", "cheats": [EVERY_TASK[0]]},
+        {"scene": "ORIG", "cheats": ["all-tasks"]},
         {"scene": "TARG", "menu": {"world": 2, "slot": 1}, "costumes": ["PLSA"]},
         {"scene": "LAST", "menu": {"world": 3, "slot": 1}},
     ]
@@ -124,7 +125,7 @@ def test_a_code_the_game_dropped_is_entered_again_from_a_cleared_history(tmp_pat
     game.await_press("y", mode=PAUSE_MENU, memory={COUNT: 0})
     game.enter_code(EVERY_TASK[0])
 
-    session, _ = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": [EVERY_TASK[0]]}]))
+    session, _ = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     assert (session.result, cheat_inputs(tmp_path)) == ("done", ["x", *EVERY_TASK[0].lower().split()])
 
@@ -137,7 +138,7 @@ def test_a_code_that_never_takes_fails_the_step_as_stalled_after_its_attempts(tm
         game.await_press("x", mode=PAUSE_MENU, memory={COUNT: 1})
         game.await_press("y", mode=PAUSE_MENU, memory={COUNT: 0})
 
-    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": [EVERY_TASK[0]]}]))
+    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     assert (session.result, manifest["steps"][0]["status"], len(cheat_inputs(tmp_path))) == (
         "failed: step 0 (ORIG), stalled",
@@ -152,7 +153,7 @@ def test_an_options_menu_that_never_takes_a_press_fails_the_step_as_stalled(tmp_
     open_options(game)
     polls(game, 20000, mode=PAUSE_MENU)
 
-    session, _ = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": [EVERY_TASK[0]]}]))
+    session, _ = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     assert session.result == "failed: step 0 (ORIG), stalled"
 
@@ -163,7 +164,7 @@ def test_a_non_toggling_code_already_in_the_cheat_mask_is_not_entered(tmp_path: 
     game.players_done()
     polls(game, 12)
 
-    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": [EVERY_TASK[0]]}]))
+    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     assert (session.result, manifest["input_ledger"]) == ("done", [])
 
@@ -185,12 +186,13 @@ def test_a_load_that_wears_other_costumes_than_the_step_names_fails_as_a_costume
     )
 
 
-def test_a_code_no_cheat_enters_fails_the_route_as_unsupported_before_any_input(tmp_path: Path) -> None:
-    game = ScriptedGame(FAST)
+def test_a_cheat_whose_bit_no_row_sets_fails_the_route_as_unsupported_before_any_input(tmp_path: Path) -> None:
+    cheats = replace(FAST.navigation.cheats, names=(("all-tasks", 0x1),))
+    game = ScriptedGame(replace(FAST, navigation=replace(FAST.navigation, cheats=cheats)))
     level(game, "ORIG", 1)
     polls(game, 20)
 
-    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["X X X X X X X X"]}]))
+    session, manifest = drive(game, tmp_path, request([{"scene": "ORIG", "cheats": ["all-tasks"]}]))
 
     assert (session.result, manifest["input_ledger"]) == ("failed: step 0 (ORIG), unsupported", [])
 

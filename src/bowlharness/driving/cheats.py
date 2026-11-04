@@ -22,11 +22,6 @@ class Code:
     bit: int
     toggles: bool
 
-    @property
-    def text(self) -> str:
-        """The code as a request spells it: ``X`` and ``Y`` separated by spaces."""
-        return " ".join(press.upper() for press in self.presses)
-
     def apply(self, mask: int) -> int:
         """The cheat mask after the code is entered into ``mask``."""
         return mask ^ self.bit if self.toggles else mask | self.bit
@@ -53,13 +48,14 @@ def read_codes(read: Read, profile: PlatformProfile) -> list[Code]:
 def plan_codes(
     read: Read, profile: PlatformProfile, requested: tuple[str, ...], costumes: tuple[str, ...] | None
 ) -> list[Code]:
-    """The codes to enter, in order: the ``requested`` ones, then those that leave exactly ``costumes`` worn.
+    """The codes to enter, in order: those of the ``requested`` cheats, then those that leave exactly ``costumes`` worn.
 
-    A requested code that doesn't change the cheat mask is left out, and so is a costume that is already as wanted.
-    ``costumes`` is ``None`` when no costume is wanted of this step, so none is toggled.
+    A requested cheat is entered by the table's row with the bit the profile gives its name. A code that doesn't change
+    the cheat mask is left out, and so is a costume that is already as wanted. ``costumes`` is ``None`` when no costume
+    is wanted of this step, so none is toggled.
 
     Raises:
-        ValueError: No row enters a requested code, or a costume isn't one a cheat can give.
+        ValueError: No row sets a requested cheat's bit, or a costume isn't one a cheat can give.
     """
     table = cache(lambda: read_codes(read, profile))
     mask = u32(read, profile.costumes.cheat_mask)
@@ -70,10 +66,11 @@ def plan_codes(
         plan.append(code)
         mask = code.apply(mask)
 
-    for text in requested:
-        code = next((code for code in table() if code.text == text), None)
+    for name in requested:
+        bit = profile.navigation.cheats.bit(name)
+        code = next((code for code in table() if code.bit == bit), None)
         if code is None:
-            raise ValueError(f"no cheat is entered with {text}")
+            raise ValueError(f"no cheat sets {bit:#x}" if bit else f"no cheat is called {name}")
         if code.toggles or not mask & code.bit:
             enter(code)
     if costumes is None:

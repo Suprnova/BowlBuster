@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,7 +13,6 @@ SCHEMA_VERSION = 1
 KIND = "record"
 STARTS = ("new-game", "booted")
 _FIELDS = {"schema_version", "request_id", "kind", "start", "steps", "observe", "input", "client"}
-_CHEAT = re.compile(r"[XY]( [XY]){7}")
 
 
 @dataclass(frozen=True)
@@ -33,7 +31,7 @@ class Step:
         scene: The scene's four-character tag.
         menu: Where the pause menu warps to it; ``None`` for the first step, which the start loads.
         costumes: The archive tags its load wears, at most one per character.
-        cheats: The cheat codes entered while it is in play, as the X and Y presses separated by spaces.
+        cheats: The cheats entered while it is in play, by the names the platform profile gives them.
     """
 
     scene: str
@@ -195,7 +193,9 @@ def _step(raw: Any, index: int, profile: PlatformProfile) -> Step:
     prefixes = [tag[:3] for tag in costumes if tag[:3] in profile.costumes.tag_prefixes]
     if len(set(prefixes)) != len(prefixes):
         raise ValueError(f"{name}.costumes has more than one costume for a character")
-    cheats = tuple(_cheat(code, f"{name}.cheats") for code in _list(fields.get("cheats", []), f"{name}.cheats"))
+    cheats = tuple(
+        _cheat(cheat, f"{name}.cheats", profile) for cheat in _list(fields.get("cheats", []), f"{name}.cheats")
+    )
     return Step(_tag(fields.get("scene"), f"{name}.scene"), menu, costumes, cheats)
 
 
@@ -214,7 +214,9 @@ def _menu(raw: Any, name: str) -> Menu:
     return Menu(world, slot)
 
 
-def _cheat(code: Any, name: str) -> str:
-    if not isinstance(code, str) or not _CHEAT.fullmatch(code):
-        raise ValueError(f"{name} must be eight X and Y presses separated by spaces")
-    return code
+def _cheat(cheat: Any, name: str, profile: PlatformProfile) -> str:
+    if not isinstance(cheat, str):
+        raise ValueError(f"{name} must be a list of cheat names")
+    if profile.navigation.cheats.bit(cheat) is None:
+        raise ValueError(f"{name} has an unknown cheat {cheat!r}")
+    return cheat

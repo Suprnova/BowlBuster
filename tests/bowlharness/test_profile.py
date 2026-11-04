@@ -87,3 +87,13 @@ def test_digest_changes_with_an_input_value() -> None:
     changed = replace(XBOX_NTSC_U, input=replace(XBOX_NTSC_U.input, hold_polls=7))
 
     assert changed.digest != XBOX_NTSC_U.digest
+
+
+def test_every_named_cheat_has_its_own_name_and_bit() -> None:
+    names, bits = zip(*XBOX_NTSC_U.navigation.cheats.names, strict=True)
+
+    assert len(set(names)) == len(names) and len(set(bits)) == len(bits)
+
+
+def test_a_cheat_the_profile_does_not_name_has_no_bit() -> None:
+    assert XBOX_NTSC_U.navigation.cheats.bit("all-coins") is None
