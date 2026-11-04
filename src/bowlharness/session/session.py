@@ -66,6 +66,11 @@ class Session:
         self._recorder, self._watchdog = self._open("attach" if boot_path == "attached" else "boot", boot_path)
 
     @property
+    def out(self) -> Path:
+        """The folder of the session's recordings."""
+        return self._out
+
+    @property
     def recordings(self) -> int:
         """How many recordings the session has opened."""
         return self._recordings

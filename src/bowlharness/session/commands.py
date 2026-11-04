@@ -133,3 +133,66 @@ def parse_drive_arguments(arguments: list[str], run_name: str) -> DriveArguments
     parser.add_argument("--recordings", type=Path, help="the folder a landing's recipes are under")
     found = parser.parse_args(arguments)
     return DriveArguments(**vars(_launch(found)), request=found.request, place=found.place, recordings=found.recordings)
+
+
+@dataclass(frozen=True)
+class QueueArguments:
+    """What ``bowl queue`` was asked to do.
+
+    Attributes:
+        store: The store's folder.
+        instance: The instance's name, which its claims carry.
+        xemu: The emulator to start, or ``None`` when attaching to a running one.
+        config: The emulator's configuration file, or ``None`` for its default.
+        port: The port of the emulator's debugger stub.
+        attach: Whether to attach to a running emulator instead of starting one.
+        liveness: How long play may stall before it is a hang, in seconds.
+        place: The published copy of ``bowlbuster`` that places landings, which a landing needs.
+        recordings: The folder a landing's recipes are under, which a landing needs.
+        stall: How long without progress makes a ``stall`` line in the progress stream, in seconds.
+    """
+
+    store: Path
+    instance: str
+    xemu: Path | None
+    config: Path | None
+    port: int
+    attach: bool
+    liveness: float
+    place: Path | None
+    recordings: Path | None
+    stall: float
+
+
+def parse_queue_arguments(arguments: list[str]) -> QueueArguments:
+    """Reads the arguments of ``bowl queue``. Raises ``ValueError`` with a message for the person."""
+    parser = _Parser(prog="bowl queue", add_help=False)
+    parser.add_argument("--store", type=Path, required=True, help="the store's folder")
+    parser.add_argument("--instance", required=True, help="the instance's name")
+    parser.add_argument("--xemu", type=Path, help="the emulator to start")
+    parser.add_argument("--config", type=Path, help="the emulator's configuration file")
+    parser.add_argument("--port", type=int, default=1234)
+    parser.add_argument("--attach", type=int, metavar="PORT", help="attach to a running emulator's stub")
+    parser.add_argument("--liveness", type=float, default=5.0)
+    parser.add_argument("--place", type=Path, help="the published bowlbuster that places landings")
+    parser.add_argument("--recordings", type=Path, help="the folder a landing's recipes are under")
+    parser.add_argument("--stall", type=float, default=600.0, help="seconds without progress before a stall line")
+    found = parser.parse_args(arguments)
+    if not found.store.is_absolute():
+        raise ValueError(f"--store must be an absolute path, got {found.store}")
+    if found.attach is None and found.xemu is None:
+        raise ValueError("give --xemu to start an emulator, or --attach PORT to attach to a running one")
+    if found.attach is not None and found.xemu is not None:
+        raise ValueError("--xemu and --attach are alternatives")
+    return QueueArguments(
+        store=found.store,
+        instance=found.instance,
+        xemu=found.xemu,
+        config=found.config,
+        port=found.attach if found.attach is not None else found.port,
+        attach=found.attach is not None,
+        liveness=found.liveness,
+        place=found.place,
+        recordings=found.recordings,
+        stall=found.stall,
+    )

@@ -52,6 +52,18 @@ A landing request also needs `--place <bowlbuster.exe>`, a copy of `bowlbuster` 
 (`dotnet publish src/BowlBuster.Cli -c Release -o <new folder>`), and `--recordings <folder>`, the folder its recipes
 are named under. The harness pins the tool when it starts and records it in the result. A control needs neither.
 
+## Queueing
+
+```
+uv run python -m bowlharness queue --store <folder> --instance <name> --xemu <xemu.exe> --config <xemu.toml>
+```
+
+Runs a store's requests one after another, unattended: each pending request in `<folder>/requests/` is claimed, the
+guest rebooted, and the request run into `<folder>/runs/<request>-a<attempt>/`, with its result there. Progress goes to
+`<folder>/progress.jsonl`. It takes `--place` and `--recordings` for landings, as `drive` does, and stops when nothing
+is pending, the emulator is lost, or a person runs `bowl stop`. Started again, it reports the runs a lost session left
+as `interrupted` and claims them again as new attempts.
+
 ## Requests and results
 
 A request's and a result's spelling is the JSON schemas in `schema/` at the repository root. The types the harness

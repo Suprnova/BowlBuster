@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from bowlharness.session.commands import parse_drive_arguments, parse_record_arguments, scene_selection
+from bowlharness.session.commands import (
+    parse_drive_arguments,
+    parse_queue_arguments,
+    parse_record_arguments,
+    scene_selection,
+)
 
 OUT = str(Path.cwd() / "recordings-test")
 
@@ -83,3 +88,20 @@ def test_driving_needs_a_request() -> None:
 def test_driving_needs_an_emulator_or_a_port_to_attach_to() -> None:
     with pytest.raises(ValueError, match="--xemu"):
         parse_drive_arguments(["--out", OUT, "--request", "route.json"], "run")
+
+
+def test_a_queue_takes_its_store_and_instance_and_the_launch_arguments() -> None:
+    arguments = parse_queue_arguments(["--store", OUT, "--instance", "inst3", "--xemu", "xemu.exe", "--place", "b.exe"])
+
+    assert (arguments.store, arguments.instance, arguments.place, arguments.recordings, arguments.stall) == (
+        Path(OUT),
+        "inst3",
+        Path("b.exe"),
+        None,
+        600.0,
+    )
+
+
+def test_a_queue_store_is_an_absolute_path() -> None:
+    with pytest.raises(ValueError, match="--store must be an absolute path"):
+        parse_queue_arguments(["--store", "store", "--instance", "inst3", "--xemu", "xemu.exe"])

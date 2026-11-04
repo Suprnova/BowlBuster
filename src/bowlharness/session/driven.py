@@ -45,6 +45,9 @@ class DrivenSession(Session):
         harness: The harness's version for the result, or ``None`` to read it from the source tree.
         placer: Where a landing's stale pointer comes from; a landing needs one.
         recordings: The folder a landing's recipe is under; a landing needs one.
+        attempt: Which attempt at the request the run is.
+        instance: The emulator instance running it, when a queue claimed it.
+        on_event: Called with each event of the run's recordings, as it is logged.
 
     Attributes:
         written: The run's result, once the session has ended and written it.
@@ -69,7 +72,13 @@ class DrivenSession(Session):
         harness: str | None = None,
         placer: Placer | None = None,
         recordings: Path | None = None,
+        attempt: int = 1,
+        instance: str | None = None,
+        on_event: Callable[[str, dict[str, object]], None] | None = None,
     ) -> None:
+        self._attempt = attempt
+        self._instance = instance
+        self._on_event = on_event
         if isinstance(request.test, LandingTest) and (placer is None or recordings is None):
             raise ValueError("a landing request needs the placement tool and the recordings folder")
         self._request = request
@@ -107,6 +116,8 @@ class DrivenSession(Session):
     def _open(self, reason: str, boot_path: str) -> tuple[Recorder, Watchdog]:
         recorder, watchdog = super()._open(reason, boot_path)
         recorder.drive(self._request.to_json(), self._request_sha256)
+        if self._on_event is not None:
+            recorder.listen(self._on_event)
         test, windows = self._request.test, self._request.windows
         if test is not None and windows is not None:
             self._tracker = StageTracker(
@@ -209,6 +220,8 @@ class DrivenSession(Session):
             started=self._started,
             ended=moment(frame),
             harness=self._harness,
+            instance=self._instance,
+            attempt=self._attempt,
             placement=placement,
             live_window=landing.live_window if landing else None,
             placement_tool=schema.PlacementTool(path=str(tool.path), build=tool.build, sha256=tool.sha256)

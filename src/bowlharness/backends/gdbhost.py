@@ -15,11 +15,20 @@ from typing import Any
 import gdb
 
 from bowlharness.backends.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
-from bowlharness.driving.request import read_request
+from bowlharness.driving.landing import check_recipe
+from bowlharness.driving.placer import PlacementFault, ToolPlacer
+from bowlharness.driving.request import LandingTest, Request, read_request
 from bowlharness.profiles import XBOX_NTSC_U
-from bowlharness.session.commands import LaunchArguments, parse_drive_arguments, parse_record_arguments
+from bowlharness.session.commands import (
+    LaunchArguments,
+    parse_drive_arguments,
+    parse_queue_arguments,
+    parse_record_arguments,
+)
 from bowlharness.session.driven import DrivenSession, pin_placer
 from bowlharness.session.session import ENDED, PAUSED, Session
+from bowlharness.store.queue import ProgressStream, Queue
+from bowlharness.store.store import Claim, Store
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
 
 
@@ -171,6 +180,8 @@ def _smoke(args: Sequence[str]) -> None:
 
 _session: Session | None = None
 _session_out: Path | None = None
+_queue: Queue | None = None
+_queue_end: Callable[[], None] | None = None
 
 
 def _connect(port: int, process: subprocess.Popen[bytes] | None) -> None:
@@ -200,6 +211,25 @@ def _tell(state: str) -> None:
             print(f"result: {written.outcome}" + (f" ({written.cause})" if written.cause else ""))
 
 
+def _start_emulator(
+    verb: str, xemu: Path | None, config: Path | None, port: int, attach: bool, log: Path
+) -> tuple[dict[str, Any], subprocess.Popen[bytes] | None]:
+    """Starts the emulator, or attaches to a running one, and connects to it; returns what a manifest records of it."""
+    config = config or default_config()
+    process = None
+    if not attach and (failures := preconditions(load_config(config), running_xemu())):
+        raise gdb.GdbError(f"cannot {verb}: " + "; ".join(failures))
+    environment = describe(xemu, config, gdb.VERSION)
+    if not attach:
+        assert xemu is not None
+        log.parent.mkdir(parents=True, exist_ok=True)
+        process = launch(xemu, config, port, log)
+    _connect(port, process)
+    if process is not None:
+        gdb.execute("monitor system_reset", to_string=True)
+    return environment, process
+
+
 def _launch(
     verb: str, arguments: LaunchArguments, open_session: Callable[[dict[str, Any], Callable[[], None] | None], Session]
 ) -> None:
@@ -207,18 +237,10 @@ def _launch(
     global _session, _session_out
     if arguments.out.exists():
         raise gdb.GdbError(f"{arguments.out} already exists")
-    config = arguments.config or default_config()
-    process = None
-    if not arguments.attach and (failures := preconditions(load_config(config), running_xemu())):
-        raise gdb.GdbError(f"cannot {verb}: " + "; ".join(failures))
-    environment = describe(arguments.xemu, config, gdb.VERSION)
-    if not arguments.attach:
-        assert arguments.xemu is not None
-        arguments.out.parent.mkdir(parents=True, exist_ok=True)
-        process = launch(arguments.xemu, config, arguments.port, arguments.out.parent / f"{arguments.name}-xemu.log")
-    _connect(arguments.port, process)
-    if process is not None:
-        gdb.execute("monitor system_reset", to_string=True)
+    log = arguments.out.parent / f"{arguments.name}-xemu.log"
+    environment, process = _start_emulator(
+        verb, arguments.xemu, arguments.config, arguments.port, arguments.attach, log
+    )
     _session_out = arguments.out
     _session = open_session(environment, (lambda: stop(process)) if process else None)
     _tell(_session.run())
@@ -321,18 +343,117 @@ def _press(args: Sequence[str]) -> None:
 
 
 def _resume(_: Sequence[str]) -> None:
-    _tell(_live().resume())
+    session = _live()
+    state = session.resume()
+    _tell(state)
+    if _queue is not None and state == ENDED:
+        _finish_queued(session)
+        _run_queue()
 
 
 def _stop(_: Sequence[str]) -> None:
-    _live().stop()
+    session = _live()
+    session.stop()
     _tell(ENDED)
+    if _queue is not None:
+        _queue.stop()
+        _finish_queued(session)
+        _run_queue()
+
+
+def _queue_command(args: Sequence[str]) -> None:
+    global _queue, _queue_end
+    _require_no_session()
+    try:
+        arguments = parse_queue_arguments(list(args))
+        store = Store(arguments.store, arguments.instance)
+        placer = ToolPlacer.pin(arguments.place) if arguments.place else None
+    except (OSError, ValueError, PlacementFault) as error:
+        raise gdb.GdbError(str(error)) from error
+    if placer is not None and placer.tool is not None:
+        print(f"placing with {placer.tool.build} ({placer.tool.path})")
+    log = store.root / f"{arguments.instance}-xemu.log"
+    environment, process = _start_emulator(
+        "queue", arguments.xemu, arguments.config, arguments.port, arguments.attach, log
+    )
+
+    def open_session(
+        request: Request, digest: str, claim: Claim, folder: Path, on_event: Callable[[str, dict[str, object]], None]
+    ) -> DrivenSession:
+        if isinstance(request.test, LandingTest):
+            if placer is None or arguments.recordings is None:
+                raise ValueError("a landing request needs --place and --recordings")
+            check_recipe(request.test, arguments.recordings, XBOX_NTSC_U.name)
+        return DrivenSession(
+            GdbTarget(XBOX_NTSC_U.registers),
+            XBOX_NTSC_U,
+            folder,
+            request,
+            digest,
+            run_stem=claim.run,
+            environment=environment,
+            liveness=arguments.liveness,
+            placer=placer,
+            recordings=arguments.recordings,
+            attempt=claim.attempt,
+            instance=claim.instance,
+            on_event=on_event,
+        )
+
+    def reboot() -> None:
+        gdb.execute("monitor system_reset", to_string=True)
+
+    progress = ProgressStream(store.progress, arguments.instance, arguments.stall)
+    _queue = Queue(store, progress, XBOX_NTSC_U, open_session, reboot)
+    _queue_end = (lambda: stop(process)) if process else None
+    for run in _queue.recover():
+        print(f"recovered {run}: its session was lost")
+    queue = _queue
+
+    def watch_for_stalls() -> None:
+        while _queue is queue:
+            time.sleep(60)
+            progress.check_stall(queue.current)
+
+    threading.Thread(target=watch_for_stalls, daemon=True).start()
+    print(f"queue {arguments.instance} on {store.root}")
+    _run_queue()
+
+
+def _run_queue() -> None:
+    """Runs the queue's sessions one after another until it pauses for a person or ends."""
+    global _session, _session_out
+    while _queue is not None and (session := _queue.start_next()) is not None:
+        _session, _session_out = session, session.out
+        print(f"running {_queue.current}")
+        state = session.run()
+        _tell(state)
+        if state == PAUSED:
+            return
+        _finish_queued(session)
+    _end_queue()
+
+
+def _finish_queued(session: Session) -> None:
+    assert _queue is not None and isinstance(session, DrivenSession)
+    _queue.finish(session)
+
+
+def _end_queue() -> None:
+    global _queue, _queue_end
+    if _queue is None:
+        return
+    print(f"queue ended: {_queue.done} run(s)")
+    if _queue_end is not None:
+        _queue_end()
+    _queue, _queue_end = None, None
 
 
 _COMMANDS: dict[str, Callable[[Sequence[str]], None]] = {
     "smoke": _smoke,
     "record": _record,
     "drive": _drive,
+    "queue": _queue_command,
     "capture": _capture,
     "read": _read,
     "press": _press,
@@ -342,7 +463,7 @@ _COMMANDS: dict[str, Callable[[Sequence[str]], None]] = {
 
 
 class _Bowl(gdb.Command):
-    """The harness's commands: bowl smoke|record|drive|capture|read|press|resume|stop."""
+    """The harness's commands: bowl smoke|record|drive|queue|capture|read|press|resume|stop."""
 
     def __init__(self) -> None:
         super().__init__("bowl", gdb.COMMAND_USER)
