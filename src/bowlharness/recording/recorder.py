@@ -1,4 +1,4 @@
-"""Records a passive run's events and manifest by observing a target. Nothing here writes to guest memory."""
+"""Records a run's events and manifest by observing a target. It writes guest memory only in :meth:`Recorder.write`."""
 
 import logging
 import shutil
@@ -367,6 +367,33 @@ class Recorder:
     def attend(self) -> None:
         """Marks the run attended: a person took part."""
         self._manifest.attended = True
+
+    def write(self, write_class: str, target: str, address: int, data: bytes) -> int:
+        """Writes guest memory: the one way the harness does.
+
+        The write is logged as a ``write`` event with the bytes it replaced and wrote, and a row of the write ledger
+        holds it with the event's ``seq``. A watched dword it changes keeps the harness's value, so the next write the
+        game makes there reports it as ``old``.
+
+        Args:
+            write_class: The write's class, such as ``bowl-storage``.
+            target: What it writes, such as ``sphere``.
+            address: Where.
+            data: The bytes.
+
+        Returns:
+            The ``seq`` of the write event.
+        """
+        old = self._target.read(address, len(data))
+        self._target.write(address, data)
+        fields = {"class": write_class, "target": target, "address": address, "old": old.hex(), "new": data.hex()}
+        seq = self._emit("write", **fields)
+        self._manifest.write_ledger.append({"seq": seq, **fields})
+        if self._watched is not None:
+            for watched in [watched for watched in self._watched if address - 4 < watched < address + len(data)]:
+                self._watched[watched] = u32(self._target.read, watched)
+        self._manifest.write(self._manifest_path)
+        return seq
 
     def log_press(self, row: dict[str, Any]) -> None:
         """Logs a press the harness gave or a person made: in the input ledger and as a ``press`` event.

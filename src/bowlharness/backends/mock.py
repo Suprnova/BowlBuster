@@ -58,7 +58,8 @@ class _Point:
 class MockTarget:
     """Plays a scripted guest, stopping only at the addresses a test armed.
 
-    Every write the harness makes is kept in :attr:`writes`.
+    Every write the harness makes is kept in :attr:`writes`, and the address of the stop it was made at in
+    :attr:`write_stops`, at the same index.
     """
 
     capabilities = frozenset(Capability) - {Capability.SAVED_STATES}
@@ -74,6 +75,8 @@ class MockTarget:
         self._next_handle = 0
         self._interrupted = False
         self.writes: list[tuple[int, bytes]] = []
+        self.write_stops: list[int] = []
+        self._pc = 0
         self.resets = 0
 
     def set_breakpoint(self, address: int, handler: Handler) -> Handle:
@@ -96,6 +99,7 @@ class MockTarget:
 
     def write(self, address: int, data: bytes) -> None:
         self.writes.append((address, data))
+        self.write_stops.append(self._pc)
         self._store(address, data)
 
     def dump(self, address: int, length: int, path: Path) -> None:
@@ -152,6 +156,7 @@ class MockTarget:
 
     def _arrive(self, step: Step) -> bool:
         """Applies a step and calls the handlers it reaches; returns whether any ran."""
+        self._pc = step.pc
         self._registers = step.registers
         for address, data in step.memory.items():
             self._store(address, data)

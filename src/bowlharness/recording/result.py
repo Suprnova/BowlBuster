@@ -141,7 +141,18 @@ def build_record_result(
         resets=[],
         integrity=schema.Integrity(flags=[]),
         effects=schema.Effects(observed=False, reason=NOT_OBSERVED),
-        write_ledger=[],
+        write_ledger=[
+            schema.Write(
+                recording=manifest["run"],
+                seq=row["seq"],
+                class_=row["class"],
+                target=row["target"],
+                address=row["address"],
+                new=row["new"],
+            )
+            for manifest in manifests
+            for row in manifest["write_ledger"]
+        ],
         input_ledger=[
             read_document(schema.Press, {"recording": manifest["run"], **row}, "press")
             for manifest in manifests
@@ -161,7 +172,11 @@ def build_record_result(
         client=request.get("client"),
         memory=schema.Memory(
             live_window=None,
-            old_bytes=[],
+            old_bytes=[
+                schema.OldBytes(recording=manifest["run"], seq=row["seq"], bytes=row["old"])
+                for manifest in manifests
+                for row in manifest["write_ledger"]
+            ],
             crash=schema.CrashMemory(registers=crash["registers"], stack=crash["stack"]) if crash else None,
         ),
     )

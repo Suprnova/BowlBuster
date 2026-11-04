@@ -61,6 +61,7 @@ class RunManifest:
     hang: dict[str, Any] | None = None
     loads: list[dict[str, Any]] = field(default_factory=list)
     input_ledger: list[dict[str, Any]] = field(default_factory=list)
+    write_ledger: list[dict[str, Any]] = field(default_factory=list)
     passive: bool = True
     request: dict[str, Any] | None = None
     request_sha256: str | None = None
@@ -93,7 +94,7 @@ class RunManifest:
             "loads": self.loads,
             "captures": self.captures,
             "captures_dropped": self.captures_dropped,
-            "write_ledger": [],
+            "write_ledger": self.write_ledger,
             "input_ledger": self.input_ledger,
             "crash": self.crash,
             "hang": self.hang,

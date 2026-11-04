@@ -1,6 +1,7 @@
 """The Xbox NTSC-U profile, which the UK build shares."""
 
 from bowlharness.profiles.profile import (
+    BowlStorage,
     Buttons,
     Cheats,
     Costumes,
@@ -139,6 +140,7 @@ XBOX_NTSC_U = PlatformProfile(
         game_mode=0x309484,
         active_port=0x2AFDEB,
     ),
+    bowl_storage=BowlStorage(flag=0x317238, flag_set=1, scale=0x31723C, scale_threshold=0.0, scale_value=4.1),
     input=Input(
         record_word=0,
         buffer_word=1,

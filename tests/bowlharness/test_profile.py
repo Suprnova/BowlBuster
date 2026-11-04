@@ -97,3 +97,10 @@ def test_every_named_cheat_has_its_own_name_and_bit() -> None:
 
 def test_a_cheat_the_profile_does_not_name_has_no_bit() -> None:
     assert XBOX_NTSC_U.navigation.cheats.bit("all-coins") is None
+
+
+def test_the_bowl_storage_writes_lie_among_the_bowls_statics() -> None:
+    first, last = XBOX_NTSC_U.globals.bowl_statics
+    storage = XBOX_NTSC_U.bowl_storage
+
+    assert all(first <= address <= last for address in (XBOX_NTSC_U.globals.sphere, storage.flag, storage.scale))

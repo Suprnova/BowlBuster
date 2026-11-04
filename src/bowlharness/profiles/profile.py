@@ -209,6 +209,25 @@ class Globals:
 
 
 @dataclass(frozen=True)
+class BowlStorage:
+    """What a landing test writes besides the stale pointer (``Globals.sphere``), as leaving an origin would leave it.
+
+    Attributes:
+        flag: The byte that, set, makes the player render write through the pointer.
+        flag_set: The value the game stores in the flag while a bowl explodes.
+        scale: The float the written words scale by.
+        scale_threshold: At or below this value the scale is written too.
+        scale_value: The value the game's own init gives the scale.
+    """
+
+    flag: int
+    flag_set: int
+    scale: int
+    scale_threshold: float
+    scale_value: float
+
+
+@dataclass(frozen=True)
 class Buttons:
     """The masks of the buttons in the game's button dword, by name."""
 
@@ -471,6 +490,7 @@ class PlatformProfile:
     layers: Layers
     crash: Crash
     globals: Globals
+    bowl_storage: BowlStorage
     input: Input
     navigation: Navigation
     scene_classes: SceneClasses
