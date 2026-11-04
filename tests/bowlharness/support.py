@@ -6,7 +6,8 @@ from typing import Any
 from scripted import COMPACT, ScriptedGame
 
 from bowlharness.backends.mock import MockTarget
-from bowlharness.driving.request import RecordRequest, parse_request
+from bowlharness.driving.placer import Placer
+from bowlharness.driving.request import Request, parse_request
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.recording.recorder import Options, Recorder
 from bowlharness.session.driven import DrivenSession
@@ -87,7 +88,7 @@ def warp(game: ScriptedGame, presses: list[tuple[str, tuple[int, int]]], scene: 
     level(game, scene, counter)
 
 
-def route(*steps: str | tuple[str, int, int], start: str = "booted") -> RecordRequest:
+def route(*steps: str | tuple[str, int, int], start: str = "booted") -> Request:
     """A record request through ``steps``: a scene, or a scene with its menu world and slot (numbered from 1)."""
     parsed = []
     for index, step in enumerate(steps):
@@ -100,7 +101,7 @@ def route(*steps: str | tuple[str, int, int], start: str = "booted") -> RecordRe
     return request(parsed, start)
 
 
-def request(steps: list[dict[str, Any]], start: str = "booted") -> RecordRequest:
+def request(steps: list[dict[str, Any]], start: str = "booted") -> Request:
     """A record request through steps written as the request file writes them."""
     document = {
         "schema_version": 1,
@@ -112,8 +113,13 @@ def request(steps: list[dict[str, Any]], start: str = "booted") -> RecordRequest
     return parse_request(document, XBOX_NTSC_U)
 
 
-def drive(game: ScriptedGame, directory: Path, request: RecordRequest) -> tuple[DrivenSession, dict[str, Any]]:
-    """Drives the scripted game along the request and returns the session and the recording's manifest."""
+def drive(
+    game: ScriptedGame, directory: Path, request: Request, placer: Placer | None = None
+) -> tuple[DrivenSession, dict[str, Any]]:
+    """Drives the scripted game along the request and returns the session and the recording's manifest.
+
+    A landing's recipes are under ``directory / "recordings"``.
+    """
     target = MockTarget(game.script, {**game.kernel_image(), game.profile.globals.frame: bytes(4)})
     session = DrivenSession(
         target,
@@ -124,6 +130,8 @@ def drive(game: ScriptedGame, directory: Path, request: RecordRequest) -> tuple[
         run_stem="s",
         environment=ENVIRONMENT,
         harness="0.1.0+test",
+        placer=placer,
+        recordings=directory / "recordings",
     )
     session.run()
     return session, json.loads((directory / "out" / "s-1" / "manifest.json").read_text())

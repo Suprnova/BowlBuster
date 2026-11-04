@@ -47,10 +47,14 @@ class DriveArguments(LaunchArguments):
     """What ``bowl drive`` was asked to do.
 
     Attributes:
-        request: The file holding the record request to follow.
+        request: The file holding the request to follow.
+        place: The published copy of ``bowlbuster`` that places landings, which a landing needs.
+        recordings: The folder a landing's recipes are under, which a landing needs.
     """
 
     request: Path
+    place: Path | None = None
+    recordings: Path | None = None
 
 
 class _Parser(argparse.ArgumentParser):
@@ -124,6 +128,8 @@ def parse_record_arguments(arguments: list[str], run_name: str) -> RecordArgumen
 def parse_drive_arguments(arguments: list[str], run_name: str) -> DriveArguments:
     """Reads the arguments of ``bowl drive``. Raises ``ValueError`` with a message for the person."""
     parser = _launch_parser("bowl drive", run_name)
-    parser.add_argument("--request", type=Path, required=True, help="the record request to follow")
+    parser.add_argument("--request", type=Path, required=True, help="the request to follow")
+    parser.add_argument("--place", type=Path, help="the published bowlbuster that places landings")
+    parser.add_argument("--recordings", type=Path, help="the folder a landing's recipes are under")
     found = parser.parse_args(arguments)
-    return DriveArguments(**vars(_launch(found)), request=found.request)
+    return DriveArguments(**vars(_launch(found)), request=found.request, place=found.place, recordings=found.recordings)

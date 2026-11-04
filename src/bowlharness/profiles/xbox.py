@@ -45,6 +45,7 @@ XBOX_NTSC_U = PlatformProfile(
     code=(0x11000, 0x21A94C),
     static_range=(0x2AF0E0, 0x4869D8),
     heap_block_size=0xE00000,
+    frame_rate=60,
     boot_scene="MNUS",
     boot_counter=1,
     boot_return=0x53377,

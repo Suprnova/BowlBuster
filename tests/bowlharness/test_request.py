@@ -5,8 +5,20 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from contract import FIXTURES
 
-from bowlharness.driving.request import Menu, Step, parse_request, read_request
+from bowlharness.driving.request import (
+    ControlTest,
+    LandingTest,
+    Menu,
+    Recipe,
+    Step,
+    Window,
+    Windows,
+    default_windows,
+    parse_request,
+    read_request,
+)
 from bowlharness.profiles import XBOX_NTSC_U
 
 
@@ -91,8 +103,94 @@ def test_an_unknown_step_field_is_refused_by_name() -> None:
     refused(document(steps=[{"scene": "ORIG", "flags": []}]), r"steps\[0\] has an unknown field 'flags'")
 
 
-def test_a_kind_other_than_record_is_refused() -> None:
-    refused(document(kind="landing"), "kind 'landing' is not supported")
+def test_an_unknown_kind_is_refused() -> None:
+    refused(document(kind="chain"), "kind must be one of record, landing, control")
+
+
+def landing(**changes: Any) -> dict[str, Any]:
+    base = json.loads((FIXTURES / "requests" / "landing.json").read_text(encoding="utf-8"))
+    return base | changes
+
+
+def with_test(**changes: Any) -> dict[str, Any]:
+    test = landing()["tests"][0] | changes
+    return landing(tests=[test])
+
+
+def test_a_landing_request_is_read_with_its_test_and_windows() -> None:
+    request = parse_request(landing(), XBOX_NTSC_U)
+
+    assert request.kind == "landing"
+    assert request.test == LandingTest(
+        1, Recipe("route-1-1", 0, 3), 12, -24, 48, bytes.fromhex("00112233445566778899aabbccddeeff")
+    )
+    assert request.windows == Windows(
+        Window("guest-frames", 1200), Window("guest-frames", 900), Window("wall-seconds", 120)
+    )
+
+
+def test_a_landing_requests_manifest_copy_reads_back_the_same() -> None:
+    request = parse_request(landing(), XBOX_NTSC_U)
+
+    assert parse_request(request.to_json(), XBOX_NTSC_U) == request
+
+
+def test_windows_left_out_take_their_defaults() -> None:
+    request = parse_request(landing(windows={"render": {"unit": "wall-seconds", "value": 5}}), XBOX_NTSC_U)
+
+    assert request.windows == Windows(
+        Window("wall-seconds", 5), Window("guest-frames", 900), Window("wall-seconds", 120)
+    )
+
+
+def test_a_control_request_is_read_with_its_step() -> None:
+    document = json.loads((FIXTURES / "requests" / "control.json").read_text(encoding="utf-8"))
+
+    request = parse_request(document, XBOX_NTSC_U)
+
+    assert (request.kind, request.test, request.windows) == ("control", ControlTest(1), default_windows(XBOX_NTSC_U))
+
+
+def test_a_test_step_is_the_last_or_the_one_before_the_exit() -> None:
+    refused(with_test(step=0), r"tests\[0\]\.step must be the route's last step")
+
+
+def test_the_test_step_enters_no_cheats() -> None:
+    steps = landing()["steps"]
+    steps[1]["cheats"] = ["all-tasks"]
+
+    refused(landing(steps=steps), r"steps\[1\]\.cheats is not allowed")
+
+
+def test_the_exit_step_enters_no_cheats() -> None:
+    steps = landing()["steps"]
+    steps[2]["cheats"] = ["all-tasks"]
+
+    refused(landing(steps=steps), r"steps\[2\]\.cheats is not allowed")
+
+
+def test_the_exit_step_wears_the_test_steps_costumes() -> None:
+    steps = landing()["steps"]
+    steps[1]["costumes"] = ["PLSA"]
+
+    refused(landing(steps=steps), r"steps\[2\]\.costumes must be the test step's")
+
+
+def test_expected_bytes_are_lower_case_hex() -> None:
+    refused(with_test(expected={"offset": 48, "bytes": "AABB"}), r"tests\[0\]\.expected\.bytes must be lower-case hex")
+
+
+def test_a_match_fraction_is_from_0_to_1() -> None:
+    refused(with_test(min_match=1.5), r"tests\[0\]\.min_match must be from 0 to 1")
+
+
+def test_a_window_is_longer_than_nothing() -> None:
+    refused(landing(windows={"reset": {"unit": "guest-frames", "value": 0}}), r"windows\.reset\.value must be above 0")
+
+
+@pytest.mark.parametrize("recording", ["C:/recordings/route-1", "/route-1", "../route-1", "store\\route-1"])
+def test_a_recipe_names_a_folder_under_the_recordings_root(recording: str) -> None:
+    refused(with_test(recipe={"recording": recording, "segment": 0, "load": 3}), r"tests\[0\]\.recipe\.recording")
 
 
 def test_a_step_after_the_first_needs_a_menu() -> None:

@@ -18,7 +18,7 @@ from bowlharness.backends.xemu import default_config, describe, launch, load_con
 from bowlharness.driving.request import read_request
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.session.commands import LaunchArguments, parse_drive_arguments, parse_record_arguments
-from bowlharness.session.driven import DrivenSession
+from bowlharness.session.driven import DrivenSession, pin_placer
 from bowlharness.session.session import ENDED, PAUSED, Session
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
 
@@ -258,8 +258,11 @@ def _drive(args: Sequence[str]) -> None:
     try:
         arguments = parse_drive_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
         request, request_sha256 = read_request(arguments.request, XBOX_NTSC_U)
+        placer = pin_placer(request, arguments.place, arguments.recordings, XBOX_NTSC_U.name)
     except (OSError, ValueError) as error:
         raise gdb.GdbError(str(error)) from error
+    if placer is not None and placer.tool is not None:
+        print(f"placing with {placer.tool.build} ({placer.tool.path})")
 
     def open_session(environment: dict[str, Any], on_end: Callable[[], None] | None) -> Session:
         print(f"driving {request.request_id} to {arguments.out}")
@@ -274,6 +277,8 @@ def _drive(args: Sequence[str]) -> None:
             boot_path="attached" if arguments.attach else "boot",
             liveness=arguments.liveness,
             on_end=on_end,
+            placer=placer,
+            recordings=arguments.recordings,
         )
 
     _launch("drive", arguments, open_session)

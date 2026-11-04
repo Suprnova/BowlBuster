@@ -26,10 +26,12 @@ class Ending:
         interrupted: Why the session was cut short, such as the emulator exiting; ``None`` when it wasn't.
         ended: Why a session that wasn't cut short ended: the route's ``done`` or ``failed``, ``stopped`` by a person,
             or ``reboot``. A crash or a hang says so in its recording.
+        verdict: The outcome and cause a landing test ended the run with, such as ``not placed``.
     """
 
     interrupted: str | None = None
     ended: str | None = None
+    verdict: tuple[str, str | None] | None = None
 
 
 def moment(frame: int | None) -> schema.Moment:
@@ -54,15 +56,18 @@ def _git(root: Path, *arguments: str) -> str:
 
 
 def outcome(manifests: list[dict[str, Any]], ending: Ending) -> tuple[schema.Outcome, str | None]:
-    """A record run's outcome and its cause, from its recordings' manifests and how its session ended.
+    """A run's outcome and its cause, from its recordings' manifests and how its session ended.
 
-    A crash or a hang wins; then a session cut short is ``interrupted`` with its reason; then the route's own end:
+    A crash or a hang wins; then a landing's verdict; then a session cut short is ``interrupted`` with its reason; then
+    the route's own end:
     ``survived`` when every step was reached, or the failed step's reason. A session a person stopped, or that a
     reboot ended, is ``interrupted`` with ``stopped`` or ``reboot``.
     """
     last = manifests[-1]
     if last["ended"] in ("crash", "hang"):
         return last["ended"], None
+    if ending.verdict is not None:
+        return ending.verdict
     if ending.interrupted is not None:
         return "interrupted", ending.interrupted
     if ending.ended == "done":
@@ -73,7 +78,7 @@ def outcome(manifests: list[dict[str, Any]], ending: Ending) -> tuple[schema.Out
     return "interrupted", ending.ended or "stopped"
 
 
-def build_record_result(
+def build_result(
     request: dict[str, Any],
     manifests: list[dict[str, Any]],
     ending: Ending,
@@ -83,8 +88,12 @@ def build_record_result(
     harness: str,
     instance: str | None = None,
     attempt: int = 1,
+    placement: schema.Placement | None = None,
+    live_window: str | None = None,
+    placement_tool: schema.PlacementTool | None = None,
+    windows: schema.Windows | None = None,
 ) -> schema.Result:
-    """The result of a driven record run.
+    """The result of a driven run.
 
     Args:
         request: The request as the run's manifests record it, defaults included.
@@ -95,6 +104,10 @@ def build_record_result(
         harness: The harness's version.
         instance: The emulator instance that ran it, when a queue claimed it.
         attempt: Which attempt at the request this is.
+        placement: A landing's placement record.
+        live_window: The expected window as players done found it, in hex.
+        placement_tool: The placement tool the session pinned.
+        windows: The test step's windows, as configured and as taken.
     """
     first = manifests[0]
     storage = first.get("storage", {})
@@ -127,14 +140,14 @@ def build_record_result(
             setup=request["start"]["from"],
             observation=read_document(common_schema.Observe, request["observe"], "observe"),
             input=read_document(common_schema.InputPolicy, request["input"], "input"),
-            windows=None,
-            placement_tool=None,
+            windows=windows,
+            placement_tool=placement_tool,
             recordings=[manifest["run"] for manifest in manifests],
             steps=[_step(step) for step in manifests[-1]["steps"]],
             loads=[_load(manifest["run"], load) for manifest in manifests for load in manifest["loads"]],
             events_dropped=sum(manifest["events_dropped"] for manifest in manifests),
         ),
-        placement=None,
+        placement=placement,
         stages=[],
         crash=_crash(crash) if crash else None,
         hang=_hang(hang) if hang else None,
@@ -171,7 +184,7 @@ def build_record_result(
         ],
         client=request.get("client"),
         memory=schema.Memory(
-            live_window=None,
+            live_window=live_window,
             old_bytes=[
                 schema.OldBytes(recording=manifest["run"], seq=row["seq"], bytes=row["old"])
                 for manifest in manifests

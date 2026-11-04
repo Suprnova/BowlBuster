@@ -465,6 +465,7 @@ class PlatformProfile:
         code: First and one past the last address of the game's code.
         static_range: First and one past the last address of the data and zero-initialised sections.
         heap_block_size: The size of the block the game takes for its heaps.
+        frame_rate: The game's frames per second, which turns a window given in seconds into guest frames.
         boot_scene: The scene the game boots into.
         boot_counter: The load counter at the boot scene.
         boot_return: The return address of the call that initialises the boot scene.
@@ -478,6 +479,7 @@ class PlatformProfile:
     code: tuple[int, int]
     static_range: tuple[int, int]
     heap_block_size: int
+    frame_rate: int
     boot_scene: str
     boot_counter: int
     boot_return: int

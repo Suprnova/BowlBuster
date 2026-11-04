@@ -196,8 +196,13 @@ class ScriptedGame:
         memory = {globals_.scene_pointer: struct.pack("<I", SCENE_OBJECT), SCENE_OBJECT: struct.pack("<I", scene_id)}
         self._step(self._profile.points.scene_id.returns[0], (0x528B6,), memory=memory)
 
-    def stale_write(self, sphere: int) -> None:
-        self._step(self._profile.points.first_stale_write.entry[0], (0x9500,), eax=sphere)
+    def stale_write(self, sphere: int | None = None) -> None:
+        """The render writing through ``sphere``, or through the pointer the sphere dword holds then."""
+        point = self._profile.points.first_stale_write.entry[0]
+        if sphere is None:
+            self._step(point, (0x9500,), eax_from=self._profile.globals.sphere)
+        else:
+            self._step(point, (0x9500,), eax=sphere)
 
     def reset(self) -> None:
         self._step(self._profile.points.reset.entry[0], (0x703DE,))
@@ -342,6 +347,7 @@ class ScriptedGame:
         written: int | None = None,
         seconds: float = 0.0,
         wait: Wait | None = None,
+        eax_from: int | None = None,
     ) -> None:
         stack = b"".join(word if isinstance(word, bytes) else struct.pack("<I", word) for word in words)
         self.frame += 1
@@ -354,6 +360,7 @@ class ScriptedGame:
                 written,
                 seconds,
                 wait,
+                eax_from,
             )
         )
 

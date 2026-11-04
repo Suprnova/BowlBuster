@@ -48,6 +48,10 @@ controller: a button pressed on it is logged as a person's press and marks the r
 route is done or a step fails, and closes the xemu the harness started. When the session ends it writes the run's
 result, `result.json`, in `--out` beside the recordings, and prints its outcome.
 
+A landing request also needs `--place <bowlbuster.exe>`, a copy of `bowlbuster` published outside the repository
+(`dotnet publish src/BowlBuster.Cli -c Release -o <new folder>`), and `--recordings <folder>`, the folder its recipes
+are named under. The harness pins the tool when it starts and records it in the result. A control needs neither.
+
 ## Requests and results
 
 A request's and a result's spelling is the JSON schemas in `schema/` at the repository root. The types the harness

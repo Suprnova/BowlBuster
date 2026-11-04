@@ -9,7 +9,7 @@ from enum import StrEnum
 
 from bowlharness.driving.cheats import Code, plan_codes
 from bowlharness.driving.input import InputDriver
-from bowlharness.driving.request import RecordRequest
+from bowlharness.driving.request import Request
 from bowlharness.profiles.profile import PlatformProfile, Ready
 from bowlharness.recording.observe import u32, worn_archives
 from bowlharness.recording.recorder import Recorder
@@ -30,6 +30,7 @@ class Phase(StrEnum):
     WARPING = "warping"
     CHEATS = "cheats"
     MAIN_MENU = "main menu"
+    HELD = "held"
 
 
 class Screen(StrEnum):
@@ -93,9 +94,23 @@ class Navigator:
         profile: The platform's addresses and constants.
         recorder: The recorder that logs the steps.
         request: The route.
+        held_step: A step that is held once reached, until ``release`` says it may be left: a test step, watched
+            through its windows.
+        release: Whether the held step may be left.
     """
 
-    def __init__(self, target: Target, profile: PlatformProfile, recorder: Recorder, request: RecordRequest) -> None:
+    def __init__(
+        self,
+        target: Target,
+        profile: PlatformProfile,
+        recorder: Recorder,
+        request: Request,
+        *,
+        held_step: int | None = None,
+        release: Callable[[], bool] = lambda: True,
+    ) -> None:
+        self._held_step = held_step
+        self._release = release
         self._target = target
         self._profile = profile
         self._recorder = recorder
@@ -129,6 +144,11 @@ class Navigator:
         self.outcome: str | None = None
         self.result: str | None = None
 
+    @property
+    def step(self) -> int:
+        """The index of the step being reached or left."""
+        return self._index
+
     def use(self, driver: InputDriver) -> None:
         """Gives the navigator the driver it presses with."""
         self._driver = driver
@@ -142,7 +162,7 @@ class Navigator:
             self._phase = Phase.MAIN_MENU
             self._enter(Screen.LOGOS)
 
-    def on_event(self, event: str) -> None:
+    def on_event(self, event: str, fields: dict[str, object]) -> None:
         """Follows the recorder's events."""
         if self.outcome is not None:
             return
@@ -173,6 +193,8 @@ class Navigator:
                 self._cheats()
             case Phase.MAIN_MENU:
                 self._main_menu()
+            case Phase.HELD if self._release():
+                self._reached(self._signal)
 
     def _read(self, address: int) -> int:
         return u32(self._target.read, address)
@@ -253,6 +275,9 @@ class Navigator:
 
     def _reached(self, signal: str) -> None:
         self._signal = signal
+        if self._index == self._held_step and not self._release():
+            self._phase = Phase.HELD
+            return
         last = self._index + 1 == len(self._request.steps)
         following = None if last else self._request.steps[self._index + 1].costumes
         try:

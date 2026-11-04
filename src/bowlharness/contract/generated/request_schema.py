@@ -100,7 +100,7 @@ class Recipe:
 
     recording: str
     """
-    The run id of the recording, a folder under the harness's recordings root.
+    The recording's folder, relative to the harness's recordings root, with forward slashes.
     """
     segment: int
     """

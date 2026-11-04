@@ -159,7 +159,7 @@ class Recorder:
         self._capture_ids: Counter[str] = Counter()
         self._last_event: dict[str, object] | None = None
         self._ending: str | None = None
-        self._listeners: list[Callable[[str], None]] = []
+        self._listeners: list[Callable[[str, dict[str, object]], None]] = []
         self.polls = 0
         self.loading = False
 
@@ -298,11 +298,11 @@ class Recorder:
         seq = self._events.emit(event, self.frame(), **fields)
         self._last_event = {"seq": seq, "event": event}
         for listener in self._listeners:
-            listener(event)
+            listener(event, fields)
         return seq
 
-    def listen(self, listener: Callable[[str], None]) -> None:
-        """Calls ``listener`` with the name of each event as it is logged."""
+    def listen(self, listener: Callable[[str, dict[str, object]], None]) -> None:
+        """Calls ``listener`` with the name and the fields of each event as it is logged."""
         self._listeners.append(listener)
 
     def arm_pad_read(self, handler: Callable[[Hit], None]) -> None:
@@ -315,6 +315,11 @@ class Recorder:
     def count_poll(self) -> None:
         """Counts a poll of the controller, which is progress for the watchdog."""
         self.polls += 1
+
+    @property
+    def directory(self) -> Path:
+        """The recording's folder."""
+        return self._directory
 
     @property
     def scene(self) -> str | None:

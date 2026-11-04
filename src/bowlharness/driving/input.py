@@ -217,7 +217,7 @@ class InputDriver:
             person.button = "+".join(named) or f"{person.mask:#x}"
             self._recorder.log_press({**person.row, "cancelled": False})
 
-    def _event(self, event: str) -> None:
+    def _event(self, event: str, fields: dict[str, object]) -> None:
         if event != "scene_init":
             return
         self._queue.clear()

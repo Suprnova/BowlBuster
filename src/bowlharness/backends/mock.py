@@ -38,6 +38,8 @@ class Step:
         written: The address the instruction writes, if any.
         seconds: How long the guest runs before arriving.
         wait: What the step waits for before the guest goes on, if anything.
+        eax_from: An address whose dword the accumulator holds on arriving, in place of ``registers``' value: a
+            pointer the guest has just loaded from memory the harness may have written.
     """
 
     pc: int
@@ -46,6 +48,7 @@ class Step:
     written: int | None = None
     seconds: float = 0.0
     wait: Wait | None = None
+    eax_from: int | None = None
 
 
 @dataclass
@@ -157,9 +160,11 @@ class MockTarget:
     def _arrive(self, step: Step) -> bool:
         """Applies a step and calls the handlers it reaches; returns whether any ran."""
         self._pc = step.pc
-        self._registers = step.registers
         for address, data in step.memory.items():
             self._store(address, data)
+        self._registers = step.registers
+        if step.eax_from is not None:
+            self._registers = {**step.registers, "eax": int.from_bytes(self.read(step.eax_from, 4), "little")}
         fired = False
         for point in list(self._points.values()):
             if point.length is None:

@@ -95,7 +95,7 @@
       "required": ["recording", "segment", "load"],
       "properties": {
         "recording": {
-          "description": "The run id of the recording, a folder under the harness's recordings root.",
+          "description": "The recording's folder, relative to the harness's recordings root, with forward slashes.",
           "type": "string",
           "minLength": 1
         },

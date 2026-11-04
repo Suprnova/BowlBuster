@@ -16,7 +16,7 @@ def writing_at_players_done(game: ScriptedGame, directory: Path, address: int, d
     target = game.build()
     recorder = Recorder(target, game.profile, directory, "run-1", Options())
 
-    def at(event: str) -> None:
+    def at(event: str, fields: dict[str, object]) -> None:
         if event == "players_done":
             recorder.write("bowl-storage", "sphere", address, data)
 
