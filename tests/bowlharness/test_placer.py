@@ -128,8 +128,19 @@ def test_a_control_needs_no_tool(tmp_path: Path) -> None:
 
 def test_drive_takes_the_tool_and_the_recordings() -> None:
     arguments = parse_drive_arguments(
-        ["--out", "C:/runs/new", "--xemu", "x.exe", "--request", "r.json", "--place", "b.exe", "--recordings", "C:/r"],
+        [
+            "--out",
+            str(Path.cwd() / "runs-new"),
+            "--xemu",
+            "x.exe",
+            "--request",
+            "r.json",
+            "--place",
+            "b.exe",
+            "--recordings",
+            "r",
+        ],
         "run",
     )
 
-    assert (arguments.place, arguments.recordings) == (Path("b.exe"), Path("C:/r"))
+    assert (arguments.place, arguments.recordings) == (Path("b.exe"), Path("r"))
