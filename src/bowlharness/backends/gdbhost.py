@@ -196,6 +196,8 @@ def _tell(state: str) -> None:
         print(f"ended: {_session.recordings if _session else 0} recording(s) in {_session_out}")
         if isinstance(_session, DrivenSession) and _session.result:
             print(f"route {_session.result}")
+        if isinstance(_session, DrivenSession) and (written := _session.written):
+            print(f"result: {written.outcome}" + (f" ({written.cause})" if written.cause else ""))
 
 
 def _launch(

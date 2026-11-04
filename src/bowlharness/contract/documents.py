@@ -33,12 +33,10 @@ def read_document[T](kind: type[T], value: Any, root: str) -> T:
 
 
 def write_document(value: Any) -> Any:
-    """The JSON form of a generated type: every field by its JSON name, except an optional one left at ``None``."""
+    """The JSON form of a generated type: every field by its JSON name, ``None`` as null, so none is ever absent."""
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return {
-            json_name(field.name): write_document(getattr(value, field.name))
-            for field in dataclasses.fields(value)
-            if not (field.default is None and getattr(value, field.name) is None)
+            json_name(field.name): write_document(getattr(value, field.name)) for field in dataclasses.fields(value)
         }
     if isinstance(value, list | tuple):
         return [write_document(item) for item in value]

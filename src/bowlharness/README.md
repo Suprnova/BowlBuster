@@ -45,7 +45,8 @@ uv run python -m bowlharness drive --request <request.json> --xemu <xemu.exe> --
 Follows a record request instead of waiting for a person to play: it takes the same `--out`, `--xemu`, `--config`,
 `--port`, `--attach` and `--liveness` options as `record`, and the request owns what is observed. Hands off the
 controller: a button pressed on it is logged as a person's press and marks the run attended. The run ends when the
-route is done or a step fails, and closes the xemu the harness started.
+route is done or a step fails, and closes the xemu the harness started. When the session ends it writes the run's
+result, `result.json`, in `--out` beside the recordings, and prints its outcome.
 
 ## Requests and results
 

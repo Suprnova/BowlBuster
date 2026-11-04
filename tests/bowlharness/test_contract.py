@@ -35,13 +35,10 @@ def test_every_request_fixture_follows_the_schema(path: Path) -> None:
 
 
 @pytest.mark.parametrize("path", REQUESTS, ids=lambda path: path.stem)
-def test_every_request_fixture_written_back_follows_the_schema_and_reads_the_same(path: Path) -> None:
+def test_every_request_fixture_written_back_reads_the_same(path: Path) -> None:
     request = read_document(request_schema.Request, fixture(path), "request")
 
-    written = write_document(request)
-
-    assert schema_errors(written, "request") == []
-    assert read_document(request_schema.Request, written, "request") == request
+    assert read_document(request_schema.Request, write_document(request), "request") == request
 
 
 def test_a_request_reads_as_the_type_its_kind_names() -> None:

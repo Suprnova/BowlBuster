@@ -49,6 +49,13 @@ def three_loads() -> ScriptedGame:
 
 
 DIGEST = "ab" * 32
+ENVIRONMENT = {
+    "emulator": {"name": "xemu", "version": "0.8.0", "config_sha256": "cd" * 32, "controller": "pad"},
+    "disc": {"image": "disc.iso", "image_sha256": "ef" * 32},
+    "storage": {"image": "hdd.qcow2", "bytes": 1024},
+    "gdb": "16.3",
+    "host": "Windows-11",
+}
 PAUSE_MENU = XBOX_NTSC_U.navigation.modes.pause_menu
 FAST = replace(
     COMPACT,
@@ -115,7 +122,8 @@ def drive(game: ScriptedGame, directory: Path, request: RecordRequest) -> tuple[
         request,
         DIGEST,
         run_stem="s",
-        environment={"emulator": {"name": "xemu"}, "disc": {"image": "disc.iso"}},
+        environment=ENVIRONMENT,
+        harness="0.1.0+test",
     )
     session.run()
     return session, json.loads((directory / "out" / "s-1" / "manifest.json").read_text())

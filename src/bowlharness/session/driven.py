@@ -1,17 +1,20 @@
 """A session that drives the game along a request's route and records it."""
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from bowlharness.contract.generated.result_schema import Result
 from bowlharness.driving.input import InputDriver
 from bowlharness.driving.navigation import Navigator
 from bowlharness.driving.request import RecordRequest
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.detection import Watchdog
 from bowlharness.recording.recorder import Recorder
-from bowlharness.session.session import Session
-from bowlharness.target import Target
+from bowlharness.recording.result import Ending, build_record_result, harness_version, moment, write_result
+from bowlharness.session.session import ENDED, Session
+from bowlharness.target import Target, TargetError
 
 
 class DrivenSession(Session):
@@ -19,7 +22,8 @@ class DrivenSession(Session):
 
     It runs until the route is done, a step fails, the guest crashes or hangs, the game reboots, or a person stops it.
     A person can still pause it, as in any session; a pause, a capture, a read or a press marks the run attended, and
-    so does a button on the controller. A reboot ends the route, since the route can't go on after one.
+    so does a button on the controller. A reboot ends the route, since the route can't go on after one. When the
+    session ends it writes the run's result, ``result.json``, in ``out`` beside the recordings.
 
     Args:
         target: The guest to drive.
@@ -32,6 +36,10 @@ class DrivenSession(Session):
         boot_path: How the recording began: ``boot`` or ``attached``.
         liveness: How long play may stall before it is a hang, in seconds.
         on_end: Called once when the session ends, for example to close the emulator.
+        harness: The harness's version for the result, or ``None`` to read it from the source tree.
+
+    Attributes:
+        written: The run's result, once the session has ended and written it.
     """
 
     def __init__(
@@ -47,10 +55,13 @@ class DrivenSession(Session):
         boot_path: str = "boot",
         liveness: float = 5.0,
         on_end: Callable[[], None] | None = None,
+        harness: str | None = None,
     ) -> None:
         self._request = request
+        self._harness = harness or harness_version()
         self._request_sha256 = request_sha256
         self._navigator: Navigator | None = None
+        self.written: Result | None = None
         super().__init__(
             target,
             profile,
@@ -62,6 +73,7 @@ class DrivenSession(Session):
             liveness=liveness,
             on_end=on_end,
         )
+        self._started = moment(self._frame())
 
     @property
     def outcome(self) -> str | None:
@@ -97,3 +109,27 @@ class DrivenSession(Session):
 
     def _concluded(self) -> str | None:
         return self.outcome
+
+    def _frame(self) -> int | None:
+        try:
+            return self._recorder.frame()
+        except TargetError:
+            return None
+
+    def _end(self, interrupted: str | None = None, ended: str | None = None) -> str:
+        if self.ended:
+            return ENDED
+        frame = self._frame()
+        super()._end(interrupted, ended)
+        runs = [f"{self._run_stem}-{number}" for number in range(1, self.recordings + 1)]
+        manifests = [json.loads((self._out / run / "manifest.json").read_text(encoding="utf-8")) for run in runs]
+        self.written = build_record_result(
+            self._request.to_json(),
+            manifests,
+            Ending(interrupted, ended),
+            started=self._started,
+            ended=moment(frame),
+            harness=self._harness,
+        )
+        write_result(self._out / "result.json", self.written)
+        return ENDED
