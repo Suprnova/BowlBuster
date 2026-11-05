@@ -51,9 +51,7 @@ class Stage(StrEnum):
     SETTLE = "settle"
     CODE = "code"
     LEAVE = "leave"
-    OPTIONS = "options"
     CLOSE = "close"
-    RETURN = "return"
 
 
 @dataclass
@@ -66,6 +64,7 @@ class _Pending:
     satisfied: Callable[[int], bool]
     queued_poll: int
     queued_frame: int
+    deadline: float | None = None
     attempts: int = 1
 
 
@@ -77,11 +76,13 @@ class Navigator:
     play afterwards. A reached step then enters its cheat codes, and those that leave the next step's costumes worn, in
     the Options menu: X from the pause menu, then L and R held, then the code's X and Y presses, each confirmed by the
     game's count of them and the code by its bit in the cheat mask. A code that doesn't take is entered again from a
-    cleared history, up to the profile's resend limit. B leaves Options once the game has made it active, and the
-    navigator waits for the pause menu to be active again. From the step it goes to the next through the pause menu:
-    Start, the world, the slot, then A to select the task and confirm it, once the menu has become active. Each press is
-    confirmed by a global the game changes, and a press the game didn't take is sent again, up to the profile's resend
-    limit. The navigator is clocked by the driver's polls and the recorder's events.
+    cleared history, up to the profile's resend limit. B leaves Options as soon as the codes are in. From the step it
+    goes to the next through the pause menu: Start, the world, the slot, then A to select the task and confirm it, once
+    the menu has become active. Each press is confirmed by a global the game changes. A press the game didn't take is
+    sent again: Start up to the profile's resend limit, and a press in a menu, which ignores input for a while after it
+    opens or after Options closes, until the menu's ready time has passed. Since A is the one press that does harm in
+    Options, the As go only after a press in the pause menu has been confirmed since Options closed; a cursor already on
+    the task is moved off it and back. The navigator is clocked by the driver's polls and the recorder's events.
 
     The route ends ``done`` when every step is reached, or ``failed`` at the first step that isn't, which it logs with
     the reason: ``scene change`` (another scene initialised), ``costume mismatch`` (the load wears other costumes than
@@ -132,7 +133,7 @@ class Navigator:
         self._trusted = False
         self._pending: _Pending | None = None
         self._menu_opened = 0.0
-        self._pause_menu = 0
+        self._menu_proven = True
         self._confirm: tuple[int, int] | None = None
         self._exit: tuple[int, int] | None = None
         self._retries = 0
@@ -326,8 +327,11 @@ class Navigator:
         address = navigation.menu_scenes + world * navigation.menu_row_stride + slot * navigation.menu_slot_stride
         return self._target.read(address, 4).decode("ascii", "replace")
 
-    def _begin(self, action: str, button: str, address: int, satisfied: Callable[[int], bool]) -> None:
-        self._pending = _Pending(action, button, address, satisfied, self._polls, self._recorder.frame())
+    def _begin(
+        self, action: str, button: str, address: int, satisfied: Callable[[int], bool], *, patient: bool = False
+    ) -> None:
+        deadline = time.monotonic() + self._profile.navigation.ready_seconds if patient else None
+        self._pending = _Pending(action, button, address, satisfied, self._polls, self._recorder.frame(), deadline)
         self._press(button)
 
     def _taken(self) -> bool:
@@ -346,19 +350,28 @@ class Navigator:
         return self._polls - self._pending.queued_poll >= self._profile.navigation.action_polls and self._driver_idle
 
     def _confirmed(self) -> bool:
-        """Whether the pending press took effect; sends it again when it hasn't, and fails the step if that keeps up."""
+        """Whether the pending press took effect; sends it again when it hasn't, and fails the step if that keeps up.
+
+        A patient press is sent again until the menu's ``ready_seconds`` have passed, since a menu ignores input for a
+        time it measures in real time; any other press is sent again up to the resend limit.
+        """
         if self._taken():
             return True
         if self._overdue():
             pending = self._pending
             assert pending is not None
-            if pending.attempts > self._profile.input.resend_limit:
+            if self._exhausted(pending):
                 self._fail("stalled")
             else:
                 pending.attempts += 1
                 pending.queued_poll = self._polls
                 self._press(pending.button)
         return False
+
+    def _exhausted(self, pending: _Pending) -> bool:
+        if pending.deadline is None:
+            return pending.attempts > self._profile.input.resend_limit
+        return time.monotonic() >= pending.deadline
 
     def _pause(self) -> None:
         modes = self._profile.navigation.modes
@@ -375,7 +388,7 @@ class Navigator:
         assert menu is not None
         if self._pending is not None:
             if self._confirmed():
-                self._trusted = True
+                self._trusted = self._menu_proven = True
             return
         if self._read(navigation.menu_active) == 0:
             if self._menu_late():
@@ -383,11 +396,17 @@ class Navigator:
             return
         world, target = self._read(navigation.menu_world), menu.world - 1
         if self._trusted and world == target:
-            self._phase = Phase.SLOT
-            self._slot()
+            if self._menu_proven:
+                self._phase = Phase.SLOT
+                self._slot()
+            else:
+                self._begin(
+                    "world", "up" if world else "down", navigation.menu_world, lambda now: now != world, patient=True
+                )
             return
         start = world if self._trusted else navigation.menu_start_world
-        self._begin("world", "down" if start <= target else "up", navigation.menu_world, lambda now: now != world)
+        button = "down" if start <= target else "up"
+        self._begin("world", button, navigation.menu_world, lambda now: now != world, patient=True)
 
     def _slot(self) -> None:
         navigation = self._profile.navigation
@@ -406,7 +425,8 @@ class Navigator:
                 self._press("a")
             self._phase = Phase.WARPING
             return
-        self._begin("slot", "right" if slot < target else "left", navigation.menu_slot, lambda now: now != slot)
+        button = "right" if slot < target else "left"
+        self._begin("slot", button, navigation.menu_slot, lambda now: now != slot, patient=True)
 
     def _warping(self) -> None:
         """Waits for the warp to begin, pressing A again only after the time it normally takes has passed."""
@@ -470,8 +490,7 @@ class Navigator:
         navigation = self._profile.navigation
         match self._stage:
             case Stage.MENU:
-                if menu := self._read(navigation.menu_active):
-                    self._pause_menu = menu
+                if self._read(navigation.menu_active):
                     self._press_for_screen("x")
                     self._stage = Stage.OPEN
                 elif self._menu_late():
@@ -499,29 +518,18 @@ class Navigator:
                 if self._index + 1 == len(self._request.steps):
                     self._finish_step(menu_open=True)
                     return
-                self._menu_opened = time.monotonic()
-                self._stage = Stage.OPTIONS
-            case Stage.OPTIONS:
-                if self._read(navigation.menu_active) not in (0, self._pause_menu):
-                    self._press_for_screen("b")
-                    self._stage = Stage.CLOSE
-                elif self._menu_late():
-                    self._fail("stalled")
+                self._press_for_screen("b")
+                self._stage = Stage.CLOSE
             case Stage.CLOSE:
                 if self._confirmed():
-                    self._menu_opened = time.monotonic()
-                    self._stage = Stage.RETURN
-            case Stage.RETURN:
-                if self._read(navigation.menu_active) == self._pause_menu:
+                    self._menu_proven = False
                     self._finish_step(menu_open=True)
-                elif self._menu_late():
-                    self._fail("stalled")
 
     def _press_for_screen(self, button: str) -> None:
         """Presses a button that opens or closes a menu screen, confirmed by the screen count changing."""
         address = self._profile.navigation.menu_screens
         before = self._read(address)
-        self._begin("options", button, address, lambda now: now != before)
+        self._begin("options", button, address, lambda now: now != before, patient=True)
 
     def _enter_code(self) -> None:
         """Presses the first code's buttons one at a time, each confirmed by the game's count of them.

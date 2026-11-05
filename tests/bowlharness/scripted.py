@@ -17,7 +17,6 @@ PAD_RECORD = 0x6000
 PAD_BUFFER = 0x6200
 SEQUENCES = 0x7000
 PAUSE_MENU = 0xB94EE0
-OPTIONS_MENU = 0xB94E40
 BUGCHECK_RVAS = (0x94B0, 0x9442)
 
 
@@ -60,7 +59,6 @@ class ScriptedGame:
         self.cursor = (0, 0)
         self.menu_lag = 0
         self.held = 0
-        self.options_open = False
         self.main_menu_ready = False
         self._menu: dict[int, bytes] = {}
 
@@ -251,9 +249,7 @@ class ScriptedGame:
             PAD_BUFFER: struct.pack("<I", physical),
             profile.globals.active_port: bytes(1),
             profile.globals.game_mode: struct.pack("<I", mode),
-            navigation.menu_active: struct.pack(
-                "<I", (OPTIONS_MENU if self.options_open else PAUSE_MENU) if active else 0
-            ),
+            navigation.menu_active: struct.pack("<I", PAUSE_MENU if active else 0),
             profile.globals.play_state: struct.pack("<I", state),
             navigation.control_off: struct.pack("<I", control_off),
             navigation.render_gate: bytes([gate]),

@@ -18,7 +18,6 @@ def open_options(game: ScriptedGame) -> None:
     """Start, X, and L and R held, from a ready level."""
     game.await_press("start", after=PAUSE_MENU)
     game.await_press("x", mode=PAUSE_MENU, memory={SCREENS: 6})
-    game.options_open = True
     game.await_chord("l", "r")
     polls(game, 2, mode=PAUSE_MENU)
 
@@ -26,7 +25,6 @@ def open_options(game: ScriptedGame) -> None:
 def leave_options(game: ScriptedGame) -> None:
     game.held = 0
     game.await_press("b", mode=PAUSE_MENU, memory={SCREENS: 8})
-    game.options_open = False
 
 
 def trip(game: ScriptedGame, cursor: tuple[int, int], scene: str, counter: int, old: str, cheats: int = 0) -> None:
@@ -222,16 +220,53 @@ def test_a_b_that_does_not_close_options_fails_the_step_as_stalled(tmp_path: Pat
     assert session.result == "failed: step 0 (ORIG), stalled"
 
 
-def test_a_pause_menu_that_never_returns_after_options_fails_the_step_as_stalled(tmp_path: Path) -> None:
+def test_a_pause_menu_that_takes_no_press_after_options_fails_the_next_step_as_stalled(tmp_path: Path) -> None:
     game = ScriptedGame(FAST)
     game.menu_scenes({(0, 0): "ORIG", (1, 0): "TARG"})
     level(game, "ORIG", 1)
     open_options(game)
     game.enter_code(PLSA[0])
-    game.held = 0
-    game.await_press("b", mode=PAUSE_MENU, memory={SCREENS: 8})
+    leave_options(game)
     polls(game, 20000, mode=PAUSE_MENU)
 
-    session, _ = drive(game, tmp_path, two_steps(costumes=["PLSA"]))
+    session, manifest = drive(game, tmp_path, two_steps(costumes=["PLSA"]))
 
-    assert session.result == "failed: step 0 (ORIG), stalled"
+    assert (session.result, manifest["steps"][0]["status"]) == ("failed: step 1 (TARG), stalled", "reached")
+
+
+def test_a_press_after_options_is_sent_again_until_the_pause_menu_takes_it(tmp_path: Path) -> None:
+    patient = replace(FAST, navigation=replace(FAST.navigation, ready_seconds=60.0))
+    game = ScriptedGame(patient)
+    game.menu_scenes({(0, 0): "ORIG", (1, 0): "TARG"})
+    level(game, "ORIG", 1)
+    open_options(game)
+    game.enter_code(PLSA[0])
+    leave_options(game)
+    polls(game, 150, mode=PAUSE_MENU)
+    trip(game, (1, 0), "TARG", 2, "ORIG", cheats=PLSA[1])
+
+    session, manifest = drive(game, tmp_path, two_steps(costumes=["PLSA"]))
+
+    downs = [row for row in manifest["input_ledger"] if row["button"] == "down"]
+    assert (session.result, len(downs) > XBOX_NTSC_U.input.resend_limit + 1) == ("done", True)
+
+
+def test_a_cursor_already_on_the_task_after_options_is_moved_off_and_back_before_the_confirm(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    open_options(game)
+    game.enter_code(EVERY_TASK[0])
+    leave_options(game)
+    game.await_press("down", cursor=(1, 0), mode=PAUSE_MENU)
+    game.await_press("up", cursor=(0, 0), mode=PAUSE_MENU)
+    for _ in range(3):
+        game.await_press("a", mode=PAUSE_MENU)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+    steps = [{"scene": "ORIG", "cheats": ["all-tasks"]}, {"scene": "ORIG", "menu": {"world": 1, "slot": 1}}]
+
+    session, manifest = drive(game, tmp_path, request(steps))
+
+    buttons = [row["button"] for row in manifest["input_ledger"]]
+    assert (session.result, buttons[buttons.index("b") :]) == ("done", ["b", "down", "up", "a", "a", "a"])
