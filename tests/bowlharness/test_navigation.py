@@ -1,6 +1,7 @@
 from dataclasses import replace
 from pathlib import Path
 
+from scripted import PAUSE_MENU as PAUSE_MENU_SCREEN
 from scripted import ScriptedGame
 from support import FAST, PAUSE_MENU, drive, driven_events, level, polls, route, warp
 
@@ -119,14 +120,14 @@ def test_a_slot_holding_another_scene_fails_before_any_input(tmp_path: Path) -> 
 
 
 def test_a_confirmed_warp_that_loads_nothing_fails_as_menu_unreachable(tmp_path: Path) -> None:
-    quick = replace(FAST, navigation=replace(FAST.navigation, warp_polls=30))
+    quick = replace(FAST, navigation=replace(FAST.navigation, warp_polls=60))
     game = ScriptedGame(quick)
     game.menu_scenes({(0, 0): "ORIG"})
     level(game, "ORIG", 1)
     game.await_press("start", after=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU)
-    polls(game, 60, mode=PAUSE_MENU)
+        game.await_confirm(mode=PAUSE_MENU)
+    polls(game, 80, mode=PAUSE_MENU)
 
     session, _ = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
 
@@ -145,7 +146,7 @@ def test_the_pause_menu_the_game_opens_is_where_the_trip_starts_and_its_first_pr
     game.await_press("up", cursor=(3, 0), mode=PAUSE_MENU)
     game.await_press("up", cursor=(2, 0), mode=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU)
+        game.await_confirm(mode=PAUSE_MENU)
     game.scene_exit("ORIG", 1)
     level(game, "TARG", 2)
 
@@ -247,7 +248,7 @@ def test_nothing_is_pressed_in_the_pause_menu_until_it_is_active(tmp_path: Path)
     game.await_press("start", after=PAUSE_MENU)
     polls(game, 19, mode=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU, polls=100)
+        game.await_confirm(mode=PAUSE_MENU, polls=100)
     game.scene_exit("ORIG", 1)
     level(game, "ORIG", 2)
 
@@ -294,10 +295,10 @@ def test_a_confirm_that_does_not_begin_the_warp_is_pressed_again_after_the_time_
     game.menu_scenes({(0, 0): "ORIG"})
     level(game, "ORIG", 1)
     game.await_press("start", after=PAUSE_MENU)
-    game.await_press("a", mode=PAUSE_MENU)
-    game.await_press("a", mode=PAUSE_MENU)
+    game.await_confirm(mode=PAUSE_MENU)
+    game.await_confirm(mode=PAUSE_MENU)
     polls(game, 12, mode=PAUSE_MENU)
-    game.await_press("a", mode=PAUSE_MENU, polls=100)
+    game.await_confirm(mode=PAUSE_MENU, polls=100)
     game.scene_exit("ORIG", 1)
     level(game, "ORIG", 2)
 
@@ -313,18 +314,17 @@ def test_a_confirm_is_not_pressed_again_once_the_menu_has_closed(tmp_path: Path)
     game.menu_scenes({(0, 0): "ORIG"})
     level(game, "ORIG", 1)
     game.await_press("start", after=PAUSE_MENU)
-    for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU, after=XBOX_NTSC_U.navigation.modes.play)
+    game.await_confirm(mode=PAUSE_MENU, after=XBOX_NTSC_U.navigation.modes.play)
     polls(game, 100)
     game.scene_exit("ORIG", 1)
     level(game, "ORIG", 2)
 
     session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
 
-    assert (session.result, [row["button"] for row in manifest["input_ledger"]].count("a")) == ("done", 3)
+    assert (session.result, [row["button"] for row in manifest["input_ledger"]].count("a")) == ("done", 1)
 
 
-def test_a_confirm_that_never_works_is_pressed_again_a_limited_number_of_times(tmp_path: Path) -> None:
+def test_an_a_the_menu_never_counts_is_sent_again_until_the_warp_has_had_its_polls(tmp_path: Path) -> None:
     quick = replace(FAST, navigation=replace(FAST.navigation, warp_wait_polls=20, warp_polls=300))
     game = ScriptedGame(quick)
     game.menu_scenes({(0, 0): "ORIG"})
@@ -334,5 +334,60 @@ def test_a_confirm_that_never_works_is_pressed_again_a_limited_number_of_times(t
 
     session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
 
+    presses = [row["button"] for row in manifest["input_ledger"]].count("a")
+    assert (session.result, presses > 1) == ("failed: step 1 (ORIG), stalled", True)
+    assert presses <= quick.navigation.warp_polls // quick.navigation.action_polls + 1
+
+
+def test_each_a_of_a_warp_waits_for_the_menu_to_count_the_one_before(tmp_path: Path) -> None:
+    quick = replace(FAST, input=replace(FAST.input, hold_polls=1, release_polls=1))
+    game = ScriptedGame(quick)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.await_press("start", after=PAUSE_MENU)
+    for _ in range(3):
+        game.await_confirm(mode=PAUSE_MENU, after=PAUSE_MENU)
+    polls(game, 2, mode=PAUSE_MENU)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, _ = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1), profile=quick))
+
+    events = [e for e in driven_events(tmp_path) if e["event"] == "navigation"]
+    confirms = [e for e in events if e["action"] == "confirm"]
+    assert (session.result, len(confirms), [e["action"] for e in events][-1]) == ("done", 3, "warp")
+    pairs = zip(confirms, confirms[1:], strict=False)
+    assert all(later["sent"]["poll"] >= earlier["taken"]["poll"] for earlier, later in pairs)
+
+
+def test_the_pause_menu_screen_is_found_by_its_name_when_another_screen_is_active(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.active_screen = PAUSE_MENU_SCREEN - FAST.navigation.screens.stride
+    game.await_press("start", after=PAUSE_MENU)
+    for _ in range(3):
+        game.await_confirm(mode=PAUSE_MENU, after=PAUSE_MENU)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, _ = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    confirms = [e for e in driven_events(tmp_path) if e["event"] == "navigation" and e["action"] == "confirm"]
+    assert (session.result, len(confirms)) == ("done", 3)
+
+
+def test_a_press_still_pending_when_a_scene_loads_is_dropped(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.await_press("start", after=PAUSE_MENU)
+    game.await_press("a", mode=PAUSE_MENU)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+    warp(game, [], "ORIG", 3, "ORIG")
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1), ("ORIG", 1, 1)))
+
     presses = [row["button"] for row in manifest["input_ledger"]]
-    assert (session.result, presses.count("a")) == ("failed: step 1 (ORIG), menu unreachable", 6)
+    assert (session.result, presses[:3]) == ("done", ["start", "a", "start"])

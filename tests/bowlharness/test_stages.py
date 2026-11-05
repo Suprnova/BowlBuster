@@ -3,13 +3,12 @@ from pathlib import Path
 from typing import Any
 
 from contract import schema_errors
-from scripted import ScriptedGame
+from scripted import COMPACT, ScriptedGame
 from support import FAST, PAUSE_MENU, drive, driven_events, level, polls
 from test_landing import OFFSET, WINDOW, FakePlacer, S, trip
 
 from bowlharness.driving.placer import Placed
 from bowlharness.driving.request import Request, parse_request
-from bowlharness.profiles import XBOX_NTSC_U
 
 FRAMES = "guest-frames"
 
@@ -39,7 +38,7 @@ def request(kind: str = "landing", *, render: int = 5, timeout: int = 200, exits
             "write_timeout": {"unit": FRAMES, "value": timeout},
         },
     }
-    return parse_request(document, XBOX_NTSC_U)
+    return parse_request(document, COMPACT)
 
 
 def at_target() -> ScriptedGame:

@@ -8,7 +8,7 @@ from scripted import COMPACT, ScriptedGame
 from bowlharness.backends.mock import MockTarget
 from bowlharness.driving.placer import Placer
 from bowlharness.driving.request import Request, parse_request
-from bowlharness.profiles import XBOX_NTSC_U
+from bowlharness.profiles import XBOX_NTSC_U, PlatformProfile
 from bowlharness.recording.recorder import Options, Recorder
 from bowlharness.session.driven import DrivenSession
 
@@ -83,12 +83,12 @@ def warp(game: ScriptedGame, presses: list[tuple[str, tuple[int, int]]], scene: 
     for button, cursor in presses:
         game.await_press(button, cursor=cursor, mode=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU, after=PAUSE_MENU)
+        game.await_confirm(mode=PAUSE_MENU, after=PAUSE_MENU)
     game.scene_exit(old, counter - 1)
     level(game, scene, counter)
 
 
-def route(*steps: str | tuple[str, int, int], start: str = "booted") -> Request:
+def route(*steps: str | tuple[str, int, int], start: str = "booted", profile: PlatformProfile = COMPACT) -> Request:
     """A record request through ``steps``: a scene, or a scene with its menu world and slot (numbered from 1)."""
     parsed = []
     for index, step in enumerate(steps):
@@ -98,10 +98,10 @@ def route(*steps: str | tuple[str, int, int], start: str = "booted") -> Request:
             world, slot = menu or (index + 1, 1)
             entry["menu"] = {"world": world, "slot": slot}
         parsed.append(entry)
-    return request(parsed, start)
+    return request(parsed, start, profile)
 
 
-def request(steps: list[dict[str, Any]], start: str = "booted") -> Request:
+def request(steps: list[dict[str, Any]], start: str = "booted", profile: PlatformProfile = COMPACT) -> Request:
     """A record request through steps written as the request file writes them."""
     document = {
         "schema_version": 1,
@@ -110,7 +110,7 @@ def request(steps: list[dict[str, Any]], start: str = "booted") -> Request:
         "start": {"from": start},
         "steps": steps,
     }
-    return parse_request(document, XBOX_NTSC_U)
+    return parse_request(document, profile)
 
 
 def drive(

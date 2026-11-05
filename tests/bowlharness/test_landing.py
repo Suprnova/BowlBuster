@@ -5,12 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from contract import schema_errors
-from scripted import PAD_STATE, ScriptedGame
+from scripted import COMPACT, PAD_STATE, ScriptedGame
 from support import FAST, PAUSE_MENU, drive, driven_events, level, polls
 
 from bowlharness.driving.placer import NotPlaced, Placed, PlacementFault, PlacementTool
 from bowlharness.driving.request import Request, parse_request
-from bowlharness.profiles import XBOX_NTSC_U
 
 S = FAST.heap.heap0_base + 0x10
 OFFSET = 0x30
@@ -58,7 +57,7 @@ def request(kind: str = "landing", expected: bytes = WINDOW, render: int = 5) ->
         "tests": [test],
         "windows": {"render": {"unit": "guest-frames", "value": render}},
     }
-    return parse_request(document, XBOX_NTSC_U)
+    return parse_request(document, COMPACT)
 
 
 def trip(game: ScriptedGame, cursor: tuple[int, int], scene: str, counter: int, old: str) -> None:
@@ -66,7 +65,7 @@ def trip(game: ScriptedGame, cursor: tuple[int, int], scene: str, counter: int, 
     game.await_press("start", after=PAUSE_MENU)
     game.await_press("down", cursor=cursor, mode=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU, after=PAUSE_MENU)
+        game.await_confirm(mode=PAUSE_MENU, after=PAUSE_MENU)
     game.scene_exit(old, counter - 1)
     game.scene_init(scene, counter)
 

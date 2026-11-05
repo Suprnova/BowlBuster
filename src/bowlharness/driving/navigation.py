@@ -4,6 +4,7 @@ import struct
 import time
 from collections import deque
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -13,7 +14,7 @@ from bowlharness.driving.request import Request
 from bowlharness.profiles.profile import PlatformProfile, Ready
 from bowlharness.recording.observe import u32, worn_archives
 from bowlharness.recording.recorder import Recorder
-from bowlharness.target import Capability, Target
+from bowlharness.target import Capability, Target, TargetError
 
 DONE = "done"
 FAILED = "failed"
@@ -27,6 +28,7 @@ class Phase(StrEnum):
     PAUSE = "pause"
     WORLD = "world"
     SLOT = "slot"
+    CONFIRM = "confirm"
     WARPING = "warping"
     CHEATS = "cheats"
     MAIN_MENU = "main menu"
@@ -78,7 +80,8 @@ class Navigator:
     game's count of them and the code by its bit in the cheat mask. A code that doesn't take is entered again from a
     cleared history, up to the profile's resend limit. B leaves Options as soon as the codes are in. From the step it
     goes to the next through the pause menu: Start, the world, the slot, then A to select the task and confirm it, once
-    the menu has become active. Each press is confirmed by a global the game changes. A press the game didn't take is
+    the menu has become active, each A once the menu has counted the last. Each press is confirmed by a value the game
+    changes. A press the game didn't take is
     sent again: Start up to the profile's resend limit, and a press in a menu, which ignores input for a while after it
     opens or after Options closes, until the menu's ready time has passed. Since A is the one press that does harm in
     Options, the As go only after a press in the pause menu has been confirmed since Options closed; a cursor already on
@@ -137,6 +140,7 @@ class Navigator:
         self._confirm: tuple[int, int] | None = None
         self._exit: tuple[int, int] | None = None
         self._retries = 0
+        self._accepted = 0
         self.warp_retries = 0
         self._quiet = 0
         self._signal = ""
@@ -175,7 +179,7 @@ class Navigator:
             return
         if event == "scene_init":
             self._scene_init()
-        elif event == "scene_exit" and self._phase is Phase.WARPING:
+        elif event == "scene_exit" and self._phase in (Phase.CONFIRM, Phase.WARPING):
             self._exit = (self._recorder.frame(), self._polls)
         elif event == "players_done" and self._phase is Phase.READY:
             self._players_frame = self._recorder.frame()
@@ -194,6 +198,8 @@ class Navigator:
                 self._world()
             case Phase.SLOT:
                 self._slot()
+            case Phase.CONFIRM:
+                self._accept()
             case Phase.WARPING:
                 self._warping()
             case Phase.CHEATS:
@@ -218,18 +224,19 @@ class Navigator:
     def _scene_init(self) -> None:
         if self._phase is Phase.MAIN_MENU and self._recorder.scene == self._profile.boot_scene:
             return
-        if self._phase not in (Phase.LOADING, Phase.WARPING, Phase.MAIN_MENU) or (
+        if self._phase not in (Phase.LOADING, Phase.CONFIRM, Phase.WARPING, Phase.MAIN_MENU) or (
             self._recorder.scene != self._request.steps[self._index].scene
         ):
             self._fail("scene change")
             return
-        if self._phase is Phase.WARPING and self._confirm and self._exit:
-            self._log_navigation("confirm", "a", self._confirm, self._exit)
+        if self._phase in (Phase.CONFIRM, Phase.WARPING) and self._confirm and self._exit:
+            self._log_navigation("warp", "a", self._confirm, self._exit)
         worn = {archive for archive in worn_archives(self._target.read, self._profile.costumes).values() if archive}
         if worn != set(self._request.steps[self._index].costumes):
             self._fail("costume mismatch")
             return
         self._phase = Phase.READY
+        self._pending = None
         self._players_frame = None
         self._since = None
         self._undrawn = False
@@ -421,12 +428,51 @@ class Navigator:
             self._retries = 0
             self._quiet = 0
             self._exit = None
-            for _ in range(self._profile.navigation.confirm_presses):
-                self._press("a")
-            self._phase = Phase.WARPING
+            self._accepted = 0
+            self._phase = Phase.CONFIRM
+            self._accept()
             return
         button = "right" if slot < target else "left"
         self._begin("slot", button, navigation.menu_slot, lambda now: now != slot, patient=True)
+
+    def _accept(self) -> None:
+        """Presses A to select the task and confirm its warp, each A once the menu has counted the one before."""
+        navigation = self._profile.navigation
+        assert self._confirm is not None
+        if self._polls - self._confirm[1] >= navigation.warp_polls:
+            self._fail("stalled")
+            return
+        if self._read(self._profile.globals.game_mode) != navigation.modes.pause_menu:
+            self._pending = None
+            self._phase = Phase.WARPING
+            return
+        if self._pending is not None:
+            if not self._confirmed():
+                return
+            self._accepted += 1
+            if self._accepted == navigation.confirm_presses:
+                self._phase = Phase.WARPING
+                return
+        if (screen := self._pause_screen()) is None:
+            self._fail("stalled")
+            return
+        accepted = screen + navigation.screens.accepted
+        before = self._read(accepted)
+        self._begin("confirm", "a", accepted, lambda now: now != before, patient=True)
+
+    def _pause_screen(self) -> int | None:
+        """The pause menu's screen, found by its name among those around the active one, nearest first, or ``None``.
+
+        A place that can't be read holds no screen.
+        """
+        screens = self._profile.navigation.screens
+        active = self._read(self._profile.navigation.menu_active)
+        for step in sorted(range(-screens.reach, screens.reach + 1), key=abs):
+            screen = (active + step * screens.stride) & 0xFFFFFFFF
+            with suppress(TargetError):
+                if self._read(screen + screens.name) == screens.pause_menu:
+                    return screen
+        return None
 
     def _warping(self) -> None:
         """Waits for the warp to begin, pressing A again only after the time it normally takes has passed."""

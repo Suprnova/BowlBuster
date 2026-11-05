@@ -15,6 +15,7 @@ LAYER_OBJECTS = 0x4800
 SCENE_OBJECT = 0x5000
 SEQUENCES = 0x7000
 PAUSE_MENU = 0xB94EE0
+OTHER_SCREEN = 0x12345678
 BUGCHECK_RVAS = (0x94B0, 0x9442)
 
 
@@ -23,7 +24,13 @@ def _tag(text: str) -> bytes:
     return text.encode("ascii")[::-1]
 
 
-COMPACT = replace(XBOX_NTSC_U, static_range=(0x8000, 0x8040))
+COMPACT = replace(
+    XBOX_NTSC_U,
+    static_range=(0x8000, 0x8040),
+    input=replace(XBOX_NTSC_U.input, hold_polls=6, release_polls=6),
+)
+"""The Xbox profile with a small static range, and presses held and released for 6 polls, which the scripts' timing
+assumes."""
 PAD_RECORD = COMPACT.input.record_base
 PAD_STATE = COMPACT.input.state_base
 
@@ -65,6 +72,8 @@ class ScriptedGame:
         self.cursor = (0, 0)
         self.menu_lag = 0
         self.held = 0
+        self.confirms = 0
+        self.active_screen = PAUSE_MENU
         self.main_menu_ready = False
         self._menu: dict[int, bytes] = {}
 
@@ -255,7 +264,10 @@ class ScriptedGame:
             pad.state_base + port * pad.state_size: pad_state(physical, profile),
             profile.globals.active_port: bytes(1),
             profile.globals.game_mode: struct.pack("<I", mode),
-            navigation.menu_active: struct.pack("<I", PAUSE_MENU if active else 0),
+            navigation.menu_active: struct.pack("<I", self.active_screen if active else 0),
+            self.active_screen + navigation.screens.name: struct.pack("<I", OTHER_SCREEN),
+            PAUSE_MENU + navigation.screens.name: struct.pack("<I", navigation.screens.pause_menu),
+            self.confirm_count: struct.pack("<I", self.confirms),
             profile.globals.play_state: struct.pack("<I", state),
             navigation.control_off: struct.pack("<I", control_off),
             navigation.render_gate: bytes([gate]),
@@ -312,6 +324,21 @@ class ScriptedGame:
         """A wait for port 0's controller state to hold ``mask``."""
         pad = self._profile.input
         return Wait(PAD_STATE, mask, polls, then or {}, length=pad.state_size, decode=pad.held)
+
+    @property
+    def confirm_count(self) -> int:
+        """Where the pause menu's screen counts the As of a task's selection and warp confirmation."""
+        return PAUSE_MENU + self._profile.navigation.screens.accepted
+
+    def await_confirm(self, *, mode: int | None = None, after: int | None = None, polls: int = 30) -> None:
+        """A poll that repeats until the harness presses A, which the pause menu then counts, and the polls that
+        finish the press. The game is in ``mode`` until the press arrives and in ``after`` from then on."""
+        pad = self._profile.input
+        counted = {self.confirm_count: struct.pack("<I", self.confirms + 1)}
+        self.pad_poll(mode=mode, wait=self.pad_wait(pad.buttons.a, polls, counted))
+        self.confirms += 1
+        for _ in range(pad.hold_polls - 1 + pad.release_polls):
+            self.pad_poll(mode=mode if after is None else after)
 
     def await_chord(self, *buttons: str, polls: int = 30) -> None:
         """A poll that repeats until the harness holds ``buttons``; the pad record shows them held after it."""

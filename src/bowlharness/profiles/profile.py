@@ -361,6 +361,29 @@ class GameModes:
 
 
 @dataclass(frozen=True)
+class MenuScreens:
+    """The menu's screens: objects a fixed distance apart, which the active-menu pointer points into.
+
+    The pointer holds whichever screen is active, and for a while after Options closes that is still Options, so the
+    pause menu's screen is found by its name.
+
+    Attributes:
+        stride: The distance between two screens.
+        name: Where a screen holds the hash of its name.
+        pause_menu: The pause menu's name hash.
+        accepted: Where the pause menu's screen holds the dword that changes each time the task selection and warp
+            confirmation take an A.
+        reach: How many screens either side of the active one the pause menu's may be.
+    """
+
+    stride: int
+    name: int
+    pause_menu: int
+    accepted: int
+    reach: int
+
+
+@dataclass(frozen=True)
 class Cheats:
     """How the cheat entry and its table are read.
 
@@ -435,8 +458,11 @@ class Navigation:
             by 2 when it closes.
         action_polls: How many polls a press has to show its effect before it is sent again.
         confirm_presses: How many times A is pressed to select a task and confirm its warp.
-        warp_wait_polls: How many polls a confirmed warp normally takes to begin after the last A. Nothing in the game
-            says whether an A was taken, so this is the one wait that has no signal.
+        screens: The menu's screens, through which each A of the warp's confirmation is confirmed. Each A is sent
+            once the last has been taken, since each step of the confirmation ignores input for a while after it
+            begins.
+        warp_wait_polls: How many polls a warp normally takes to begin after its last A is counted; after that long
+            without a load, A is pressed again.
         warp_polls: How many polls the confirmed warp has to begin loading.
     """
 
@@ -460,6 +486,7 @@ class Navigation:
     menu_screens: int
     action_polls: int
     confirm_presses: int
+    screens: MenuScreens
     warp_wait_polls: int
     warp_polls: int
 

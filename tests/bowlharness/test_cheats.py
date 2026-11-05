@@ -31,7 +31,7 @@ def trip(game: ScriptedGame, cursor: tuple[int, int], scene: str, counter: int, 
     """The cursor's press, A three times, and the load of ``scene`` wearing what ``cheats`` enable."""
     game.await_press("down", cursor=cursor, mode=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU)
+        game.await_confirm(mode=PAUSE_MENU)
     game.scene_exit(old, counter - 1)
     game.scene_init(scene, counter, cheats=cheats)
     game.players_done()
@@ -261,7 +261,7 @@ def test_a_cursor_already_on_the_task_after_options_is_moved_off_and_back_before
     game.await_press("down", cursor=(1, 0), mode=PAUSE_MENU)
     game.await_press("up", cursor=(0, 0), mode=PAUSE_MENU)
     for _ in range(3):
-        game.await_press("a", mode=PAUSE_MENU)
+        game.await_confirm(mode=PAUSE_MENU)
     game.scene_exit("ORIG", 1)
     level(game, "ORIG", 2)
     steps = [{"scene": "ORIG", "cheats": ["all-tasks"]}, {"scene": "ORIG", "menu": {"world": 1, "slot": 1}}]

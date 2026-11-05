@@ -46,7 +46,7 @@ def test_a_request_gets_the_documented_defaults() -> None:
     request = parse_request(document(), XBOX_NTSC_U)
 
     assert request.to_json()["observe"] == {"heap_events": "all", "cutoff_captures": "none", "capture_budget": None}
-    assert request.to_json()["input"] == {"hold": 6, "release": 6}
+    assert request.to_json()["input"] == {"hold": 1, "release": 1}
 
 
 def test_a_request_is_read_with_its_steps() -> None:

@@ -34,10 +34,10 @@ Before asking a person to run one, say how long it should take. Measured on the 
 | Run | Wall time |
 |---|---|
 | New game to `BB02`, one cheat, nothing logged | about 50 s |
-| The six-step acceptance route, nothing logged | about 100 s (40 s of game time) |
-| The six-step acceptance route, every heap event and cutoff capture | about 7 min (80 s of game time) |
+| The six-step acceptance route, nothing logged | about 80 s |
+| The six-step acceptance route, every heap event and cutoff capture | about 5.5 min |
 | Each visit to the Options menu, on top | about 10 s for a 16-press entry, 7 s for an 8-press one |
-| A landing or a control at its target, nothing logged | the route to it, plus its windows (20 s of render and 15 s of reset by default) |
+| A landing or a control at its target, nothing logged | the route to it, plus its windows (20 s of render and 15 s of reset by default); about 100 s at `B101`'s first visit, whose own reset ends the render window after about 10 s |
 
 ## Recording
 
