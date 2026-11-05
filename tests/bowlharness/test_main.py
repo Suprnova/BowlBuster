@@ -1,6 +1,19 @@
 import pytest
 
-from bowlharness.__main__ import SOURCE_ROOT, find_gdb, gdb_command, split_gdb
+from bowlharness.__main__ import SOURCE_ROOT, find_gdb, gdb_command, run_gdb, split_gdb
+
+
+class InterruptedGdb:
+    """A gdb whose first wait a person's Ctrl-C interrupts, and which then exits with code 3."""
+
+    def __init__(self, command: list[str]) -> None:
+        self.waits = 0
+
+    def wait(self) -> int:
+        self.waits += 1
+        if self.waits == 1:
+            raise KeyboardInterrupt
+        return 3
 
 
 def test_gdb_command_imports_the_harness_and_runs_the_bowl_command() -> None:
@@ -68,3 +81,9 @@ def test_without_a_gdb_argument_the_arguments_are_the_bowl_commands() -> None:
 def test_a_gdb_argument_needs_a_path() -> None:
     with pytest.raises(SystemExit, match="--gdb needs the path"):
         split_gdb(["drive", "--gdb"])
+
+
+def test_a_ctrl_c_is_left_to_gdb_and_its_exit_code_is_returned(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("subprocess.Popen", InterruptedGdb)
+
+    assert run_gdb(["gdb"]) == 3

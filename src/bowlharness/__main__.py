@@ -50,11 +50,24 @@ def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:
     ]
 
 
+def run_gdb(command: list[str]) -> int:
+    """Runs gdb to its end and returns its exit code.
+
+    A person's Ctrl-C reaches this process as well as gdb, and it is gdb's: it pauses the run, so it ends no wait.
+    """
+    process = subprocess.Popen(command)
+    while True:
+        try:
+            return process.wait()
+        except KeyboardInterrupt:
+            continue
+
+
 def main() -> int:
     named, arguments = split_gdb(sys.argv[1:])
     if not arguments:
         raise SystemExit("usage: python -m bowlharness [--gdb <gdb>] <bowl command> [arguments]")
-    return subprocess.call(gdb_command(find_gdb(named), arguments))
+    return run_gdb(gdb_command(find_gdb(named), arguments))
 
 
 if __name__ == "__main__":
