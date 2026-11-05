@@ -1,6 +1,7 @@
 """The arguments of the ``bowl`` console commands, parsed without gdb."""
 
 import argparse
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
@@ -14,7 +15,7 @@ class LaunchArguments:
 
     Attributes:
         out: The folder for the session's recordings; it must not exist.
-        xemu: The emulator to start, or ``None`` when attaching to a running one.
+        xemu: The emulator to start (``--xemu``, or else ``BOWL_XEMU``), or ``None`` when attaching to a running one.
         config: The emulator's configuration file, or ``None`` for its default.
         port: The port of the emulator's debugger stub.
         attach: Whether to attach to a running emulator instead of starting one.
@@ -90,19 +91,30 @@ def _launch_parser(prog: str, run_name: str) -> _Parser:
     return parser
 
 
+def _emulator(found: argparse.Namespace) -> tuple[Path | None, int, bool]:
+    """The emulator to start (``--xemu``, else ``BOWL_XEMU``) or the stub to attach to, the port, and which."""
+    if found.attach is not None:
+        if found.xemu is not None:
+            raise ValueError("--xemu and --attach are alternatives")
+        return None, found.attach, True
+    xemu = found.xemu or (Path(named) if (named := os.environ.get("BOWL_XEMU")) else None)
+    if xemu is None:
+        raise ValueError(
+            "give --xemu, or set BOWL_XEMU, to start an emulator, or --attach PORT to attach to a running one"
+        )
+    return xemu, found.port, False
+
+
 def _launch(found: argparse.Namespace) -> LaunchArguments:
     if not found.out.is_absolute():
         raise ValueError(f"--out must be an absolute path, got {found.out}")
-    if found.attach is None and found.xemu is None:
-        raise ValueError("give --xemu to start an emulator, or --attach PORT to attach to a running one")
-    if found.attach is not None and found.xemu is not None:
-        raise ValueError("--xemu and --attach are alternatives")
+    xemu, port, attach = _emulator(found)
     return LaunchArguments(
         out=found.out,
-        xemu=found.xemu,
+        xemu=xemu,
         config=found.config,
-        port=found.attach if found.attach is not None else found.port,
-        attach=found.attach is not None,
+        port=port,
+        attach=attach,
         liveness=found.liveness,
         name=found.name,
     )
@@ -142,7 +154,7 @@ class QueueArguments:
     Attributes:
         store: The store's folder.
         instance: The instance's name, which its claims carry.
-        xemu: The emulator to start, or ``None`` when attaching to a running one.
+        xemu: The emulator to start (``--xemu``, or else ``BOWL_XEMU``), or ``None`` when attaching to a running one.
         config: The emulator's configuration file, or ``None`` for its default.
         port: The port of the emulator's debugger stub.
         attach: Whether to attach to a running emulator instead of starting one.
@@ -180,17 +192,14 @@ def parse_queue_arguments(arguments: list[str]) -> QueueArguments:
     found = parser.parse_args(arguments)
     if not found.store.is_absolute():
         raise ValueError(f"--store must be an absolute path, got {found.store}")
-    if found.attach is None and found.xemu is None:
-        raise ValueError("give --xemu to start an emulator, or --attach PORT to attach to a running one")
-    if found.attach is not None and found.xemu is not None:
-        raise ValueError("--xemu and --attach are alternatives")
+    xemu, port, attach = _emulator(found)
     return QueueArguments(
         store=found.store,
         instance=found.instance,
-        xemu=found.xemu,
+        xemu=xemu,
         config=found.config,
-        port=found.attach if found.attach is not None else found.port,
-        attach=found.attach is not None,
+        port=port,
+        attach=attach,
         liveness=found.liveness,
         place=found.place,
         recordings=found.recordings,

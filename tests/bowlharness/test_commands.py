@@ -12,6 +12,12 @@ from bowlharness.session.commands import (
 OUT = str(Path.cwd() / "recordings-test")
 
 
+@pytest.fixture(autouse=True)
+def no_named_emulator(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tests name their emulator, or set ``BOWL_XEMU`` themselves, whatever the shell running them has."""
+    monkeypatch.delenv("BOWL_XEMU", raising=False)
+
+
 def parse(*arguments: str):
     return parse_record_arguments(list(arguments), "run")
 
@@ -105,3 +111,33 @@ def test_a_queue_takes_its_store_and_instance_and_the_launch_arguments() -> None
 def test_a_queue_store_is_an_absolute_path() -> None:
     with pytest.raises(ValueError, match="--store must be an absolute path"):
         parse_queue_arguments(["--store", "store", "--instance", "inst3", "--xemu", "xemu.exe"])
+
+
+def test_the_emulator_named_in_bowl_xemu_is_started_when_none_is_given(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOWL_XEMU", "D:/xemu/xemu.exe")
+
+    arguments = parse("--out", OUT)
+
+    assert (arguments.xemu, arguments.attach) == (Path("D:/xemu/xemu.exe"), False)
+
+
+def test_the_emulator_given_wins_over_bowl_xemu(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOWL_XEMU", "D:/xemu/xemu.exe")
+
+    assert parse("--out", OUT, "--xemu", "other.exe").xemu == Path("other.exe")
+
+
+def test_attaching_ignores_bowl_xemu(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOWL_XEMU", "D:/xemu/xemu.exe")
+
+    assert (parse("--out", OUT, "--attach", "1234").xemu, parse("--out", OUT, "--attach", "1234").attach) == (
+        None,
+        True,
+    )
+
+
+def test_no_emulator_and_no_bowl_xemu_says_what_to_do(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("BOWL_XEMU", raising=False)
+
+    with pytest.raises(ValueError, match="give --xemu, or set BOWL_XEMU"):
+        parse("--out", OUT)

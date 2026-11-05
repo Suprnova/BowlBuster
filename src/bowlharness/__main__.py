@@ -1,4 +1,4 @@
-"""Starts gdb with the harness loaded: ``python -m bowlharness <bowl command> [arguments]``."""
+"""Starts gdb with the harness loaded: ``python -m bowlharness [--gdb <gdb>] <bowl command> [arguments]``."""
 
 import os
 import shutil
@@ -9,13 +9,25 @@ from pathlib import Path
 SOURCE_ROOT = Path(__file__).resolve().parent.parent
 
 
-def find_gdb() -> str:
-    """Finds the gdb to host the harness: the one ``BOWL_GDB`` names, or else the one on ``PATH``."""
+def find_gdb(named: str | None = None) -> str:
+    """Finds the gdb to host the harness: the one ``--gdb`` names, else ``BOWL_GDB``, else the one on ``PATH``."""
+    if named:
+        return named
     if configured := os.environ.get("BOWL_GDB"):
         return configured
     if found := shutil.which("gdb"):
         return found
-    raise SystemExit("gdb not found: put a gdb with Python scripting on PATH, or set BOWL_GDB to it")
+    raise SystemExit("gdb not found: give --gdb <gdb>, set BOWL_GDB to it, or put a gdb with Python scripting on PATH")
+
+
+def split_gdb(arguments: list[str]) -> tuple[str | None, list[str]]:
+    """Takes ``--gdb <gdb>`` out of the arguments, wherever it is: the gdb it names, and the bowl command's."""
+    if "--gdb" not in arguments:
+        return None, arguments
+    index = arguments.index("--gdb")
+    if index + 1 == len(arguments):
+        raise SystemExit("--gdb needs the path of a gdb")
+    return arguments[index + 1], arguments[:index] + arguments[index + 2 :]
 
 
 def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:
@@ -39,9 +51,10 @@ def gdb_command(gdb: str, bowl_args: list[str]) -> list[str]:
 
 
 def main() -> int:
-    if not sys.argv[1:]:
-        raise SystemExit("usage: python -m bowlharness <bowl command> [arguments]")
-    return subprocess.call(gdb_command(find_gdb(), sys.argv[1:]))
+    named, arguments = split_gdb(sys.argv[1:])
+    if not arguments:
+        raise SystemExit("usage: python -m bowlharness [--gdb <gdb>] <bowl command> [arguments]")
+    return subprocess.call(gdb_command(find_gdb(named), arguments))
 
 
 if __name__ == "__main__":

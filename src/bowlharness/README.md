@@ -7,9 +7,12 @@ asks for one.
 ## Setting up
 
 - [uv](https://docs.astral.sh/uv/) and `uv sync` at the repository root.
-- A gdb for the harness to run inside, found through the `BOWL_GDB` environment variable or else `PATH`. It needs
-  Python scripting with an embedded Python of the version in `.python-version`, because the harness can't see a virtual
-  environment from inside gdb, and the remote protocol, to talk to xemu's debugger stub as an x86 target.
+- A gdb for the harness to run inside: `--gdb <gdb.exe>` before the command
+  (`uv run python -m bowlharness --gdb <gdb.exe> drive ...`), or else the `BOWL_GDB` environment variable, or else the
+  one on `PATH`. It needs Python scripting with an embedded Python of the version in `.python-version`, because the
+  harness can't see a virtual environment from inside gdb, and the remote protocol, to talk to xemu's debugger stub as
+  an x86 target. On Windows the MSYS2 UCRT64 gdb (`C:\msys64\ucrt64\bin\gdb.exe`) has both.
+- The emulator, given with `--xemu <xemu.exe>` or else the `BOWL_XEMU` environment variable.
 - xemu, with a controller bound to port 1 in the configuration you record with. Without one the game's first frame of
   play crashes in the input read, so the harness refuses to start.
 - Close any running xemu first: the harness starts its own, which holds the storage image.

@@ -1,6 +1,6 @@
 import pytest
 
-from bowlharness.__main__ import SOURCE_ROOT, find_gdb, gdb_command
+from bowlharness.__main__ import SOURCE_ROOT, find_gdb, gdb_command, split_gdb
 
 
 def test_gdb_command_imports_the_harness_and_runs_the_bowl_command() -> None:
@@ -49,3 +49,22 @@ def test_gdb_is_told_not_to_page_or_ask() -> None:
     command = gdb_command("gdb", ["record"])
 
     assert [arg for arg in command if arg.startswith("set ")] == ["set pagination off", "set confirm off"]
+
+
+def test_the_gdb_given_on_the_command_line_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("BOWL_GDB", "named-gdb")
+
+    assert find_gdb("given-gdb") == "given-gdb"
+
+
+def test_the_gdb_argument_is_taken_out_wherever_it_is() -> None:
+    assert split_gdb(["drive", "--gdb", "C:/gdb.exe", "--out", "x"]) == ("C:/gdb.exe", ["drive", "--out", "x"])
+
+
+def test_without_a_gdb_argument_the_arguments_are_the_bowl_commands() -> None:
+    assert split_gdb(["drive", "--out", "x"]) == (None, ["drive", "--out", "x"])
+
+
+def test_a_gdb_argument_needs_a_path() -> None:
+    with pytest.raises(SystemExit, match="--gdb needs the path"):
+        split_gdb(["drive", "--gdb"])
