@@ -80,6 +80,20 @@ def test_a_press_the_menu_did_not_take_is_sent_again(tmp_path: Path) -> None:
     assert (session.result, len(starts) >= 2) == ("done", True)
 
 
+def test_a_resent_press_is_logged_as_sent_when_its_last_send_was(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    polls(game, 20)
+    warp(game, [], "ORIG", 2, "ORIG")
+
+    _, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    first_start = next(row for row in manifest["input_ledger"] if row["button"] == "start")
+    pause = next(e for e in driven_events(tmp_path) if e["event"] == "navigation")
+    assert pause["sent"]["frame"] > first_start["sent_frame"] and pause["sent"]["poll"] > first_start["sent_poll"]
+
+
 def test_a_fourth_miss_fails_the_step_as_stalled(tmp_path: Path) -> None:
     game = ScriptedGame(FAST)
     game.menu_scenes({(0, 0): "ORIG"})

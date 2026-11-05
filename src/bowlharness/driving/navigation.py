@@ -364,7 +364,7 @@ class Navigator:
                 self._fail("stalled")
             else:
                 pending.attempts += 1
-                pending.queued_poll = self._polls
+                pending.queued_poll, pending.queued_frame = self._polls, self._recorder.frame()
                 self._press(pending.button)
         return False
 
