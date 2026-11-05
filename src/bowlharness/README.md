@@ -1,8 +1,9 @@
 # bowlharness
 
-Records a run of the game under [xemu](https://xemu.app), as a person plays it. It only observes: it writes nothing to
-the guest's memory, and its recording says so. The one thing it can give the game is a button press, when a person
-asks for one.
+Records runs of the game under [xemu](https://xemu.app): played by a person, or driven along a request's route, with a
+landing test or a control at its target. A recording and a record run write nothing to the guest's memory; a landing
+writes only the stale pointer and what goes with it, and every write is in the run's write ledger. Input is button
+presses, which touch no game state.
 
 ## Setting up
 
@@ -16,6 +17,27 @@ asks for one.
 - xemu, with a controller bound to port 1 in the configuration you record with. Without one the game's first frame of
   play crashes in the input read, so the harness refuses to start.
 - Close any running xemu first: the harness starts its own, which holds the storage image.
+
+## How long a run takes
+
+Live runs are slow, and what a run observes decides how slow. Heap logging stops the guest at every allocation of
+every logged scene, which makes it about ten times slower, and each capture copies megabytes. Observe only what the run
+is for:
+
+- A recording something will replay (a recipe, the survey) needs `heap_events: all` and `cutoff_captures: all`:
+  `place` replay-validates every load of a recipe, so a load logged without its heap events fails it.
+- Anything else, such as a check of navigation, a result, a landing or a control, needs `heap_events: none` and
+  `cutoff_captures: none`, and a small `capture_budget`.
+
+Before asking a person to run one, say how long it should take. Measured on the official disc:
+
+| Run | Wall time |
+|---|---|
+| New game to `BB02`, one cheat, nothing logged | about 50 s |
+| The six-step acceptance route, nothing logged | about 100 s (40 s of game time) |
+| The six-step acceptance route, every heap event and cutoff capture | about 7 min (80 s of game time) |
+| Each visit to the Options menu, on top | about 10 s for a 16-press entry, 7 s for an 8-press one |
+| A landing or a control at its target, nothing logged | the route to it, plus its windows (20 s of render and 15 s of reset by default) |
 
 ## Recording
 

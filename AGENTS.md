@@ -56,4 +56,5 @@ Warnings are errors, and `dotnet format --verify-no-changes`, `ruff check` and `
 - **Clean room.** The repository holds no game files or game data. Names, addresses, sizes and other dimensions are fine; extracted content is not.
 - **Licensing.** Code is MIT. The catalog is CC0, and each of its files carries an SPDX header. Run `reuse lint` before committing license changes.
 - **AI use.** Contributions, including those made by agents, follow the [AI contributions policy](AI_POLICY.md).
+- **Harness runs are slow.** Heap logging and captures slow a live run about tenfold, so a request asks for them only when the run is a recording something will replay; anything else logs no heap events and takes no cutoff captures. When you ask a person to run the harness, say how long the run should take. `src/bowlharness/README.md`, "How long a run takes", has the measurements.
 - Keep documentation, comments, and this file current with the code.
