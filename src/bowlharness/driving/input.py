@@ -41,15 +41,15 @@ class _Press:
 
 
 class InputDriver:
-    """Gives the game buttons by ORing them into the button dword its pad read has just filled.
+    """Gives the game buttons by setting them in the controller state its pad read has just copied.
 
-    The game rebuilds that dword at every poll, so a press touches no game state: it goes in the input ledger and the
-    ``press`` events, never in the write ledger. A chord (:meth:`hold_chord`) is held at every poll until it is
-    released, across the presses queued while it is held. A press is held for its polls and released for the profile's
-    ``release_polls`` before the next begins, and a scene init cancels a press in progress and drops the queued ones,
-    since no press is held across a load. A poll is a stop at the pad read of the active pad that read a pad; every such
-    stop counts, except one that finds the dword holding what the driver wrote at the previous stop, which is the
-    debugger reporting the same poll twice.
+    The game copies that state afresh at every poll and builds its button dword from it, so a press touches no game
+    state: it goes in the input ledger and the ``press`` events, never in the write ledger. A chord
+    (:meth:`hold_chord`) is held at every poll until it is released, across the presses queued while it is held. A
+    press is held for its polls and released for the profile's ``release_polls`` before the next begins, and a scene
+    init cancels a press in progress and drops the queued ones, since no press is held across a load. A poll is a stop
+    at the pad read of the active pad; every such stop counts, except one that finds the state holding what the driver
+    wrote at the previous stop, which is the debugger reporting the same poll twice.
 
     Args:
         target: The guest to give input to.
@@ -83,7 +83,7 @@ class InputDriver:
         self._current: _Press | None = None
         self._person: _Press | None = None
         self._chord: _Press | None = None
-        self._written: tuple[int, int] | None = None
+        self._written: tuple[int, bytes] | None = None
         self.polls = 0
 
     def arm(self) -> None:
@@ -138,23 +138,24 @@ class InputDriver:
 
     def _poll(self, hit: Hit) -> None:
         profile = self._profile.input
-        active = struct.unpack("b", self._target.read(self._profile.globals.active_port, 1))[0]
-        if hit.result == 0 or hit.words[profile.port_word] != active:
+        port = hit.words[profile.port_word]
+        if port != struct.unpack("b", self._target.read(self._profile.globals.active_port, 1))[0]:
             return
-        buffer = hit.words[profile.buffer_word]
-        physical = u32(self._target.read, buffer)
-        if self._written == (buffer, physical):
+        address = profile.state_base + port * profile.state_size
+        state = self._target.read(address, profile.state_size)
+        if self._written == (address, state):
             return
         self._written = None
         self.polls += 1
         self._recorder.count_poll()
+        physical = profile.held(state)
         if self._watch_person:
             self._follow_person(physical)
-        self._advance(hit, buffer, physical)
+        self._advance(port, address, state, physical)
         if self._on_poll:
             self._on_poll()
 
-    def _advance(self, hit: Hit, buffer: int, physical: int) -> None:
+    def _advance(self, port: int, address: int, state: bytes, physical: int) -> None:
         value = physical
         if (chord := self._chord) is not None:
             if chord.held == 0:
@@ -164,22 +165,23 @@ class InputDriver:
         if self._current is None and self._queue:
             self._current = self._queue.popleft()
         if (press := self._current) is not None:
-            value |= self._step(hit, press)
+            value |= self._step(port, press)
         if value != physical:
-            self._target.write(buffer, struct.pack("<I", value))
-            self._written = (buffer, value)
+            written = self._profile.input.holding(state, value)
+            self._target.write(address, written)
+            self._written = (address, written)
 
-    def _step(self, hit: Hit, press: _Press) -> int:
+    def _step(self, port: int, press: _Press) -> int:
         """Moves a press one poll on and returns the buttons it gives at this poll."""
         if press.held < press.hold:
             if press.held == 0:
                 press.context = self._context()
             else:
-                self._look_for_the_edge(hit, press)
+                self._look_for_the_edge(port, press)
             press.held += 1
             return press.mask
         if press.released == 0:
-            self._look_for_the_edge(hit, press)
+            self._look_for_the_edge(port, press)
             self._recorder.log_press({**press.row, "cancelled": False})
         press.released += 1
         if press.released >= self._release:
@@ -196,10 +198,10 @@ class InputDriver:
             "sent_frame": self._recorder.frame(),
         }
 
-    def _look_for_the_edge(self, hit: Hit, press: _Press) -> None:
+    def _look_for_the_edge(self, port: int, press: _Press) -> None:
         """Notes the frame the game took a press: the pad record shows the previous poll's pressed edge."""
         profile = self._profile.input
-        record = hit.words[profile.record_word]
+        record = profile.record_base + port * profile.record_stride
         if press.taken is None and u32(self._target.read, record + profile.pressed_offset) & press.mask:
             press.taken = self._recorder.frame()
 

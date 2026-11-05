@@ -13,8 +13,6 @@ ARCHIVE = 0x4000
 ARRAY = 0x4400
 LAYER_OBJECTS = 0x4800
 SCENE_OBJECT = 0x5000
-PAD_RECORD = 0x6000
-PAD_BUFFER = 0x6200
 SEQUENCES = 0x7000
 PAUSE_MENU = 0xB94EE0
 BUGCHECK_RVAS = (0x94B0, 0x9442)
@@ -26,6 +24,14 @@ def _tag(text: str) -> bytes:
 
 
 COMPACT = replace(XBOX_NTSC_U, static_range=(0x8000, 0x8040))
+PAD_RECORD = COMPACT.input.record_base
+PAD_STATE = COMPACT.input.state_base
+
+
+def pad_state(buttons: int = 0, profile: PlatformProfile = COMPACT) -> bytes:
+    """Port 0's controller state holding ``buttons``, a mask of the game's button dword."""
+    return profile.input.holding(bytes(profile.input.state_size), buttons)
+
 
 ARCHIVES = [(_tag("PLSB"), 0, 0), (_tag("PLSD"), 0, 0), (_tag("PLPB"), 1, 0), (_tag("PLP1"), 1, 0)]
 CHEAT_ARCHIVES = [
@@ -218,7 +224,6 @@ class ScriptedGame:
         physical: int = 0,
         *,
         port: int = 0,
-        result: int = 1,
         pressed: int = 0,
         mode: int | None = None,
         state: int = 1,
@@ -227,7 +232,8 @@ class ScriptedGame:
         movie: int = 2,
         wait: Wait | None = None,
     ) -> None:
-        """A poll of the pad: the button dword holds ``physical`` and the pad record shows ``pressed`` as the edge.
+        """A poll of ``port``'s pad: its controller state holds ``physical`` and the pad record shows ``pressed`` as
+        the edge.
 
         The game is in play unless ``mode`` says otherwise, and the record shows the buttons the game has seen held
         (:attr:`held`). A ``wait`` makes the poll repeat until a press arrives.
@@ -246,7 +252,7 @@ class ScriptedGame:
         memory = {
             pad.active_record: struct.pack("<I", PAD_RECORD),
             PAD_RECORD: bytes(record),
-            PAD_BUFFER: struct.pack("<I", physical),
+            pad.state_base + port * pad.state_size: pad_state(physical, profile),
             profile.globals.active_port: bytes(1),
             profile.globals.game_mode: struct.pack("<I", mode),
             navigation.menu_active: struct.pack("<I", PAUSE_MENU if active else 0),
@@ -258,8 +264,8 @@ class ScriptedGame:
             navigation.menu_slot: struct.pack("<I", self.cursor[1]),
             **self._menu,
         }
-        words = (PAD_RECORD, PAD_BUFFER, 0, 0, 0, port)
-        self._step(profile.points.pad_read.entry[0], words, eax=result, memory=memory, wait=wait)
+        words = (0, 0, 0, port, 0)
+        self._step(profile.points.pad_read.entry[0], words, memory=memory, wait=wait)
 
     def menu_scenes(self, rows: dict[tuple[int, int], str]) -> None:
         """The scenes the pause menu holds, by world and slot (both from 0), as the game fills its table at boot."""
@@ -296,17 +302,22 @@ class ScriptedGame:
                 navigation.menu_world: struct.pack("<I", cursor[0]),
                 navigation.menu_slot: struct.pack("<I", cursor[1]),
             }
-        self.pad_poll(mode=mode, wait=Wait(PAD_BUFFER, getattr(pad.buttons, button), polls, then))
+        self.pad_poll(mode=mode, wait=self.pad_wait(getattr(pad.buttons, button), polls, then))
         if cursor is not None:
             self.cursor = cursor
         for _ in range(pad.hold_polls - 1 + pad.release_polls):
             self.pad_poll(mode=mode if after is None else after)
 
+    def pad_wait(self, mask: int, polls: int, then: dict[int, bytes] | None = None) -> Wait:
+        """A wait for port 0's controller state to hold ``mask``."""
+        pad = self._profile.input
+        return Wait(PAD_STATE, mask, polls, then or {}, length=pad.state_size, decode=pad.held)
+
     def await_chord(self, *buttons: str, polls: int = 30) -> None:
         """A poll that repeats until the harness holds ``buttons``; the pad record shows them held after it."""
         pad = self._profile.input
         mask = sum(getattr(pad.buttons, button) for button in buttons)
-        self.pad_poll(mode=self._profile.navigation.modes.pause_menu, wait=Wait(PAD_BUFFER, mask, polls))
+        self.pad_poll(mode=self._profile.navigation.modes.pause_menu, wait=self.pad_wait(mask, polls))
         self.held = mask
 
     def enter_code(

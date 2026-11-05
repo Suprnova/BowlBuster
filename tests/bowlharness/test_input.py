@@ -1,9 +1,8 @@
 import json
-import struct
 from pathlib import Path
 
 import pytest
-from scripted import PAD_BUFFER, ScriptedGame
+from scripted import PAD_STATE, ScriptedGame, pad_state
 
 from bowlharness.backends.mock import MockTarget
 from bowlharness.driving.input import MANUAL, InputDriver
@@ -34,10 +33,6 @@ def manifest(recorder: Recorder, directory: Path) -> dict:
     return json.loads((directory / "manifest.json").read_text())
 
 
-def dword(mask: int) -> bytes:
-    return struct.pack("<I", mask)
-
-
 def test_a_press_is_held_for_six_polls_and_released_for_six(tmp_path: Path) -> None:
     game = ScriptedGame()
     polls(game, 20)
@@ -49,10 +44,10 @@ def test_a_press_is_held_for_six_polls_and_released_for_six(tmp_path: Path) -> N
 
     rows = manifest(recorder, tmp_path)["input_ledger"]
     assert [(row["button"], row["sent_poll"], row["polls"]) for row in rows] == [("a", 1, 6), ("b", 13, 6)]
-    assert target.writes == [(PAD_BUFFER, dword(BUTTONS.a))] * 6 + [(PAD_BUFFER, dword(BUTTONS.b))] * 6
+    assert target.writes == [(PAD_STATE, pad_state(BUTTONS.a))] * 6 + [(PAD_STATE, pad_state(BUTTONS.b))] * 6
 
 
-def test_the_only_writes_are_to_the_button_dword_while_a_press_is_held(tmp_path: Path) -> None:
+def test_the_only_writes_are_to_the_controller_state_while_a_press_is_held(tmp_path: Path) -> None:
     game = ScriptedGame()
     polls(game, 20)
     recorder, target, driver = start(game, tmp_path)
@@ -60,7 +55,7 @@ def test_the_only_writes_are_to_the_button_dword_while_a_press_is_held(tmp_path:
 
     target.run()
 
-    assert target.writes == [(PAD_BUFFER, dword(BUTTONS.start))] * 3
+    assert target.writes == [(PAD_STATE, pad_state(BUTTONS.start))] * 3
     assert manifest(recorder, tmp_path)["write_ledger"] == []
 
 
@@ -72,12 +67,11 @@ def test_a_press_is_added_to_the_physical_buttons(tmp_path: Path) -> None:
 
     target.run()
 
-    assert target.writes == [(PAD_BUFFER, dword(BUTTONS.l | BUTTONS.x))]
+    assert target.writes == [(PAD_STATE, pad_state(BUTTONS.l | BUTTONS.x))]
 
 
-def test_a_stop_that_read_no_pad_or_polled_another_port_is_left_alone(tmp_path: Path) -> None:
+def test_a_stop_that_polled_another_port_is_left_alone(tmp_path: Path) -> None:
     game = ScriptedGame()
-    game.pad_poll(result=0)
     game.pad_poll(port=1)
     _, target, driver = start(game, tmp_path)
     driver.press("a")
@@ -193,7 +187,7 @@ def test_a_stop_the_guest_is_held_at_gives_its_press_when_replayed(tmp_path: Pat
 
     recorder.replay_current_stop()
 
-    assert (target.writes, driver.polls) == ([(PAD_BUFFER, dword(BUTTONS.a))], 1)
+    assert (target.writes, driver.polls) == ([(PAD_STATE, pad_state(BUTTONS.a))], 1)
 
 
 def test_a_manual_press_marks_the_run_attended(tmp_path: Path) -> None:
@@ -261,7 +255,7 @@ def test_a_chord_is_held_at_every_poll_across_the_presses_queued_while_it_is_hel
     driver.release_chord()
 
     expected = [chord | BUTTONS.x] * 2 + [chord] * 6 + [chord | BUTTONS.y] * 2 + [chord] * 2
-    assert target.writes == [(PAD_BUFFER, dword(value)) for value in expected]
+    assert target.writes == [(PAD_STATE, pad_state(value)) for value in expected]
     chord_row = manifest(recorder, tmp_path)["input_ledger"][-1]
     assert (chord_row["button"], chord_row["mask"], chord_row["polls"], chord_row["cancelled"]) == (
         "l+r",

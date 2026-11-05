@@ -1,9 +1,8 @@
 import json
-import struct
 from pathlib import Path
 
 import pytest
-from scripted import PAD_BUFFER, ScriptedGame
+from scripted import PAD_STATE, ScriptedGame, pad_state
 from support import names
 
 from bowlharness.backends.mock import MockTarget
@@ -208,7 +207,7 @@ def test_a_press_a_person_queues_is_given_when_the_guest_resumes(tmp_path: Path)
     session.stop()
 
     row = manifest_of(tmp_path, 1)["input_ledger"][0]
-    assert (target.writes, row["button"], row["source"]) == ([(PAD_BUFFER, struct.pack("<I", 1))], "start", "manual")
+    assert (target.writes, row["button"], row["source"]) == ([(PAD_STATE, pad_state(1))], "start", "manual")
     assert manifest_of(tmp_path, 1)["attended"] is True
 
 

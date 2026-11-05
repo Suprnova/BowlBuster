@@ -4,6 +4,8 @@ from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.profiles.profile import Point, Ready
 from bowlharness.recording.observe import tag
 
+INPUT = XBOX_NTSC_U.input
+
 
 def all_points() -> dict[str, Point]:
     points = XBOX_NTSC_U.points
@@ -25,6 +27,34 @@ def test_a_point_that_clobbers_its_arguments_reads_them_at_the_entry() -> None:
     pop = XBOX_NTSC_U.points.pop
 
     assert pop.entry and pop.returns and pop.args > 0
+
+
+def test_every_button_held_in_the_controller_state_reads_back_as_itself() -> None:
+    masks = [getattr(INPUT.buttons, field.name) for field in fields(INPUT.buttons)]
+
+    assert [INPUT.held(INPUT.holding(bytes(INPUT.state_size), mask)) for mask in masks] == masks
+
+
+def test_holding_a_button_keeps_the_ones_already_held() -> None:
+    state = INPUT.holding(bytes(INPUT.state_size), INPUT.buttons.up)
+
+    assert INPUT.held(INPUT.holding(state, INPUT.buttons.a)) == INPUT.buttons.up | INPUT.buttons.a
+
+
+def test_an_analog_button_pressed_partway_is_held() -> None:
+    state = bytearray(INPUT.state_size)
+    state[INPUT.controls.a.offset] = 0x40
+
+    assert INPUT.held(bytes(state)) == INPUT.buttons.a
+
+
+def test_a_trigger_is_held_only_above_its_threshold() -> None:
+    state = bytearray(INPUT.state_size)
+    state[INPUT.controls.l.offset] = 0x80
+    at_threshold = INPUT.held(bytes(state))
+    state[INPUT.controls.l.offset] = 0x81
+
+    assert (at_threshold, INPUT.held(bytes(state))) == (0, INPUT.buttons.l)
 
 
 def test_digest_is_stable() -> None:

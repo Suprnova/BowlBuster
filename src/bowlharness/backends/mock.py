@@ -1,6 +1,6 @@
 """A target with no emulator behind it, for testing the harness's logic."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,20 +11,24 @@ from bowlharness.target import Capability, Handle, Handler, Registers, Stop, Tar
 class Wait:
     """A step that repeats until the harness has given the guest a button.
 
-    The step repeats as a poll, arriving again each time, until the dword at ``address`` holds all of ``mask`` or the
-    guest has polled ``polls`` times, and only then applies ``then``.
+    The step repeats as a poll, arriving again each time, until the ``length`` bytes at ``address``, read by
+    ``decode``, hold all of ``mask``, or the guest has polled ``polls`` times, and only then applies ``then``.
 
     Attributes:
-        address: The dword the harness presses into.
+        address: Where the harness presses into.
         mask: The buttons it must hold.
         polls: How many times the step may repeat before the guest goes on without the press.
         then: The memory that takes effect once the press arrives.
+        length: How many bytes the press is read from.
+        decode: Turns those bytes into the buttons they hold; by default they are a little-endian mask.
     """
 
     address: int
     mask: int
     polls: int
     then: Mapping[int, bytes] = field(default_factory=dict)
+    length: int = 4
+    decode: Callable[[bytes], int] = lambda data: int.from_bytes(data, "little")
 
 
 @dataclass(frozen=True)
@@ -145,7 +149,7 @@ class MockTarget:
         """Repeats a step until its press arrives or its polls run out; returns whether any handler ran."""
         fired = False
         for repeat in range(wait.polls + 1):
-            if int.from_bytes(self.read(wait.address, 4), "little") & wait.mask == wait.mask:
+            if wait.decode(self.read(wait.address, wait.length)) & wait.mask == wait.mask:
                 self._store_all(wait.then)
                 break
             if repeat == wait.polls or self._interrupted:

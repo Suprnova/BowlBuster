@@ -2,7 +2,7 @@
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from enum import StrEnum
 
 
@@ -246,18 +246,51 @@ class Buttons:
 
 
 @dataclass(frozen=True)
+class Control:
+    """Where the controller's state holds one button: held while the byte at ``offset``, masked by ``mask``, is above
+    ``above``. A press sets every bit of ``mask``.
+
+    Attributes:
+        offset: The byte's offset in the state.
+        mask: The bits of the byte that belong to the button.
+        above: The value the masked byte must exceed: 0 for a digital button, the game's threshold for an analog one.
+    """
+
+    offset: int
+    mask: int
+    above: int = 0
+
+
+@dataclass(frozen=True)
+class Controls:
+    """Where the controller's state holds each button, by the names of :class:`Buttons`."""
+
+    a: Control
+    b: Control
+    x: Control
+    y: Control
+    start: Control
+    back: Control
+    l: Control  # noqa: E741
+    r: Control
+    up: Control
+    down: Control
+    left: Control
+    right: Control
+
+
+@dataclass(frozen=True)
 class Input:
     """How the harness presses buttons at the game's pad read.
 
-    At the pad read point the stack holds the pad record, then a pointer to the button dword the read has just filled,
-    and further on the port (``Globals.active_port`` names the one the controller is on); the accumulator is zero when
-    no pad was read. A pad record holds the held mask, the
-    pressed edge and the released edge, and a time per button.
+    The pad read point is reached once a poll for each open pad, just after the controller's state has been copied
+    into the game's buffer for that port and before the game builds its button dword from it, so a button the
+    harness sets in the buffer reads to the game as held. The stack holds the port being polled
+    (``Globals.active_port`` names the one the controller is on). A pad record holds the held mask, the pressed edge
+    and the released edge, and a time per button.
 
     Attributes:
-        record_word: The stack word, counted from the stack pointer, that holds the pad record's address.
-        buffer_word: The stack word that holds the address of the button dword.
-        port_word: The stack word that holds the port being polled.
+        port_word: The stack word, counted from the stack pointer, that holds the port being polled.
         active_record: The dword that holds the active pad record's address.
         record_base: Where port 0's pad record starts.
         record_stride: The size of a pad record.
@@ -265,14 +298,15 @@ class Input:
         pressed_offset: Where it holds the pressed edge.
         released_offset: Where it holds the released edge.
         times_offset: Where it holds the time of the first button.
-        buttons: The button masks.
+        state_base: Where port 0's controller state starts.
+        state_size: The size of a port's controller state, which is also the distance between two ports' states.
+        controls: Where the controller state holds each button.
+        buttons: The button masks of the game's button dword.
         hold_polls: How many polls a press is held for.
         release_polls: How many polls it is released for before the next.
         resend_limit: How many times a press the game didn't take is sent again.
     """
 
-    record_word: int
-    buffer_word: int
     port_word: int
     active_record: int
     record_base: int
@@ -281,10 +315,30 @@ class Input:
     pressed_offset: int
     released_offset: int
     times_offset: int
+    state_base: int
+    state_size: int
+    controls: Controls
     buttons: Buttons
     hold_polls: int
     release_polls: int
     resend_limit: int
+
+    def held(self, state: bytes) -> int:
+        """The buttons a controller state holds, as the game's button mask."""
+        return sum(
+            getattr(self.buttons, button.name)
+            for button in fields(Buttons)
+            if state[(control := getattr(self.controls, button.name)).offset] & control.mask > control.above
+        )
+
+    def holding(self, state: bytes, mask: int) -> bytes:
+        """``state`` with the buttons of ``mask`` (the game's button mask) held as well."""
+        held = bytearray(state)
+        for button in fields(Buttons):
+            if mask & getattr(self.buttons, button.name):
+                control = getattr(self.controls, button.name)
+                held[control.offset] |= control.mask
+        return bytes(held)
 
 
 @dataclass(frozen=True)

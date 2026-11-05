@@ -2,7 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from scripted import CHEATS, PAD_BUFFER, ScriptedGame
+from scripted import CHEATS, PAD_STATE, ScriptedGame
 from support import FAST, PAUSE_MENU, drive, driven_events, level, polls, request
 
 from bowlharness.profiles import XBOX_NTSC_U
@@ -63,7 +63,7 @@ def test_a_code_holds_l_and_r_across_all_eight_presses(tmp_path: Path) -> None:
         ["start", "x", *EVERY_TASK[0].lower().split(), "l+r"],
     )
     assert (chord["mask"], chord["polls"] >= 8 * 12, chord["cancelled"]) == (CHORD, True, False)
-    written = [int.from_bytes(value, "little") for _, value in session._target.writes]
+    written = [FAST.input.held(value) for _, value in session._target.writes]
     held = written[next(i for i, value in enumerate(written) if value & CHORD == CHORD) :]
     assert (
         all(value & CHORD == CHORD for value in held)
@@ -112,7 +112,7 @@ def test_a_cheat_costume_is_toggled_on_before_its_step_and_off_before_the_next(t
         *PLSA[0].lower().split(),
         *PLSA[0].lower().split(),
     ]
-    assert {address for address, _ in session._target.writes} == {PAD_BUFFER}
+    assert {address for address, _ in session._target.writes} == {PAD_STATE}
 
 
 def test_a_code_the_game_dropped_is_entered_again_from_a_cleared_history(tmp_path: Path) -> None:

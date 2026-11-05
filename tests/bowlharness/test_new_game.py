@@ -1,9 +1,7 @@
 from pathlib import Path
 
-from scripted import PAD_BUFFER, ScriptedGame
+from scripted import ScriptedGame
 from support import FAST, drive, driven_events, level, polls, route
-
-from bowlharness.backends.mock import Wait
 
 MENU = FAST.navigation.modes.menu
 TITLE_START = FAST.navigation.title_start
@@ -14,7 +12,7 @@ def boot(game: ScriptedGame) -> None:
     """The boot scene, a logo skipped with A, and the title."""
     game.scene_init("MNUS", 1)
     game.players_done()
-    game.pad_poll(mode=1, movie=1, wait=Wait(PAD_BUFFER, A, 30))
+    game.pad_poll(mode=1, movie=1, wait=game.pad_wait(A, 30))
     polls(game, 11, mode=1)
 
 

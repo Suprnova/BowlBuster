@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from contract import schema_errors
-from scripted import PAD_BUFFER, ScriptedGame
+from scripted import PAD_STATE, ScriptedGame
 from support import FAST, PAUSE_MENU, drive, driven_events, level, polls
 
 from bowlharness.driving.placer import NotPlaced, Placed, PlacementFault, PlacementTool
@@ -94,7 +94,7 @@ def result(directory: Path) -> dict[str, Any]:
 
 
 def harness_writes(session: Any) -> list[tuple[int, bytes]]:
-    return [(address, data) for address, data in session._target.writes if address != PAD_BUFFER]
+    return [(address, data) for address, data in session._target.writes if address != PAD_STATE]
 
 
 def test_a_placed_landing_writes_the_sphere_and_the_flag_at_players_done_and_nothing_else(tmp_path: Path) -> None:
@@ -106,7 +106,7 @@ def test_a_placed_landing_writes_the_sphere_and_the_flag_at_players_done_and_not
     stops = [
         stop
         for (address, _), stop in zip(session._target.writes, session._target.write_stops, strict=True)
-        if address != PAD_BUFFER
+        if address != PAD_STATE
     ]
     assert harness_writes(session) == [(SPHERE, struct.pack("<I", S)), (STORAGE.flag, bytes([STORAGE.flag_set]))]
     assert stops == [players_done, players_done]

@@ -32,16 +32,24 @@ from bowlharness.store.store import Claim, Store
 from bowlharness.target import Capability, Handle, Handler, Registers, Stop, TargetError
 
 
+def _register(name: str) -> int:
+    """A register of the stopped guest, read without building gdb's frame, which costs code reads at every stop."""
+    return int(gdb.parse_and_eval(f"${name}")) & 0xFFFFFFFF
+
+
 class _Point(gdb.Breakpoint):
-    def __init__(self, spec: str, kind: int, handler: Handler, target: GdbTarget, address: int | None) -> None:
+    def __init__(
+        self, spec: str, kind: int, handler: Handler, target: GdbTarget, *, pc: int | None, watched: int | None
+    ) -> None:
         super().__init__(spec, kind, gdb.WP_WRITE, internal=True)
         self._handler = handler
         self._target = target
-        self._address = address
+        self._pc = pc
+        self._watched = watched
 
     def stop(self) -> bool:
         self._target.stops += 1
-        self._handler(Stop(int(gdb.selected_frame().pc()), self._address))
+        self._handler(Stop(_register("pc") if self._pc is None else self._pc, self._watched))
         return self._target.take_interrupt()
 
 
@@ -65,11 +73,11 @@ class GdbTarget:
         self.stops = 0
 
     def set_breakpoint(self, address: int, handler: Handler) -> Handle:
-        return self._add(_Point(f"*{address:#x}", gdb.BP_BREAKPOINT, handler, self, None))
+        return self._add(_Point(f"*{address:#x}", gdb.BP_BREAKPOINT, handler, self, pc=address, watched=None))
 
     def set_watchpoint(self, address: int, length: int, handler: Handler) -> Handle:
         spec = f"*(unsigned char (*)[{length}]) {address:#x}"
-        return self._add(_Point(spec, gdb.BP_WATCHPOINT, handler, self, address))
+        return self._add(_Point(spec, gdb.BP_WATCHPOINT, handler, self, pc=None, watched=address))
 
     def clear(self, handle: Handle) -> None:
         point = self._points.pop(handle)
@@ -83,8 +91,7 @@ class GdbTarget:
             raise TargetError(str(error)) from error
 
     def registers(self) -> Registers:
-        frame = gdb.selected_frame()
-        return {name: int(frame.read_register(name)) & 0xFFFFFFFF for name in self._register_names}
+        return {name: _register(name) for name in self._register_names}
 
     def write(self, address: int, data: bytes) -> None:
         try:
