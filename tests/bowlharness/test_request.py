@@ -9,10 +9,13 @@ from contract import FIXTURES
 
 from bowlharness.driving.request import (
     ControlTest,
+    Injection,
+    InjectTest,
     LandingTest,
     Menu,
     Recipe,
     Step,
+    Target,
     Window,
     Windows,
     default_windows,
@@ -104,7 +107,7 @@ def test_an_unknown_step_field_is_refused_by_name() -> None:
 
 
 def test_an_unknown_kind_is_refused() -> None:
-    refused(document(kind="chain"), "kind must be one of record, landing, control")
+    refused(document(kind="chain"), "kind must be one of record, landing, control, inject")
 
 
 def landing(**changes: Any) -> dict[str, Any]:
@@ -260,3 +263,117 @@ def test_a_route_needs_a_step() -> None:
 
 def test_a_press_is_held_for_a_poll_at_least() -> None:
     refused(document(input={"hold": 0}), "input.hold must be at least 1 poll")
+
+
+def inject(**changes: Any) -> dict[str, Any]:
+    base = json.loads((FIXTURES / "requests" / "inject.json").read_text(encoding="utf-8"))
+    return base | changes
+
+
+def with_inject_test(**changes: Any) -> dict[str, Any]:
+    return inject(tests=[inject()["tests"][0] | changes])
+
+
+def with_injection(**changes: Any) -> dict[str, Any]:
+    injection = {"target": {"address": 4096}} | changes
+    return with_inject_test(injections=[injection])
+
+
+def test_an_inject_request_is_read_with_its_injections_and_default_windows() -> None:
+    request = parse_request(inject(), XBOX_NTSC_U)
+
+    assert request.kind == "inject"
+    assert request.test == InjectTest(
+        1,
+        (
+            Injection(Target("asset", 0x1A2B3C4D, 0)),
+            Injection(Target("lookup", 0xBEEF, -56), words=(56,)),
+            Injection(Target("address", None, 2863104), values=((4, bytes.fromhex("0102")),)),
+        ),
+    )
+    assert request.windows == default_windows(XBOX_NTSC_U)
+
+
+def test_an_inject_requests_manifest_copy_reads_back_the_same() -> None:
+    request = parse_request(inject(), XBOX_NTSC_U)
+
+    assert parse_request(request.to_json(), XBOX_NTSC_U) == request
+
+
+def test_an_inject_requests_manifest_copy_spells_ids_and_addresses_as_the_file_does() -> None:
+    request = parse_request(inject(), XBOX_NTSC_U)
+
+    assert request.to_json()["tests"] == inject()["tests"]
+
+
+def test_an_injection_is_explicit_with_values_and_the_footprint_otherwise() -> None:
+    injections = parse_request(inject(), XBOX_NTSC_U).test.injections
+
+    assert [injection.source for injection in injections] == ["footprint", "footprint", "explicit"]
+
+
+def test_a_version_1_request_is_still_read() -> None:
+    document = json.loads((FIXTURES / "requests" / "landing.json").read_text(encoding="utf-8"))
+
+    assert parse_request(document, XBOX_NTSC_U).kind == "landing"
+
+
+def test_an_inject_request_is_version_2() -> None:
+    refused(inject(schema_version=1), r"schema_version")
+
+
+def test_the_inject_step_must_exist() -> None:
+    refused(with_inject_test(step=9), r"tests\[0\]\.step must be the index of a step, below 4")
+
+
+def test_the_inject_step_enters_no_cheats() -> None:
+    steps = inject()["steps"]
+    steps[1]["cheats"] = ["all-tasks"]
+
+    refused(inject(steps=steps), r"steps\[1\]\.cheats is not allowed")
+
+
+def test_the_exit_after_the_inject_step_enters_no_cheats_and_wears_its_costumes() -> None:
+    steps = inject()["steps"]
+    steps[2]["costumes"] = ["PLSA"]
+
+    refused(inject(steps=steps), r"steps\[2\]\.costumes must be the test step's")
+
+
+def test_steps_may_follow_the_exit() -> None:
+    assert len(parse_request(inject(), XBOX_NTSC_U).steps) == 4
+
+
+def test_words_are_the_footprints_offsets() -> None:
+    refused(with_injection(words=[57]), r"tests\[0\]\.injections\[0\]\.words has 57, which is not one of")
+
+
+def test_words_and_values_are_not_both_given() -> None:
+    refused(
+        with_injection(words=[56], values=[{"offset": 0, "hex": "00"}]),
+        r"tests\[0\]\.injections\[0\] has both words and values",
+    )
+
+
+@pytest.mark.parametrize("hex_text", ["abc", "AB", "zz"])
+def test_explicit_values_are_lower_case_hex_of_whole_bytes(hex_text: str) -> None:
+    refused(with_injection(values=[{"offset": 0, "hex": hex_text}]), r"hex")
+
+
+def test_first_visit_only_needs_the_scenes_first_load() -> None:
+    steps = inject()["steps"]
+
+    refused(
+        with_inject_test(step=3, first_visit_only=True) | {"steps": steps},
+        r"tests\[0\]\.first_visit_only is not allowed: steps\[3\] is not the first load of TARG",
+    )
+
+
+def test_first_visit_only_on_the_first_load_is_read() -> None:
+    request = parse_request(with_inject_test(first_visit_only=True), XBOX_NTSC_U)
+
+    assert request.test.first_visit_only
+
+
+def test_an_inject_request_holds_one_test() -> None:
+    refused(inject(tests=inject()["tests"] * 2), "tests must hold exactly one test")

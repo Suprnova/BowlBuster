@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "request_id": "inject-targ-1",
+  "kind": "inject",
+  "start": { "from": "new-game" },
+  "steps": [
+    { "scene": "ORIG", "cheats": ["all-tasks", "all-moves-upgraded"] },
+    { "scene": "TARG", "menu": { "world": 2, "slot": 1 } },
+    { "scene": "EXIT", "menu": { "world": 1, "slot": 1 } },
+    { "scene": "TARG", "menu": { "world": 2, "slot": 1 } }
+  ],
+  "tests": [
+    {
+      "step": 1,
+      "injections": [
+        { "target": { "asset": { "id": "0x1A2B3C4D", "offset": 0 } } },
+        { "target": { "lookup": { "id": "0x0000BEEF", "offset": -56 } }, "words": [56] },
+        { "target": { "address": 2863104 }, "values": [{ "offset": 4, "hex": "0102" }] }
+      ],
+      "first_visit_only": false
+    }
+  ]
+}

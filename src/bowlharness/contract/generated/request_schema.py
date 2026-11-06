@@ -166,13 +166,117 @@ class ControlTest:
     """
 
 
+type ObjectId = str
+"""
+An object's id as the game names it: 0x and up to eight hexadecimal digits.
+"""
+
+
+@dataclass(frozen=True, kw_only=True)
+class ObjectOffset:
+    id: ObjectId
+    offset: int
+    """
+    Where S falls from the object, in signed bytes.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class AssetTarget:
+    """
+    The asset of the live base with the id, plus the offset.
+    """
+
+    asset: ObjectOffset
+
+
+@dataclass(frozen=True, kw_only=True)
+class LiveTarget:
+    """
+    The live base with the id, plus the offset.
+    """
+
+    live: ObjectOffset
+
+
+@dataclass(frozen=True, kw_only=True)
+class LookupTarget:
+    """
+    The lookup table's entry for the id, plus the offset.
+    """
+
+    lookup: ObjectOffset
+
+
+@dataclass(frozen=True, kw_only=True)
+class AddressTarget:
+    """
+    An address in guest memory.
+    """
+
+    address: int
+
+
+@dataclass(frozen=True, kw_only=True)
+class Value:
+    """
+    Bytes written at an offset from the anchor.
+    """
+
+    offset: int
+    """
+    Where the bytes start, in signed bytes from the anchor.
+    """
+    hex: str
+    """
+    Bytes as lower-case hexadecimal, two digits per byte.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class Injection:
+    """
+    Words written at a target in the load. Without words or values, the footprint is written.
+    """
+
+    target: AssetTarget | LiveTarget | LookupTarget | AddressTarget
+    """
+    Where S would be: the anchor the writes are laid against.
+    """
+    words: list[int] | None = None
+    """
+    The footprint's words to write, by their offsets from the anchor. Not with values.
+    """
+    values: list[Value] | None = None
+    """
+    Explicit bytes in place of the footprint. Not with words.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class InjectTest:
+    """
+    Injections applied to the loads of a scene, starting at one step of the route.
+    """
+
+    step: int
+    """
+    The index of the target step, whose load is injected first.
+    """
+    injections: list[Injection]
+    first_visit_only: bool | None = None
+    """
+    Inject the target step's load only, not the later loads of its scene. Default: false.
+    """
+
+
 @dataclass(frozen=True, kw_only=True)
 class RecordRequest:
     """
     A route to drive and record, load by load.
     """
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     request_id: RequestId
     kind: Literal["record"]
     start: Start
@@ -191,7 +295,7 @@ class LandingRequest:
     A route to a target step, a landing placed there, and an exit step after it.
     """
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     request_id: RequestId
     kind: Literal["landing"]
     start: Start
@@ -215,7 +319,7 @@ class ControlRequest:
     A route to a target step, watched with nothing placed, and an exit step after it.
     """
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     request_id: RequestId
     kind: Literal["control"]
     start: Start
@@ -233,7 +337,31 @@ class ControlRequest:
     """
 
 
-type Request = RecordRequest | LandingRequest | ControlRequest
+@dataclass(frozen=True, kw_only=True)
+class InjectRequest:
+    """
+    A route to a target step, injections written there, and an exit step after it.
+    """
+
+    schema_version: Literal[2]
+    request_id: RequestId
+    kind: Literal["inject"]
+    start: Start
+    steps: Steps
+    tests: list[InjectTest]
+    """
+    The one test the request runs.
+    """
+    windows: Windows | None = None
+    observe: Observe | None = None
+    input: InputPolicy | None = None
+    client: Any | None = None
+    """
+    An opaque value the harness returns unread.
+    """
+
+
+type Request = RecordRequest | LandingRequest | ControlRequest | InjectRequest
 """
-A request for the harness to run: a route to record, a landing test, or a control.
+A request for the harness to run: a route to record, a landing test, a control, or an inject test.
 """

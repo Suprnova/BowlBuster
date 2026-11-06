@@ -218,6 +218,7 @@ class BowlStorage:
         scale: The float the written words scale by.
         scale_threshold: At or below this value the scale is written too.
         scale_value: The value the game's own init gives the scale.
+        footprint: The words Bowl Storage writes at its landing, as offsets from ``S`` and the float each holds.
     """
 
     flag: int
@@ -225,6 +226,35 @@ class BowlStorage:
     scale: int
     scale_threshold: float
     scale_value: float
+    footprint: tuple[tuple[int, float], ...]
+
+
+@dataclass(frozen=True)
+class Objects:
+    """How the scene's live objects and the object lookup table are laid out.
+
+    The scene holds an array of pointers to its live bases; a base holds its id and a pointer to its asset, which holds
+    its own id. The lookup table is an array of entries, each an id and the object it names.
+
+    Attributes:
+        base_count: Where the scene holds the number of live bases.
+        base_array: Where the scene holds the pointer to the array of base pointers.
+        base_id: Where a base holds its id.
+        base_asset: Where a base holds the pointer to its asset.
+        asset_id: Where an asset holds its id.
+        lookup: The dword holding the pointer to the lookup table.
+        lookup_count: How many entries the table has.
+        lookup_stride: The size of an entry, which starts with its id and then holds the object's address.
+    """
+
+    base_count: int
+    base_array: int
+    base_id: int
+    base_asset: int
+    asset_id: int
+    lookup: int
+    lookup_count: int
+    lookup_stride: int
 
 
 @dataclass(frozen=True)
@@ -574,6 +604,7 @@ class PlatformProfile:
     crash: Crash
     globals: Globals
     bowl_storage: BowlStorage
+    objects: Objects
     input: Input
     navigation: Navigation
     scene_classes: SceneClasses

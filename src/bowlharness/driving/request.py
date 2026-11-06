@@ -1,4 +1,5 @@
-"""Requests: a route for the harness to drive, and the landing test or control at its target, read and checked."""
+"""Requests: a route for the harness to drive, and the landing test, control or inject test at its target, read and
+checked."""
 
 import hashlib
 import json
@@ -12,9 +13,17 @@ from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.recorder import Options
 
 SCHEMA_VERSION = 1
+INJECT_SCHEMA_VERSION = 2
 RECORD = "record"
 LANDING = "landing"
 CONTROL = "control"
+INJECT = "inject"
+ASSET = "asset"
+LIVE = "live"
+LOOKUP = "lookup"
+ADDRESS = "address"
+FOOTPRINT = "footprint"
+EXPLICIT = "explicit"
 GUEST_FRAMES = "guest-frames"
 WALL_SECONDS = "wall-seconds"
 DEFAULT_MIN_MATCH = 0.9
@@ -114,20 +123,70 @@ class ControlTest:
 
 
 @dataclass(frozen=True)
+class Target:
+    """Where an injection's ``S`` would be: the anchor its writes are laid against.
+
+    Attributes:
+        kind: ``asset``, ``live``, ``lookup`` or ``address``.
+        id: The object's id; ``None`` for an address.
+        offset: Signed bytes from the object; for an address, the address itself.
+    """
+
+    kind: str
+    id: int | None
+    offset: int
+
+
+@dataclass(frozen=True)
+class Injection:
+    """Words written at a target.
+
+    Attributes:
+        target: Where ``S`` would be.
+        words: The footprint's words to write, by their offsets from the anchor; ``None`` for all of them.
+        values: Explicit bytes by offset from the anchor, in place of the footprint; ``None`` for the footprint.
+    """
+
+    target: Target
+    words: tuple[int, ...] | None = None
+    values: tuple[tuple[int, bytes], ...] | None = None
+
+    @property
+    def source(self) -> str:
+        """``explicit`` when the bytes are the request's own, otherwise ``footprint``."""
+        return FOOTPRINT if self.values is None else EXPLICIT
+
+
+@dataclass(frozen=True)
+class InjectTest:
+    """Injections applied to the loads of a scene, starting at a step.
+
+    Attributes:
+        step: The target step's index, whose load is injected first.
+        injections: What is written in each injected load.
+        first_visit_only: Whether only the target step's load is injected, not the later loads of its scene.
+    """
+
+    step: int
+    injections: tuple[Injection, ...]
+    first_visit_only: bool = False
+
+
+@dataclass(frozen=True)
 class Request:
     """A request with every default filled in.
 
     Attributes:
         request_id: The request's durable identity.
-        kind: ``record``, ``landing`` or ``control``.
+        kind: ``record``, ``landing``, ``control`` or ``inject``.
         start: ``new-game`` to begin at the main menu's New Game, or ``booted`` when the disc boots into the first step.
         steps: The scenes to load, in order.
         options: What to observe.
         hold: How many polls a press is held for.
         release: How many polls it is released for.
         client: An opaque value the harness returns unread.
-        test: A landing's or a control's test; ``None`` in a record.
-        windows: A landing's or a control's windows; ``None`` in a record.
+        test: The request's one test; ``None`` in a record.
+        windows: The test's windows; ``None`` in a record.
     """
 
     request_id: str
@@ -138,13 +197,13 @@ class Request:
     hold: int
     release: int
     client: Any = None
-    test: LandingTest | ControlTest | None = None
+    test: LandingTest | ControlTest | InjectTest | None = None
     windows: Windows | None = None
 
     def to_json(self) -> dict[str, Any]:
         """The request as a manifest records it: the file's spelling, defaults included."""
         return {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": INJECT_SCHEMA_VERSION if self.kind == INJECT else SCHEMA_VERSION,
             "request_id": self.request_id,
             "kind": self.kind,
             "start": {"from": self.start},
@@ -169,9 +228,15 @@ class Request:
         }
 
 
-def _test_json(test: LandingTest | ControlTest) -> dict[str, Any]:
+def _test_json(test: LandingTest | ControlTest | InjectTest) -> dict[str, Any]:
     if isinstance(test, ControlTest):
         return {"step": test.step}
+    if isinstance(test, InjectTest):
+        return {
+            "step": test.step,
+            "injections": [_injection_json(injection) for injection in test.injections],
+            "first_visit_only": test.first_visit_only,
+        }
     recipe = test.recipe
     return {
         "step": test.step,
@@ -180,6 +245,24 @@ def _test_json(test: LandingTest | ControlTest) -> dict[str, Any]:
         "delta": test.delta,
         "expected": {"offset": test.offset, "bytes": test.expected.hex()},
         "min_match": test.min_match,
+    }
+
+
+def _injection_json(injection: Injection) -> dict[str, Any]:
+    target = injection.target
+    spelled = (
+        {ADDRESS: target.offset}
+        if target.kind == ADDRESS
+        else {target.kind: {"id": f"0x{target.id:08X}", "offset": target.offset}}
+    )
+    return {
+        "target": spelled,
+        **({"words": list(injection.words)} if injection.words is not None else {}),
+        **(
+            {"values": [{"offset": offset, "hex": data.hex()} for offset, data in injection.values]}
+            if injection.values is not None
+            else {}
+        ),
     }
 
 
@@ -242,7 +325,12 @@ def parse_request(document: Any, profile: PlatformProfile) -> Request:
     )
     pad = request.input or common_schema.InputPolicy()
     test, windows = None, None
-    if isinstance(request, request_schema.LandingRequest | request_schema.ControlRequest):
+    if not isinstance(request, request_schema.RecordRequest) and len(request.tests) != 1:
+        raise ValueError("tests must hold exactly one test")
+    if isinstance(request, request_schema.InjectRequest):
+        test = _inject_test(request.tests[0], steps, profile)
+        windows = _windows(request.windows or request_schema.Windows(), profile)
+    elif isinstance(request, request_schema.LandingRequest | request_schema.ControlRequest):
         test = _test(request.tests[0], steps)
         windows = _windows(request.windows or request_schema.Windows(), profile)
     return Request(
@@ -311,16 +399,69 @@ def _test(
     index, last = test.step, len(steps) - 1
     if index not in (last, last - 1):
         raise ValueError("tests[0].step must be the route's last step, or the one before its exit step")
-    if steps[index].cheats:
-        raise ValueError(f"steps[{index}].cheats is not allowed: nothing may open the pause menu inside the windows")
-    if index < last:
-        if steps[last].cheats:
-            raise ValueError(f"steps[{last}].cheats is not allowed: the run ends at the exit step's scene init")
-        if steps[last].costumes != steps[index].costumes:
-            raise ValueError(f"steps[{last}].costumes must be the test step's, so leaving it changes no costume")
+    _check_exit(steps, index)
     if isinstance(test, request_schema.ControlTest):
         return ControlTest(index)
     return LandingTest(index, _recipe(test.recipe), test.op, test.delta, *_expected(test), _min_match(test))
+
+
+def _check_exit(steps: tuple[Step, ...], index: int) -> None:
+    if steps[index].cheats:
+        raise ValueError(f"steps[{index}].cheats is not allowed: nothing may open the pause menu inside the windows")
+    exit_index = index + 1
+    if exit_index < len(steps):
+        if steps[exit_index].cheats:
+            raise ValueError(f"steps[{exit_index}].cheats is not allowed: the run ends at the exit step's scene init")
+        if steps[exit_index].costumes != steps[index].costumes:
+            raise ValueError(f"steps[{exit_index}].costumes must be the test step's, so leaving it changes no costume")
+
+
+def _inject_test(test: request_schema.InjectTest, steps: tuple[Step, ...], profile: PlatformProfile) -> InjectTest:
+    index = test.step
+    if index >= len(steps):
+        raise ValueError(f"tests[0].step must be the index of a step, below {len(steps)}")
+    _check_exit(steps, index)
+    first_visit_only = bool(test.first_visit_only)
+    if first_visit_only and any(step.scene == steps[index].scene for step in steps[:index]):
+        raise ValueError(
+            f"tests[0].first_visit_only is not allowed: steps[{index}] is not the first load of {steps[index].scene}"
+        )
+    injections = tuple(_injection(item, f"tests[0].injections[{n}]", profile) for n, item in enumerate(test.injections))
+    return InjectTest(index, injections, first_visit_only)
+
+
+def _injection(injection: request_schema.Injection, name: str, profile: PlatformProfile) -> Injection:
+    if injection.words is not None and injection.values is not None:
+        raise ValueError(f"{name} has both words and values; give one")
+    words = None
+    if injection.words is not None:
+        footprint = [offset for offset, _ in profile.bowl_storage.footprint]
+        unknown = [word for word in injection.words if word not in footprint]
+        if unknown:
+            raise ValueError(f"{name}.words has {unknown[0]}, which is not one of the footprint's offsets {footprint}")
+        words = tuple(injection.words)
+    values = None
+    if injection.values is not None:
+        values = tuple((value.offset, _value_bytes(value, f"{name}.values")) for value in injection.values)
+    return Injection(_target(injection.target), words, values)
+
+
+def _value_bytes(value: request_schema.Value, name: str) -> bytes:
+    try:
+        data = bytes.fromhex(value.hex)
+    except ValueError:
+        data = b""
+    if not data or value.hex != data.hex():
+        raise ValueError(f"{name}.hex must be lower-case hex, two digits per byte")
+    return data
+
+
+def _target(target: Any) -> Target:
+    if isinstance(target, request_schema.AddressTarget):
+        return Target(ADDRESS, None, target.address)
+    kind = next(kind for kind in (ASSET, LIVE, LOOKUP) if hasattr(target, kind))
+    found = getattr(target, kind)
+    return Target(kind, int(found.id, 16), found.offset)
 
 
 def _recipe(recipe: request_schema.Recipe) -> Recipe:

@@ -74,7 +74,7 @@ def test_a_wrong_type_is_named_by_its_path() -> None:
 def test_an_unknown_kind_lists_the_kinds() -> None:
     document = fixture(FIXTURES / "requests" / "record.json") | {"kind": "chain"}
 
-    with pytest.raises(ValueError, match=r"^kind must be one of record, landing, control$"):
+    with pytest.raises(ValueError, match=r"^kind must be one of record, landing, control, inject$"):
         read_document(request_schema.Request, document, "request")
 
 
