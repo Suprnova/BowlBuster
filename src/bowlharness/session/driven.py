@@ -6,11 +6,12 @@ from pathlib import Path
 from typing import Any
 
 from bowlharness.contract.generated import result_schema as schema
+from bowlharness.driving.injector import Injector
 from bowlharness.driving.input import InputDriver
 from bowlharness.driving.landing import Landing, check_recipe
 from bowlharness.driving.navigation import Navigator
 from bowlharness.driving.placer import PlacementFault, Placer, ToolPlacer
-from bowlharness.driving.request import LandingTest, Request
+from bowlharness.driving.request import InjectTest, LandingTest, Request
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.detection import Watchdog
 from bowlharness.recording.recorder import Recorder
@@ -25,11 +26,12 @@ LANDED = "landed"
 class DrivenSession(Session):
     """A :class:`Session` that follows a request instead of waiting for a person to play.
 
-    It runs until the route is done, a step fails, a landing test ends the run, the guest crashes or hangs, the game
-    reboots, or a person stops it. A person can still pause it, as in any session; a pause, a capture, a read or a
-    press marks the run attended, and so does a button on the controller. A reboot ends the route, since the route
-    can't go on after one. A landing's or a control's test step is held until its windows close, then left for the exit
-    step. When the session ends it writes the run's result, ``result.json``, in ``out`` beside the recordings.
+    It runs until the route is done, a step fails, a landing or inject test ends the run, the guest crashes or hangs,
+    the game reboots, or a person stops it. A person can still pause it, as in any session; a pause, a capture, a read
+    or a press marks the run attended, and so does a button on the controller. A reboot ends the route, since the route
+    can't go on after one. The test step of a landing, a control or an inject test is held until its windows close, then
+    left for the exit step. When the session ends it writes the run's result, ``result.json``, in ``out`` beside the
+    recordings.
 
     Args:
         target: The guest to drive.
@@ -88,6 +90,7 @@ class DrivenSession(Session):
         self._recipes = recordings
         self._navigator: Navigator | None = None
         self._landing: Landing | None = None
+        self._injector: Injector | None = None
         self._tracker: StageTracker | None = None
         self.written: schema.Result | None = None
         super().__init__(
@@ -166,6 +169,10 @@ class DrivenSession(Session):
                 self._target, self._profile, recorder, test, self._placer, self._recipes, self._current_step
             )
             recorder.listen(self._landing.on_event)
+        if isinstance(test, InjectTest):
+            scene = self._request.steps[test.step].scene
+            self._injector = Injector(self._target, self._profile, recorder, test, scene, self._current_step)
+            recorder.listen(self._injector.on_event)
         navigator.start()
         return recorder, watchdog
 
@@ -177,7 +184,7 @@ class DrivenSession(Session):
         self._end(ended="reboot")
 
     def _verdict(self) -> tuple[str, str | None] | None:
-        for source in (self._landing, self._tracker):
+        for source in (self._landing, self._injector, self._tracker):
             if source is not None and source.verdict is not None:
                 return source.verdict
         return None

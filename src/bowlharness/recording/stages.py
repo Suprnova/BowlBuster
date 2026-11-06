@@ -57,7 +57,7 @@ class StageTracker:
         target: The guest.
         profile: The platform's addresses and constants.
         recorder: The recorder whose events it follows and logs to.
-        kind: The request's kind, ``landing`` or ``control``.
+        kind: The request's kind: ``landing``, ``control`` or ``inject``.
         step: The test step's index.
         windows: The test step's windows.
         current: The navigator's current step.

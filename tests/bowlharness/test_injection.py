@@ -6,6 +6,7 @@ from bowlharness.backends.mock import MockTarget
 from bowlharness.driving.injection import Resolved, Unresolved, resolve
 from bowlharness.driving.request import Target
 from bowlharness.profiles import XBOX_NTSC_U
+from bowlharness.profiles.profile import PlatformProfile
 
 PROFILE = XBOX_NTSC_U
 OBJECTS = PROFILE.objects
@@ -17,16 +18,19 @@ def words(address: int, *values: int) -> dict[int, bytes]:
     return {address: struct.pack(f"<{len(values)}I", *values)}
 
 
-def memory(*, base_id: int = ID, asset_id: int = ID, entry: int | None = 7) -> dict[int, bytes]:
-    pointers = {PROFILE.globals.scene_pointer: struct.pack("<I", SCENE)}
-    scene = words(SCENE + OBJECTS.base_count, 2) | words(SCENE + OBJECTS.base_array, ARRAY)
+def memory(
+    *, base_id: int = ID, asset_id: int = ID, entry: int | None = 7, profile: PlatformProfile = PROFILE
+) -> dict[int, bytes]:
+    objects = profile.objects
+    pointers = {profile.globals.scene_pointer: struct.pack("<I", SCENE)}
+    scene = words(SCENE + objects.base_count, 2) | words(SCENE + objects.base_array, ARRAY)
     array = words(ARRAY, 0, BASE)
-    base = words(BASE + OBJECTS.base_id, base_id) | words(BASE + OBJECTS.base_asset, ASSET)
-    asset = words(ASSET + OBJECTS.asset_id, asset_id)
-    table = bytearray(OBJECTS.lookup_count * OBJECTS.lookup_stride)
+    base = words(BASE + objects.base_id, base_id) | words(BASE + objects.base_asset, ASSET)
+    asset = words(ASSET + objects.asset_id, asset_id)
+    table = bytearray(objects.lookup_count * objects.lookup_stride)
     if entry is not None:
-        struct.pack_into("<II", table, entry * OBJECTS.lookup_stride, ID, 0x520000)
-    lookup = words(OBJECTS.lookup, TABLE) | {TABLE: bytes(table)}
+        struct.pack_into("<II", table, entry * objects.lookup_stride, ID, 0x520000)
+    lookup = words(objects.lookup, TABLE) | {TABLE: bytes(table)}
     merged: dict[int, bytes] = {}
     for part in (pointers, scene, array, base, asset, lookup):
         for address, data in part.items():

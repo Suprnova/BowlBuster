@@ -200,8 +200,8 @@ class ScriptedGame:
     def entity(self, address: int) -> None:
         self._step(self._profile.points.entity.entry[0], (0x7267E,), eax=address)
 
-    def players_done(self) -> None:
-        self._step(self._profile.points.players_done.entry[0], (0x4E8D2,))
+    def players_done(self, memory: dict[int, bytes] | None = None) -> None:
+        self._step(self._profile.points.players_done.entry[0], (0x4E8D2,), memory=memory)
 
     def scene_id(self, scene_id: int) -> None:
         """A scene init returning, with the scene object holding its id."""
@@ -225,8 +225,8 @@ class ScriptedGame:
         stack = tuple(range(1, self._profile.globals.watch_stack_words + 2))
         self._step(pc, stack, memory={address: struct.pack("<I", value)}, written=address)
 
-    def drawn(self) -> None:
-        self._step(self._profile.points.drawn.entry[0], (0x9000,))
+    def drawn(self, memory: dict[int, bytes] | None = None) -> None:
+        self._step(self._profile.points.drawn.entry[0], (0x9000,), memory=memory)
 
     def pad_poll(
         self,
