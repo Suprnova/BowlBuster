@@ -1,8 +1,9 @@
 # bowlharness
 
 Records runs of the game under [xemu](https://xemu.app): played by a person, or driven along a request's route, with a
-landing test or a control at its target. A recording and a record run write nothing to the guest's memory; a landing
-writes only the stale pointer and what goes with it, and every write is in the run's write ledger. Input is button
+landing test, a control or an inject test at its target. A recording and a record run write nothing to the guest's
+memory; a landing writes only the stale pointer and what goes with it, an inject test only the words its request names,
+and every write is in the run's write ledger. Input is button
 presses, which touch no game state.
 
 ## Setting up
@@ -26,7 +27,7 @@ is for:
 
 - A recording something will replay (a recipe, the survey) needs `heap_events: all` and `cutoff_captures: all`:
   `place` replay-validates every load of a recipe, so a load logged without its heap events fails it.
-- Anything else, such as a check of navigation, a result, a landing or a control, needs `heap_events: none` and
+- Anything else, such as a check of navigation, a result, a landing, a control or an inject test, needs `heap_events: none` and
   `cutoff_captures: none`, and a small `capture_budget`.
 
 Before asking a person to run one, say how long it should take. Measured on the official disc:
@@ -37,7 +38,7 @@ Before asking a person to run one, say how long it should take. Measured on the 
 | The six-step acceptance route, nothing logged | about 80 s |
 | The six-step acceptance route, every heap event and cutoff capture | about 5.5 min |
 | Each visit to the Options menu, on top | about 10 s for a 16-press entry, 7 s for an 8-press one |
-| A landing or a control at its target, nothing logged | the route to it, plus its windows (20 s of render and 15 s of reset by default); about 100 s at `B101`'s first visit, whose own reset ends the render window after about 10 s |
+| A landing, a control or an inject test at its target, nothing logged | the route to it, plus its windows (20 s of render and 15 s of reset by default); about 100 s at `B101`'s first visit, whose own reset ends the render window after about 10 s |
 
 ## Recording
 
@@ -75,7 +76,7 @@ result, `result.json`, in `--out` beside the recordings, and prints its outcome.
 
 A landing request also needs `--place <bowlbuster.exe>`, a copy of `bowlbuster` published outside the repository
 (`dotnet publish src/BowlBuster.Cli -c Release -o <new folder>`), and `--recordings <folder>`, the folder its recipes
-are named under. The harness pins the tool when it starts and records it in the result. A control needs neither.
+are named under. The harness pins the tool when it starts and records it in the result. A control and an inject test need neither.
 
 ## Queueing
 

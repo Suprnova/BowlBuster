@@ -202,7 +202,7 @@ class DrivenSession(Session):
         if self.ended:
             return ENDED
         frame = self._frame()
-        landing, tracker, navigator = self._landing, self._tracker, self._navigator
+        landing, injector, tracker, navigator = self._landing, self._injector, self._tracker, self._navigator
         if tracker is not None:
             if ended == "failed" and navigator is not None and navigator.reason is not None:
                 tracker.fail_exit(navigator.reason)
@@ -230,6 +230,7 @@ class DrivenSession(Session):
             instance=self._instance,
             attempt=self._attempt,
             placement=placement,
+            injection=injector.record() if injector else None,
             live_window=landing.live_window if landing else None,
             placement_tool=schema.PlacementTool(path=str(tool.path), build=tool.build, sha256=tool.sha256)
             if tool

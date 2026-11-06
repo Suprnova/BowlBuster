@@ -159,3 +159,90 @@ class Top:
     """
     The depth.
     """
+
+
+type ObjectId = str
+"""
+An object's id as the game names it: 0x and up to eight hexadecimal digits.
+"""
+
+
+@dataclass(frozen=True, kw_only=True)
+class ObjectOffset:
+    id: ObjectId
+    offset: int
+    """
+    Where S falls from the object, in signed bytes.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class AssetTarget:
+    """
+    The asset of the live base with the id, plus the offset.
+    """
+
+    asset: ObjectOffset
+
+
+@dataclass(frozen=True, kw_only=True)
+class LiveTarget:
+    """
+    The live base with the id, plus the offset.
+    """
+
+    live: ObjectOffset
+
+
+@dataclass(frozen=True, kw_only=True)
+class LookupTarget:
+    """
+    The lookup table's entry for the id, plus the offset.
+    """
+
+    lookup: ObjectOffset
+
+
+@dataclass(frozen=True, kw_only=True)
+class AddressTarget:
+    """
+    An address in guest memory.
+    """
+
+    address: int
+
+
+@dataclass(frozen=True, kw_only=True)
+class Value:
+    """
+    Bytes written at an offset from the anchor.
+    """
+
+    offset: int
+    """
+    Where the bytes start, in signed bytes from the anchor.
+    """
+    hex: str
+    """
+    Bytes as lower-case hexadecimal, two digits per byte.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class Injection:
+    """
+    Words written at a target in the load. Without words or values, the footprint is written.
+    """
+
+    target: AssetTarget | LiveTarget | LookupTarget | AddressTarget
+    """
+    Where S would be: the anchor the writes are laid against.
+    """
+    words: list[int] | None = None
+    """
+    The footprint's words to write, by their offsets from the anchor. Not with values.
+    """
+    values: list[Value] | None = None
+    """
+    Explicit bytes in place of the footprint. Not with words.
+    """

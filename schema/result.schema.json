@@ -11,11 +11,11 @@
     "input_ledger", "attended", "captures", "captures_dropped", "client", "memory"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": { "description": "2 since the inject kind; 1 results are still read.", "enum": [1, 2] },
     "run": { "description": "The run's id: the request's id and the attempt, <request>-a<attempt>.", "type": "string" },
     "request": { "description": "The id of the request the run attempted.", "type": "string" },
     "attempt": { "description": "Which attempt at the request this is, from 1.", "type": "integer", "minimum": 1 },
-    "kind": { "description": "The request's kind.", "enum": ["record", "landing", "control"] },
+    "kind": { "description": "The request's kind.", "enum": ["record", "landing", "control", "inject"] },
     "instance": {
       "description": "The emulator instance that ran it, or null for a run no queue claimed.",
       "type": ["string", "null"]
@@ -24,13 +24,17 @@
     "ended": { "$ref": "#/$defs/Moment" },
     "outcome": { "$ref": "#/$defs/Outcome" },
     "cause": {
-      "description": "Why an interrupted run was cut short (stopped, lost, a harness fault); null for any other outcome.",
+      "description": "Why an interrupted run was cut short (stopped, lost, a harness fault), or why a target was not injected; null for any other outcome.",
       "type": ["string", "null"]
     },
     "manifest": { "$ref": "#/$defs/Manifest" },
     "placement": {
       "description": "The landing's placement; null in a record or a control.",
       "oneOf": [{ "$ref": "#/$defs/Placement" }, { "type": "null" }]
+    },
+    "injection": {
+      "description": "The inject test and what it did to each load; null in any other kind. Absent in a version 1 result.",
+      "oneOf": [{ "$ref": "#/$defs/InjectionRecord" }, { "type": "null" }]
     },
     "stages": {
       "description": "The stages the target load went through, in order, each time it entered one; empty in a record.",
@@ -86,7 +90,7 @@
     "Outcome": {
       "description": "How the run ended, from what the harness observed.",
       "enum": [
-        "survived", "crash", "hang", "stalled", "no write", "no control", "layout mismatch", "not placed",
+        "survived", "crash", "hang", "stalled", "no write", "no control", "layout mismatch", "not placed", "not injected",
         "scene change", "costume mismatch", "menu unreachable", "unsupported", "interrupted"
       ]
     },
@@ -273,6 +277,62 @@
         }
       }
     },
+    "InjectionRecord": {
+      "description": "An inject test as requested, and the loads it injected.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["injections", "first_visit_only", "loads"],
+      "properties": {
+        "injections": {
+          "description": "The test's injections as requested.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/$defs/Injection" }
+        },
+        "first_visit_only": { "type": "boolean" },
+        "loads": {
+          "description": "The loads injected, in order: the target step's, then each later load of its scene.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/InjectedLoad" }
+        }
+      }
+    },
+    "InjectedLoad": {
+      "description": "What the test did in one load.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counter", "scene", "injections"],
+      "properties": {
+        "counter": { "description": "The load's counter.", "type": "integer" },
+        "scene": { "$ref": "common.schema.json#/$defs/Scene" },
+        "injections": { "type": "array", "items": { "$ref": "#/$defs/InjectionOutcome" } }
+      }
+    },
+    "InjectionOutcome": {
+      "description": "One injection in one load.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "source", "timing", "anchor", "seqs"],
+      "properties": {
+        "index": { "description": "The injection's position in the test's injections.", "type": "integer", "minimum": 0 },
+        "source": {
+          "description": "footprint: the profile's words, or the picked ones. explicit: the request's own bytes.",
+          "enum": ["footprint", "explicit"]
+        },
+        "timing": {
+          "description": "after-player-init: written at players done. at-first-draw: written at the load's first drawn frame.",
+          "enum": ["after-player-init", "at-first-draw"]
+        },
+        "anchor": {
+          "description": "Where the target resolved to; null when the load never got that far.",
+          "type": ["integer", "null"]
+        },
+        "seqs": {
+          "description": "The seq of each of its write events, in the write ledger.",
+          "type": "array",
+          "items": { "type": "integer" }
+        }
+      }
+    },
     "StaleWrite": {
       "description": "A stale write: the pointer the game wrote through, and when.",
       "type": "object",
@@ -392,8 +452,11 @@
       "properties": {
         "recording": { "type": "string" },
         "seq": { "description": "The seq of its write event.", "type": "integer" },
-        "class": { "enum": ["bowl-storage"] },
-        "target": { "description": "What was written: sphere, flag or scale.", "type": "string" },
+        "class": { "enum": ["bowl-storage", "inject"] },
+        "target": {
+          "description": "What was written: sphere, flag or scale; for an injection, its target and the offset written, such as asset 0x1A2B3C4D+0x38.",
+          "type": "string"
+        },
         "address": { "type": "integer" },
         "new": { "$ref": "common.schema.json#/$defs/Hex" }
       }

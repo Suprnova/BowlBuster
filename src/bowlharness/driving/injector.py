@@ -4,8 +4,11 @@ import struct
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
+from bowlharness.contract.documents import read_document
+from bowlharness.contract.generated import common_schema
+from bowlharness.contract.generated import result_schema as schema
 from bowlharness.driving.injection import Resolved, resolve
-from bowlharness.driving.request import ADDRESS, ASSET, Injection, InjectTest
+from bowlharness.driving.request import ADDRESS, ASSET, Injection, InjectTest, injection_json
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.recorder import Recorder
 from bowlharness.target import Target
@@ -101,6 +104,33 @@ class Injector:
                     self._inject(AT_FIRST_DRAW)
         except Exception as error:
             self._end(INTERRUPTED, f"harness fault: {error}")
+
+    def record(self) -> schema.InjectionRecord:
+        """The test as requested, and what it did in each load injected so far."""
+        return schema.InjectionRecord(
+            injections=[
+                read_document(common_schema.Injection, injection_json(injection), "injection")
+                for injection in self._test.injections
+            ],
+            first_visit_only=self._test.first_visit_only,
+            loads=[
+                schema.InjectedLoad(
+                    counter=load.counter,
+                    scene=load.scene,
+                    injections=[
+                        schema.InjectionOutcome(
+                            index=index,
+                            source=injected.injection.source,
+                            timing=injected.timing,
+                            anchor=injected.anchor,
+                            seqs=injected.seqs,
+                        )
+                        for index, injected in enumerate(load.injections)
+                    ],
+                )
+                for load in self.loads
+            ],
+        )
 
     def _injects(self, scene: object) -> bool:
         step = self._step()

@@ -13,7 +13,7 @@ from bowlharness.contract.documents import read_document, write_document
 from bowlharness.contract.generated import common_schema
 from bowlharness.contract.generated import result_schema as schema
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 NOT_OBSERVED = "the observed-fields list is not confirmed"
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -26,7 +26,7 @@ class Ending:
         interrupted: Why the session was cut short, such as the emulator exiting; ``None`` when it wasn't.
         ended: Why a session that wasn't cut short ended: the route's ``done`` or ``failed``, ``stopped`` by a person,
             or ``reboot``. A crash or a hang says so in its recording.
-        verdict: The outcome and cause a landing test ended the run with, such as ``not placed``.
+        verdict: The outcome and cause a landing or inject test ended the run with, such as ``not placed``.
     """
 
     interrupted: str | None = None
@@ -58,7 +58,7 @@ def _git(root: Path, *arguments: str) -> str:
 def outcome(manifests: list[dict[str, Any]], ending: Ending) -> tuple[schema.Outcome, str | None]:
     """A run's outcome and its cause, from its recordings' manifests and how its session ended.
 
-    A crash or a hang wins; then a landing's verdict; then a session cut short is ``interrupted`` with its reason; then
+    A crash or a hang wins; then a test's verdict; then a session cut short is ``interrupted`` with its reason; then
     the route's own end:
     ``survived`` when every step was reached, or the failed step's reason. A session a person stopped, or that a
     reboot ended, is ``interrupted`` with ``stopped`` or ``reboot``.
@@ -89,6 +89,7 @@ def build_result(
     instance: str | None = None,
     attempt: int = 1,
     placement: schema.Placement | None = None,
+    injection: schema.InjectionRecord | None = None,
     live_window: str | None = None,
     placement_tool: schema.PlacementTool | None = None,
     windows: schema.Windows | None = None,
@@ -109,6 +110,7 @@ def build_result(
         instance: The emulator instance that ran it, when a queue claimed it.
         attempt: Which attempt at the request this is.
         placement: A landing's placement record.
+        injection: An inject test's record.
         live_window: The expected window as players done found it, in hex.
         placement_tool: The placement tool the session pinned.
         windows: The test step's windows, as configured and as taken.
@@ -156,6 +158,7 @@ def build_result(
             events_dropped=sum(manifest["events_dropped"] for manifest in manifests),
         ),
         placement=placement,
+        injection=injection,
         stages=stages or [],
         crash=_crash(crash, crash_stage) if crash else None,
         hang=_hang(hang) if hang else None,

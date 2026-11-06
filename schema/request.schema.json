@@ -146,87 +146,6 @@
         "step": { "description": "The index of the target step.", "type": "integer", "minimum": 0 }
       }
     },
-    "ObjectId": {
-      "description": "An object's id as the game names it: 0x and up to eight hexadecimal digits.",
-      "type": "string",
-      "pattern": "^0x[0-9A-Fa-f]{1,8}$"
-    },
-    "ObjectOffset": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "offset"],
-      "properties": {
-        "id": { "$ref": "#/$defs/ObjectId" },
-        "offset": { "description": "Where S falls from the object, in signed bytes.", "type": "integer" }
-      }
-    },
-    "AssetTarget": {
-      "description": "The asset of the live base with the id, plus the offset.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["asset"],
-      "properties": { "asset": { "$ref": "#/$defs/ObjectOffset" } }
-    },
-    "LiveTarget": {
-      "description": "The live base with the id, plus the offset.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["live"],
-      "properties": { "live": { "$ref": "#/$defs/ObjectOffset" } }
-    },
-    "LookupTarget": {
-      "description": "The lookup table's entry for the id, plus the offset.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["lookup"],
-      "properties": { "lookup": { "$ref": "#/$defs/ObjectOffset" } }
-    },
-    "AddressTarget": {
-      "description": "An address in guest memory.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["address"],
-      "properties": { "address": { "type": "integer", "minimum": 0, "maximum": 4294967295 } }
-    },
-    "Value": {
-      "description": "Bytes written at an offset from the anchor.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["offset", "hex"],
-      "properties": {
-        "offset": { "description": "Where the bytes start, in signed bytes from the anchor.", "type": "integer" },
-        "hex": { "$ref": "common.schema.json#/$defs/Hex", "minLength": 2 }
-      }
-    },
-    "Injection": {
-      "description": "Words written at a target in the load. Without words or values, the footprint is written.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["target"],
-      "properties": {
-        "target": {
-          "description": "Where S would be: the anchor the writes are laid against.",
-          "oneOf": [
-            { "$ref": "#/$defs/AssetTarget" },
-            { "$ref": "#/$defs/LiveTarget" },
-            { "$ref": "#/$defs/LookupTarget" },
-            { "$ref": "#/$defs/AddressTarget" }
-          ]
-        },
-        "words": {
-          "description": "The footprint's words to write, by their offsets from the anchor. Not with values.",
-          "type": "array",
-          "minItems": 1,
-          "items": { "type": "integer" }
-        },
-        "values": {
-          "description": "Explicit bytes in place of the footprint. Not with words.",
-          "type": "array",
-          "minItems": 1,
-          "items": { "$ref": "#/$defs/Value" }
-        }
-      }
-    },
     "InjectTest": {
       "description": "Injections applied to the loads of a scene, starting at one step of the route.",
       "type": "object",
@@ -234,7 +153,7 @@
       "required": ["step", "injections"],
       "properties": {
         "step": { "description": "The index of the target step, whose load is injected first.", "type": "integer", "minimum": 0 },
-        "injections": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Injection" } },
+        "injections": { "type": "array", "minItems": 1, "items": { "$ref": "common.schema.json#/$defs/Injection" } },
         "first_visit_only": {
           "description": "Inject the target step's load only, not the later loads of its scene. Default: false.",
           "type": "boolean"

@@ -234,7 +234,7 @@ def _test_json(test: LandingTest | ControlTest | InjectTest) -> dict[str, Any]:
     if isinstance(test, InjectTest):
         return {
             "step": test.step,
-            "injections": [_injection_json(injection) for injection in test.injections],
+            "injections": [injection_json(injection) for injection in test.injections],
             "first_visit_only": test.first_visit_only,
         }
     recipe = test.recipe
@@ -248,7 +248,8 @@ def _test_json(test: LandingTest | ControlTest | InjectTest) -> dict[str, Any]:
     }
 
 
-def _injection_json(injection: Injection) -> dict[str, Any]:
+def injection_json(injection: Injection) -> dict[str, Any]:
+    """The injection as a request file spells it."""
     target = injection.target
     spelled = (
         {ADDRESS: target.offset}
@@ -430,7 +431,7 @@ def _inject_test(test: request_schema.InjectTest, steps: tuple[Step, ...], profi
     return InjectTest(index, injections, first_visit_only)
 
 
-def _injection(injection: request_schema.Injection, name: str, profile: PlatformProfile) -> Injection:
+def _injection(injection: common_schema.Injection, name: str, profile: PlatformProfile) -> Injection:
     if injection.words is not None and injection.values is not None:
         raise ValueError(f"{name} has both words and values; give one")
     words = None
@@ -446,7 +447,7 @@ def _injection(injection: request_schema.Injection, name: str, profile: Platform
     return Injection(_target(injection.target), words, values)
 
 
-def _value_bytes(value: request_schema.Value, name: str) -> bytes:
+def _value_bytes(value: common_schema.Value, name: str) -> bytes:
     try:
         data = bytes.fromhex(value.hex)
     except ValueError:
@@ -457,7 +458,7 @@ def _value_bytes(value: request_schema.Value, name: str) -> bytes:
 
 
 def _target(target: Any) -> Target:
-    if isinstance(target, request_schema.AddressTarget):
+    if isinstance(target, common_schema.AddressTarget):
         return Target(ADDRESS, None, target.address)
     kind = next(kind for kind in (ASSET, LIVE, LOOKUP) if hasattr(target, kind))
     found = getattr(target, kind)

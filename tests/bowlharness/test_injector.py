@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from contract import schema_errors
 from scripted import PAD_STATE, ScriptedGame
 from support import FAST, drive, level, polls
 from test_injection import ASSET, ID, TABLE, memory
@@ -153,3 +154,49 @@ def test_an_inject_run_is_watched_as_a_control_is(tmp_path: Path) -> None:
     assert [stage["stage"] for stage in written["stages"]][:3] == ["loading", "held", "in control"]
     assert "render" in [stage["stage"] for stage in written["stages"]]
     assert written["placement"] is None
+
+
+def result(directory: Path) -> dict[str, Any]:
+    return json.loads((directory / "out" / "result.json").read_text(encoding="utf-8"))
+
+
+def test_an_inject_result_validates_and_records_the_test_and_each_loads_anchors(tmp_path: Path) -> None:
+    injections = [{"target": ASSET_TARGET}, {"target": LOOKUP_TARGET, "words": [0x38]}]
+
+    drive(inject_game(revisit=True), tmp_path, request(injections, revisit=True))
+
+    written = result(tmp_path)
+    first, second = written["injection"]["loads"]
+    assert schema_errors(written, "result") == []
+    assert (written["schema_version"], written["kind"], written["outcome"]) == (2, "inject", "survived")
+    assert [(i["target"], i["words"]) for i in written["injection"]["injections"]] == [
+        (ASSET_TARGET, None),
+        (LOOKUP_TARGET, [0x38]),
+    ]
+    assert (first["counter"], first["scene"], second["counter"]) == (2, "TARG", 4)
+    assert [(i["index"], i["timing"], i["anchor"]) for i in first["injections"]] == [
+        (0, "after-player-init", ASSET),
+        (1, "at-first-draw", ENTRY - 0x38),
+    ]
+    assert [seq for i in first["injections"] for seq in i["seqs"]] == [
+        row["seq"] for row in written["write_ledger"][:5]
+    ]
+
+
+def test_a_missing_target_is_a_not_injected_result_with_its_reason(tmp_path: Path) -> None:
+    injections = [{"target": {"asset": {"id": "0xBEEF", "offset": 0}}}]
+
+    drive(inject_game(), tmp_path, request(injections))
+
+    written = result(tmp_path)
+    assert schema_errors(written, "result") == []
+    assert (written["outcome"], written["cause"], written["write_ledger"]) == ("not injected", "no base", [])
+    assert written["injection"]["loads"][0]["injections"][0]["anchor"] is None
+
+
+def test_explicit_values_are_recorded_as_explicit(tmp_path: Path) -> None:
+    injections = [{"target": {"address": ADDRESS}, "values": [{"offset": 0, "hex": "01"}]}]
+
+    drive(inject_game(), tmp_path, request(injections))
+
+    assert result(tmp_path)["injection"]["loads"][0]["injections"][0]["source"] == "explicit"

@@ -6,6 +6,7 @@ from typing import Any, Literal
 from .common_schema import (
     HeapState,
     Hex,
+    Injection,
     InputPolicy,
     Observe,
     Scene,
@@ -40,6 +41,7 @@ type Outcome = Literal[
     "no control",
     "layout mismatch",
     "not placed",
+    "not injected",
     "scene change",
     "costume mismatch",
     "menu unreachable",
@@ -173,6 +175,34 @@ class Load:
     costumes: dict[str, str | None]
     """
     The tag of the player archive each character wore, by character; null for none.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class InjectionOutcome:
+    """
+    One injection in one load.
+    """
+
+    index: int
+    """
+    The injection's position in the test's injections.
+    """
+    source: Literal["footprint", "explicit"]
+    """
+    footprint: the profile's words, or the picked ones. explicit: the request's own bytes.
+    """
+    timing: Literal["after-player-init", "at-first-draw"]
+    """
+    after-player-init: written at players done. at-first-draw: written at the load's first drawn frame.
+    """
+    anchor: int | None
+    """
+    Where the target resolved to; null when the load never got that far.
+    """
+    seqs: list[int]
+    """
+    The seq of each of its write events, in the write ledger.
     """
 
 
@@ -317,10 +347,10 @@ class Write:
     """
     The seq of its write event.
     """
-    class_: Literal["bowl-storage"]
+    class_: Literal["bowl-storage", "inject"]
     target: str
     """
-    What was written: sphere, flag or scale.
+    What was written: sphere, flag or scale; for an injection, its target and the offset written, such as asset 0x1A2B3C4D+0x38.
     """
     address: int
     new: Hex
@@ -438,6 +468,20 @@ class Placement:
 
 
 @dataclass(frozen=True, kw_only=True)
+class InjectedLoad:
+    """
+    What the test did in one load.
+    """
+
+    counter: int
+    """
+    The load's counter.
+    """
+    scene: Scene
+    injections: list[InjectionOutcome]
+
+
+@dataclass(frozen=True, kw_only=True)
 class Hang:
     """
     A guest that made no progress.
@@ -545,12 +589,32 @@ class Manifest:
 
 
 @dataclass(frozen=True, kw_only=True)
+class InjectionRecord:
+    """
+    An inject test as requested, and the loads it injected.
+    """
+
+    injections: list[Injection]
+    """
+    The test's injections as requested.
+    """
+    first_visit_only: bool
+    loads: list[InjectedLoad]
+    """
+    The loads injected, in order: the target step's, then each later load of its scene.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
 class Result:
     """
     What one attempt at a request did, written once when the run ends and never changed. A field that doesn't apply is null, or sits in a group that says why.
     """
 
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
+    """
+    2 since the inject kind; 1 results are still read.
+    """
     run: str
     """
     The run's id: the request's id and the attempt, <request>-a<attempt>.
@@ -563,7 +627,7 @@ class Result:
     """
     Which attempt at the request this is, from 1.
     """
-    kind: Literal["record", "landing", "control"]
+    kind: Literal["record", "landing", "control", "inject"]
     """
     The request's kind.
     """
@@ -576,7 +640,7 @@ class Result:
     outcome: Outcome
     cause: str | None
     """
-    Why an interrupted run was cut short (stopped, lost, a harness fault); null for any other outcome.
+    Why an interrupted run was cut short (stopped, lost, a harness fault), or why a target was not injected; null for any other outcome.
     """
     manifest: Manifest
     placement: Placement | None
@@ -626,3 +690,7 @@ class Result:
     The request's client value, as received.
     """
     memory: Memory
+    injection: InjectionRecord | None = None
+    """
+    The inject test and what it did to each load; null in any other kind. Absent in a version 1 result.
+    """
