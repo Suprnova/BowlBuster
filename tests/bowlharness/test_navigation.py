@@ -391,3 +391,34 @@ def test_a_press_still_pending_when_a_scene_loads_is_dropped(tmp_path: Path) -> 
 
     presses = [row["button"] for row in manifest["input_ledger"]]
     assert (session.result, presses[:3]) == ("done", ["start", "a", "start"])
+
+
+def test_start_waits_for_the_player_to_be_back_in_control_after_the_step_was_reached(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    polls(game, FAST.scene_classes.stall_frames - 5, control_off=1)
+    back = game.frame
+    game.await_press("start", after=PAUSE_MENU)
+    for _ in range(3):
+        game.await_confirm(mode=PAUSE_MENU, after=PAUSE_MENU)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    start = manifest["input_ledger"][0]
+    assert (session.result, start["button"], start["sent_frame"] > back) == ("done", "start", True)
+
+
+def test_start_is_sent_anyway_when_the_player_never_recovers(tmp_path: Path) -> None:
+    stall = FAST.scene_classes.stall_frames
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    polls(game, stall + 40, control_off=1)
+
+    _, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    start = manifest["input_ledger"][0]
+    assert (start["button"], start["sent_frame"] >= manifest["steps"][0]["frame"] + stall) == ("start", True)

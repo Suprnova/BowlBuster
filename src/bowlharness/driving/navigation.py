@@ -131,6 +131,7 @@ class Navigator:
         self._players_frame: int | None = None
         self._since: int | None = None
         self._undrawn = False
+        self._busy_since: int | None = None
         self._presses = 0
         self._game_opened = False
         self._trusted = False
@@ -240,6 +241,7 @@ class Navigator:
         self._players_frame = None
         self._since = None
         self._undrawn = False
+        self._busy_since = None
         self._game_opened = False
         self._presses = self._recorder.presses
 
@@ -354,7 +356,20 @@ class Navigator:
     def _overdue(self) -> bool:
         """Whether the pending press has had its polls to show an effect and the driver has nothing left to give."""
         assert self._pending is not None
+        if self._pending.action == "pause" and self._player_busy():
+            return False
         return self._polls - self._pending.queued_poll >= self._profile.navigation.action_polls and self._driver_idle
+
+    def _player_busy(self) -> bool:
+        """Whether Start would be ignored: the player is out of control in a step it reached in control, as it is
+        while it dies. This holds for at most the scene classes' stall length, so a player that never recovers still
+        ends the step ``stalled``."""
+        if self._signal == "control_off" or self._read(self._profile.navigation.control_off) == 0:
+            self._busy_since = None
+            return False
+        frame = self._recorder.frame()
+        self._busy_since = frame if self._busy_since is None else self._busy_since
+        return frame - self._busy_since < self._profile.scene_classes.stall_frames
 
     def _confirmed(self) -> bool:
         """Whether the pending press took effect; sends it again when it hasn't, and fails the step if that keeps up.
@@ -383,7 +398,8 @@ class Navigator:
     def _pause(self) -> None:
         modes = self._profile.navigation.modes
         if self._pending is None:
-            self._begin("pause", "start", self._profile.globals.game_mode, lambda mode: mode == modes.pause_menu)
+            if not self._player_busy():
+                self._begin("pause", "start", self._profile.globals.game_mode, lambda mode: mode == modes.pause_menu)
         elif self._confirmed():
             self._trusted = True
             self._menu_opened = time.monotonic()
