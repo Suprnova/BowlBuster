@@ -219,6 +219,7 @@ class DrivenSession(Session):
                 match=placement.match if placement else None,
                 events_dropped=sum(manifest["events_dropped"] for manifest in manifests),
                 warp_retries=navigator.warp_retries if navigator else 0,
+                test_ended=injector is not None and injector.verdict is not None,
             )
         self.written = build_result(
             self._request.to_json(),

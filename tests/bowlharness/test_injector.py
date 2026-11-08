@@ -191,6 +191,7 @@ def test_a_missing_target_is_a_not_injected_result_with_its_reason(tmp_path: Pat
     written = result(tmp_path)
     assert schema_errors(written, "result") == []
     assert (written["outcome"], written["cause"], written["write_ledger"]) == ("not injected", "no base", [])
+    assert written["integrity"]["flags"] == []
     assert written["injection"]["loads"][0]["injections"][0]["anchor"] is None
 
 

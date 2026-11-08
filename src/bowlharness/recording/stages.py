@@ -202,8 +202,14 @@ class StageTracker:
             write_timeout=_record(self._windows.write_timeout, write),
         )
 
-    def flags(self, *, match: float | None, events_dropped: int, warp_retries: int) -> list[str]:
-        """The integrity flags of 15.1 the run raised; a run is valid when there are none."""
+    def flags(
+        self, *, match: float | None, events_dropped: int, warp_retries: int, test_ended: bool = False
+    ) -> list[str]:
+        """The integrity flags of 15.1 the run raised; a run is valid when there are none.
+
+        ``test_ended`` says the request's own test ended the run before the player had control, as ``not injected``
+        does, so that the player never having control is no sign of a fault.
+        """
         raised = []
         if self._crashed is not None and any(entry.start > self._crashed for entry in self._entries):
             raised.append("stage after crash")
@@ -217,7 +223,7 @@ class StageTracker:
             raised.append("warp retried")
         if events_dropped:
             raised.append("events dropped")
-        if self._kind != LANDING and self._entries and not self._controlled:
+        if self._kind != LANDING and self._entries and not self._controlled and not test_ended:
             raised.append("control never given")
         if match is not None and match < 0.9:
             raised.append("match below 0.9")
