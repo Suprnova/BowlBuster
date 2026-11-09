@@ -9,7 +9,7 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "datamodel-code-generator==0.86.0",
+    "datamodel-code-generator==0.90.0",
     "jsonschema==4.26.0",
     "pytest",
     "pytest-cov",
