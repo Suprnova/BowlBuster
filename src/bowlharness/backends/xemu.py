@@ -44,7 +44,8 @@ def preconditions(config: dict[str, Any], running: list[str]) -> list[str]:
     return failures
 
 
-def _sha256(path: Path) -> str:
+def file_sha256(path: Path) -> str:
+    """A file's SHA-256, read in 8 MiB chunks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         while chunk := handle.read(1 << 23):
@@ -76,11 +77,11 @@ def describe(exe: Path | None, config_path: Path, gdb_version: str) -> dict[str,
         "emulator": {
             "name": "xemu",
             **parse_banner(banner),
-            **({"executable_sha256": _sha256(exe)} if exe else {}),
-            "config_sha256": _sha256(config_path),
+            **({"executable_sha256": file_sha256(exe)} if exe else {}),
+            "config_sha256": file_sha256(config_path),
             "controller": config.get("input", {}).get("bindings", {}).get("port1"),
         },
-        "disc": {"image": disc.name, "image_sha256": _sha256(disc)} if disc.is_file() else {},
+        "disc": {"image": disc.name, "image_sha256": file_sha256(disc)} if disc.is_file() else {},
         "storage": {"image": storage.name, "bytes": storage.stat().st_size} if storage.is_file() else {},
         "gdb": gdb_version,
         "host": platform.platform(),

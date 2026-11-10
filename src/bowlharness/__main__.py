@@ -1,4 +1,7 @@
-"""Starts gdb with the harness loaded: ``python -m bowlharness [--gdb <gdb>] <bowl command> [arguments]``."""
+"""Starts gdb with the harness loaded: ``python -m bowlharness [--gdb <gdb>] <bowl command> [arguments]``.
+
+``python -m bowlharness saves ...`` manages the save library instead, with no gdb (:mod:`bowlharness.saves.commands`).
+"""
 
 import os
 import shutil
@@ -67,6 +70,10 @@ def main() -> int:
     named, arguments = split_gdb(sys.argv[1:])
     if not arguments:
         raise SystemExit("usage: python -m bowlharness [--gdb <gdb>] <bowl command> [arguments]")
+    if arguments[0] == "saves":
+        from bowlharness.saves.commands import main as saves
+
+        return saves(arguments[1:])
     return run_gdb(gdb_command(find_gdb(named), arguments))
 
 

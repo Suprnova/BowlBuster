@@ -90,6 +90,21 @@ guest rebooted, and the request run into `<folder>/runs/<request>-a<attempt>/`, 
 is pending, the emulator is lost, or a person runs `bowl stop`. Started again, it reports the runs a lost session left
 as `interrupted` and claims them again as new attempts.
 
+## The save library
+
+```
+uv run python -m bowlharness saves add --saves <folder> --image <xbox_hdd.qcow2> --name <image>
+    --save <slot>:<name>:<scene> [--save ...] [--about <name>:<text> ...]
+uv run python -m bowlharness saves list --saves <folder>
+```
+
+The library holds xemu storage images with the game's saves in them, each under a name that is unique across the
+library. `add` copies an image into `<folder>/<image>/`, with an `image.json` holding its SHA-256 and its saves: the
+slot (1 to 3), the scene the save loads into, and what was played to make it. It never changes the image it copies,
+refuses while xemu runs, and refuses a name the library already holds. A library image is never run: a run that
+starts from a save plays on a fresh copy in `<folder>/work/<instance>/`, which the game writes to (it autosaves at
+every token). These commands need no gdb.
+
 ## Requests and results
 
 A request's and a result's spelling is the JSON schemas in `schema/` at the repository root. The types the harness
