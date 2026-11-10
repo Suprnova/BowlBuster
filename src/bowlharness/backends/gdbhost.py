@@ -50,6 +50,17 @@ def _register(name: str) -> int:
     return int(gdb.parse_and_eval(f"${name}")) & 0xFFFFFFFF
 
 
+_last_stop: list[str] = []
+"""What the guest last stopped on, while a :meth:`GdbTarget.run` waits: ``breakpoint``, or the stop event's kind."""
+
+
+def _note_stop(event: Any) -> None:
+    _last_stop[:] = ["breakpoint" if isinstance(event, gdb.BreakpointEvent) else type(event).__name__]
+
+
+gdb.events.stop.connect(_note_stop)
+
+
 class _Point(gdb.Breakpoint):
     def __init__(
         self, spec: str, kind: int, handler: Handler, target: GdbTarget, *, pc: int | None, watched: int | None
@@ -61,8 +72,17 @@ class _Point(gdb.Breakpoint):
         self._watched = watched
 
     def stop(self) -> bool:
+        """Runs the handler and stops the guest only if a handler asked to.
+
+        gdb stops at a breakpoint whose ``stop`` raises, which the session would read as a person's pause, so a handler
+        that raises drops its event instead; a person's Ctrl-C (``KeyboardInterrupt``) still stops.
+        """
         self._target.stops += 1
-        self._handler(Stop(_register("pc") if self._pc is None else self._pc, self._watched))
+        pc = _register("pc") if self._pc is None else self._pc
+        try:
+            self._handler(Stop(pc, self._watched))
+        except Exception as error:
+            print(f"dropped the event at {pc:#x}: {type(error).__name__}: {error}")
         return self._target.take_interrupt()
 
 
@@ -83,6 +103,7 @@ class GdbTarget:
         self._points: dict[Handle, _Point] = {}
         self._next_handle = 0
         self._interrupted = False
+        self._requested = False
         self._runs = 0
         self._continuing = False
         self.stops = 0
@@ -124,21 +145,34 @@ class GdbTarget:
         self._interrupted = True
 
     def run(self, timeout: float | None = None) -> bool:
-        self._interrupted = False
+        """Runs the guest until a handler asks it to stop, a person stops it, or ``timeout`` passes with no stop.
+
+        A breakpoint stop no handler asked for is no person's either (a person's Ctrl-C stops on a signal), so the guest
+        is resumed after it rather than the stop being returned as a pause.
+        """
+        self._interrupted = self._requested = False
         self._runs += 1
         expired = threading.Event()
         timers: list[threading.Timer] = []
         if timeout is not None:
             self._watch_for_silence(timeout, expired, timers, self._runs)
-        self._continuing = True
         try:
-            gdb.execute("continue", to_string=True)
-        except KeyboardInterrupt:
-            self._stop_running_guest()
+            while True:
+                _last_stop[:] = []
+                self._continuing = True
+                try:
+                    gdb.execute("continue", to_string=True)
+                except KeyboardInterrupt:
+                    self._stop_running_guest()
+                    break
+                finally:
+                    self._continuing = False
+                if expired.is_set() or self._requested or _last_stop != ["breakpoint"]:
+                    break
+                print("resumed the guest: it stopped at a breakpoint no handler asked it to stop at")
         except gdb.error as error:
             raise TargetError(str(error)) from error
         finally:
-            self._continuing = False
             for timer in timers:
                 timer.cancel()
         return expired.is_set()
@@ -182,6 +216,7 @@ class GdbTarget:
     def take_interrupt(self) -> bool:
         """Whether a handler asked to stop the guest; the request is consumed."""
         interrupted, self._interrupted = self._interrupted, False
+        self._requested |= interrupted
         return interrupted
 
     def _add(self, point: _Point) -> Handle:
