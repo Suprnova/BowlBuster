@@ -83,6 +83,8 @@ class GdbTarget:
         self._points: dict[Handle, _Point] = {}
         self._next_handle = 0
         self._interrupted = False
+        self._runs = 0
+        self._continuing = False
         self.stops = 0
 
     def set_breakpoint(self, address: int, handler: Handler) -> Handle:
@@ -123,10 +125,12 @@ class GdbTarget:
 
     def run(self, timeout: float | None = None) -> bool:
         self._interrupted = False
+        self._runs += 1
         expired = threading.Event()
         timers: list[threading.Timer] = []
         if timeout is not None:
-            self._watch_for_silence(timeout, expired, timers)
+            self._watch_for_silence(timeout, expired, timers, self._runs)
+        self._continuing = True
         try:
             gdb.execute("continue", to_string=True)
         except KeyboardInterrupt:
@@ -134,6 +138,7 @@ class GdbTarget:
         except gdb.error as error:
             raise TargetError(str(error)) from error
         finally:
+            self._continuing = False
             for timer in timers:
                 timer.cancel()
         return expired.is_set()
@@ -144,20 +149,28 @@ class GdbTarget:
         with suppress(gdb.error):
             gdb.execute("interrupt", to_string=True)
 
-    def _watch_for_silence(self, timeout: float, expired: threading.Event, timers: list[threading.Timer]) -> None:
+    def _watch_for_silence(
+        self, timeout: float, expired: threading.Event, timers: list[threading.Timer], run: int
+    ) -> None:
         """Interrupts the guest after ``timeout`` seconds with no stop reaching a handler.
 
         Interrupting a guest that keeps stopping at breakpoints would often land on a breakpoint's own address, and gdb
-        resumes from there by stepping over it, which loses that stop.
+        resumes from there by stepping over it, which loses that stop. The interrupt is posted to gdb's event loop,
+        which may run it only after the ``continue`` it was meant for has returned; it then does nothing, so it never
+        stops a later ``continue``, which would read as a person's pause.
         """
         seen = self.stops
 
+        def interrupt() -> None:
+            if self._continuing and self._runs == run:
+                gdb.execute("interrupt", to_string=True)
+
         def check() -> None:
             if self.stops != seen:
-                self._watch_for_silence(timeout, expired, timers)
+                self._watch_for_silence(timeout, expired, timers, run)
                 return
             expired.set()
-            gdb.post_event(lambda: gdb.execute("interrupt", to_string=True))
+            gdb.post_event(interrupt)
 
         timer = threading.Timer(timeout, check)
         timers.append(timer)
