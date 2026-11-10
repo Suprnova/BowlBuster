@@ -170,9 +170,11 @@ def _read_union(options: list[Any], value: Any, path: Path, root: str) -> Any:
             return _read_object(matching[0], value, path, root)
         if not matching and (found := _discriminator(kinds)):
             name, values = found
-            if value.get(name) in values:
-                return _read_object(kinds[values.index(value[name])], value, path, root)
-            raise ValueError(f"{_label((*path, name), root)} must be one of {', '.join(map(str, values))}")
+            for kind, allowed in zip(kinds, values, strict=True):
+                if value.get(name) in allowed:
+                    return _read_object(kind, value, path, root)
+            listed = ", ".join(str(item) for allowed in values for item in allowed)
+            raise ValueError(f"{_label((*path, name), root)} must be one of {listed}")
     for option in options:
         try:
             return _read(option, value, path, root)
@@ -196,10 +198,11 @@ def _discriminated(kind: type, value: dict[str, Any]) -> bool:
     return all(value[name] in allowed for name, allowed in _literals(kind).items() if name in value)
 
 
-def _discriminator(kinds: list[type]) -> tuple[str, list[Any]] | None:
-    """The single-valued literal field that tells ``kinds`` apart, and the value each has there."""
+def _discriminator(kinds: list[type]) -> tuple[str, list[tuple[Any, ...]]] | None:
+    """The literal field that tells ``kinds`` apart, every kind allowing values no other does, and those values."""
     for name in _literals(kinds[0]):
         values = [_literals(kind).get(name, ()) for kind in kinds]
-        if all(len(allowed) == 1 for allowed in values) and len({allowed[0] for allowed in values}) == len(kinds):
-            return name, [allowed[0] for allowed in values]
+        flat = [item for allowed in values for item in allowed]
+        if all(values) and len(set(flat)) == len(flat):
+            return name, values
     return None

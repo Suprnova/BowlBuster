@@ -17,6 +17,10 @@
     },
     "Start": {
       "description": "How the run reaches its first step.",
+      "oneOf": [{ "$ref": "#/$defs/BootStart" }, { "$ref": "#/$defs/SaveStart" }]
+    },
+    "BootStart": {
+      "description": "A start from the boot, with nothing loaded.",
       "type": "object",
       "additionalProperties": false,
       "required": ["from"],
@@ -24,6 +28,20 @@
         "from": {
           "description": "new-game: the main menu's New Game, then the first step's load. booted: the disc boots straight into the first step's scene.",
           "enum": ["new-game", "booted"]
+        }
+      }
+    },
+    "SaveStart": {
+      "description": "A start from a save in the harness's save library, loaded through the main menu's Load Game. Since schema_version 3.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "save"],
+      "properties": {
+        "from": { "const": "save" },
+        "save": {
+          "description": "The save's name in the library. The first step is the scene it loads into.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
@@ -166,7 +184,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "request_id", "kind", "start", "steps"],
       "properties": {
-        "schema_version": { "enum": [1, 2] },
+        "schema_version": { "enum": [1, 2, 3] },
         "request_id": { "$ref": "#/$defs/RequestId" },
         "kind": { "const": "record" },
         "start": { "$ref": "#/$defs/Start" },
@@ -182,7 +200,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "request_id", "kind", "start", "steps", "tests"],
       "properties": {
-        "schema_version": { "enum": [1, 2] },
+        "schema_version": { "enum": [1, 2, 3] },
         "request_id": { "$ref": "#/$defs/RequestId" },
         "kind": { "const": "landing" },
         "start": { "$ref": "#/$defs/Start" },
@@ -206,7 +224,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "request_id", "kind", "start", "steps", "tests"],
       "properties": {
-        "schema_version": { "enum": [1, 2] },
+        "schema_version": { "enum": [1, 2, 3] },
         "request_id": { "$ref": "#/$defs/RequestId" },
         "kind": { "const": "control" },
         "start": { "$ref": "#/$defs/Start" },
@@ -230,7 +248,7 @@
       "additionalProperties": false,
       "required": ["schema_version", "request_id", "kind", "start", "steps", "tests"],
       "properties": {
-        "schema_version": { "const": 2 },
+        "schema_version": { "enum": [2, 3] },
         "request_id": { "$ref": "#/$defs/RequestId" },
         "kind": { "const": "inject" },
         "start": { "$ref": "#/$defs/Start" },

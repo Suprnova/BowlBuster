@@ -119,6 +119,16 @@ def test_a_slot_holding_another_scene_fails_before_any_input(tmp_path: Path) -> 
     assert (session.result, manifest["input_ledger"]) == ("failed: step 1 (TARG), menu unreachable", [])
 
 
+def test_a_start_from_a_save_is_not_driven_yet(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    level(game, "ORIG", 1)
+    polls(game, 20)
+
+    session, manifest = drive(game, tmp_path, replace(route("ORIG"), start="save", save="base"))
+
+    assert (session.result, manifest["input_ledger"]) == ("failed: step 0 (ORIG), unsupported", [])
+
+
 def test_a_confirmed_warp_that_loads_nothing_fails_as_menu_unreachable(tmp_path: Path) -> None:
     quick = replace(FAST, navigation=replace(FAST.navigation, warp_polls=60))
     game = ScriptedGame(quick)

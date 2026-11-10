@@ -108,6 +108,19 @@ def test_a_queue_takes_its_store_and_instance_and_the_launch_arguments() -> None
     )
 
 
+def test_drive_and_queue_take_the_save_library() -> None:
+    drive = parse_drive_arguments(["--out", OUT, "--xemu", "x.exe", "--request", "r.json", "--saves", "lib"], "run")
+    queue = parse_queue_arguments(["--store", OUT, "--instance", "inst3", "--xemu", "x.exe", "--saves", "lib"])
+
+    assert (drive.saves, queue.saves) == (Path("lib"), Path("lib"))
+
+
+def test_without_a_save_library_there_is_none() -> None:
+    arguments = parse_queue_arguments(["--store", OUT, "--instance", "inst3", "--xemu", "x.exe"])
+
+    assert arguments.saves is None
+
+
 def test_a_queue_store_is_an_absolute_path() -> None:
     with pytest.raises(ValueError, match="--store must be an absolute path"):
         parse_queue_arguments(["--store", "store", "--instance", "inst3", "--xemu", "xemu.exe"])

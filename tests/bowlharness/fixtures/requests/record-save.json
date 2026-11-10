@@ -1,0 +1,10 @@
+{
+  "schema_version": 3,
+  "request_id": "save-load-1",
+  "kind": "record",
+  "start": { "from": "save", "save": "base" },
+  "steps": [
+    { "scene": "BB02" },
+    { "scene": "B101", "menu": { "world": 4, "slot": 1 }, "costumes": ["PLSB"] }
+  ]
+}

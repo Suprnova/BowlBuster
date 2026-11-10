@@ -13,7 +13,7 @@ from bowlharness.contract.documents import read_document, write_document
 from bowlharness.contract.generated import common_schema
 from bowlharness.contract.generated import result_schema as schema
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 NOT_OBSERVED = "the observed-fields list is not confirmed"
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -148,6 +148,7 @@ def build_result(
             boot_path=first["boot_path"],
             request_sha256=first["request_sha256"],
             setup=request["start"]["from"],
+            save=schema.SaveRecord(**save) if (save := first.get("save")) else None,
             observation=read_document(common_schema.Observe, request["observe"], "observe"),
             input=read_document(common_schema.InputPolicy, request["input"], "input"),
             windows=windows,

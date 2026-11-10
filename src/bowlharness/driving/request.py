@@ -11,9 +11,12 @@ from bowlharness.contract.documents import read_document
 from bowlharness.contract.generated import common_schema, request_schema
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.recorder import Options
+from bowlharness.saves.library import Library
 
 SCHEMA_VERSION = 1
 INJECT_SCHEMA_VERSION = 2
+SAVE_SCHEMA_VERSION = 3
+SAVE = "save"
 RECORD = "record"
 LANDING = "landing"
 CONTROL = "control"
@@ -179,7 +182,8 @@ class Request:
     Attributes:
         request_id: The request's durable identity.
         kind: ``record``, ``landing``, ``control`` or ``inject``.
-        start: ``new-game`` to begin at the main menu's New Game, or ``booted`` when the disc boots into the first step.
+        start: ``new-game`` to begin at the main menu's New Game, ``booted`` when the disc boots into the first step,
+            or ``save`` to load a library save through the main menu's Load Game.
         steps: The scenes to load, in order.
         options: What to observe.
         hold: How many polls a press is held for.
@@ -187,6 +191,7 @@ class Request:
         client: An opaque value the harness returns unread.
         test: The request's one test; ``None`` in a record.
         windows: The test's windows; ``None`` in a record.
+        save: The library save a ``save`` start loads, by name; ``None`` for any other start.
     """
 
     request_id: str
@@ -199,14 +204,15 @@ class Request:
     client: Any = None
     test: LandingTest | ControlTest | InjectTest | None = None
     windows: Windows | None = None
+    save: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         """The request as a manifest records it: the file's spelling, defaults included."""
         return {
-            "schema_version": INJECT_SCHEMA_VERSION if self.kind == INJECT else SCHEMA_VERSION,
+            "schema_version": self._version(),
             "request_id": self.request_id,
             "kind": self.kind,
-            "start": {"from": self.start},
+            "start": {"from": self.start, **({"save": self.save} if self.save else {})},
             "steps": [
                 {
                     "scene": step.scene,
@@ -226,6 +232,11 @@ class Request:
             "input": {"hold": self.hold, "release": self.release},
             "client": self.client,
         }
+
+    def _version(self) -> int:
+        if self.save:
+            return SAVE_SCHEMA_VERSION
+        return INJECT_SCHEMA_VERSION if self.kind == INJECT else SCHEMA_VERSION
 
 
 def _test_json(test: LandingTest | ControlTest | InjectTest) -> dict[str, Any]:
@@ -334,6 +345,9 @@ def parse_request(document: Any, profile: PlatformProfile) -> Request:
     elif isinstance(request, request_schema.LandingRequest | request_schema.ControlRequest):
         test = _test(request.tests[0], steps)
         windows = _windows(request.windows or request_schema.Windows(), profile)
+    save = request.start.save if isinstance(request.start, request_schema.SaveStart) else None
+    if save is not None and request.schema_version < SAVE_SCHEMA_VERSION:
+        raise ValueError(f"start.from {SAVE} needs schema_version {SAVE_SCHEMA_VERSION}")
     return Request(
         request.request_id,
         request.kind,
@@ -345,7 +359,25 @@ def parse_request(document: Any, profile: PlatformProfile) -> Request:
         request.client,
         test,
         windows,
+        save,
     )
+
+
+def check_save(request: Request, library: Library | None) -> None:
+    """Checks a request that starts from a save against the save library. Raises ``ValueError`` naming the field.
+
+    Args:
+        request: The request.
+        library: The save library, or ``None`` when the harness was given none.
+    """
+    if request.save is None:
+        return
+    if library is None:
+        raise ValueError("start.save needs a save library: give --saves")
+    if (save := library.saves.get(request.save)) is None:
+        raise ValueError(f"start.save names {request.save}, which the save library doesn't hold")
+    if request.steps[0].scene != save.scene:
+        raise ValueError(f"steps[0].scene must be {save.scene}, the scene save {save.name} loads into")
 
 
 def _polls(value: int, name: str) -> int:

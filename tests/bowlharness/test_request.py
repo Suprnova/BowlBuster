@@ -14,15 +14,18 @@ from bowlharness.driving.request import (
     LandingTest,
     Menu,
     Recipe,
+    Request,
     Step,
     Target,
     Window,
     Windows,
+    check_save,
     default_windows,
     parse_request,
     read_request,
 )
 from bowlharness.profiles import XBOX_NTSC_U
+from bowlharness.saves.library import INDEX, Library
 
 
 def document(**changes: Any) -> dict[str, Any]:
@@ -253,8 +256,64 @@ def test_a_scene_is_four_characters() -> None:
     refused(document(steps=[{"scene": "TOOLONG"}]), r"steps\[0\]\.scene must be a four-character tag")
 
 
-def test_a_start_is_new_game_or_booted() -> None:
-    refused(document(start={"from": "save"}), "start.from must be one of new-game, booted")
+def test_a_start_is_new_game_booted_or_save() -> None:
+    refused(document(start={"from": "title"}), "start.from must be one of new-game, booted, save")
+
+
+def test_a_save_start_names_its_save_and_writes_back_at_version_3() -> None:
+    request = parse_request(document(schema_version=3, start={"from": "save", "save": "base"}), XBOX_NTSC_U)
+
+    assert (request.start, request.save) == ("save", "base")
+    assert (request.to_json()["start"], request.to_json()["schema_version"]) == ({"from": "save", "save": "base"}, 3)
+
+
+def test_a_save_start_needs_version_3() -> None:
+    refused(document(start={"from": "save", "save": "base"}), "start.from save needs schema_version 3")
+
+
+def test_a_save_start_needs_its_save() -> None:
+    refused(document(schema_version=3, start={"from": "save"}), "start.save is required")
+
+
+def test_a_boot_start_has_no_save() -> None:
+    refused(document(start={"from": "booted", "save": "base"}), "start has an unknown field 'save'")
+
+
+def save_request(scene: str = "ORIG") -> Request:
+    steps = [{"scene": scene}, {"scene": "TARG", "menu": {"world": 3, "slot": 2}}]
+    return parse_request(document(schema_version=3, start={"from": "save", "save": "base"}, steps=steps), XBOX_NTSC_U)
+
+
+def library(tmp_path: Path, scene: str = "ORIG") -> Library:
+    folder = tmp_path / "played-1"
+    folder.mkdir()
+    index = {"sha256": "0" * 64, "bytes": 1, "added": "2026-11-09", "source": "x", "saves": []}
+    index["saves"] = [{"slot": 1, "name": "base", "scene": scene, "about": ""}]
+    (folder / INDEX).write_text(json.dumps(index), encoding="utf-8")
+    return Library(tmp_path)
+
+
+def test_a_save_the_library_holds_whose_scene_is_the_first_steps_passes(tmp_path: Path) -> None:
+    check_save(save_request(), library(tmp_path))
+
+
+def test_a_save_the_library_does_not_hold_is_refused_naming_start_save(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="start.save names base, which the save library doesn't hold"):
+        check_save(save_request(), Library(tmp_path))
+
+
+def test_a_first_step_that_is_not_the_saves_scene_is_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="steps.0..scene must be BB02, the scene save base loads into"):
+        check_save(save_request("ORIG"), library(tmp_path, "BB02"))
+
+
+def test_a_save_start_without_a_library_is_refused() -> None:
+    with pytest.raises(ValueError, match="give --saves"):
+        check_save(save_request(), None)
+
+
+def test_a_request_from_the_boot_needs_no_library() -> None:
+    check_save(parse_request(document(), XBOX_NTSC_U), None)
 
 
 def test_a_route_needs_a_step() -> None:

@@ -168,7 +168,7 @@ def test_an_inject_result_validates_and_records_the_test_and_each_loads_anchors(
     written = result(tmp_path)
     first, second = written["injection"]["loads"]
     assert schema_errors(written, "result") == []
-    assert (written["schema_version"], written["kind"], written["outcome"]) == (2, "inject", "survived")
+    assert (written["schema_version"], written["kind"], written["outcome"]) == (3, "inject", "survived")
     assert [(i["target"], i["words"]) for i in written["injection"]["injections"]] == [
         (ASSET_TARGET, None),
         (LOOKUP_TARGET, [0x38]),

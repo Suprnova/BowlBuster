@@ -95,6 +95,30 @@ class Disc:
 
 
 @dataclass(frozen=True, kw_only=True)
+class SaveRecord:
+    """
+    A save from the harness's library, as image.json recorded it when the image was added.
+    """
+
+    name: str
+    """
+    The save's name in the library.
+    """
+    slot: int
+    """
+    Its save slot.
+    """
+    image: str
+    """
+    The library image that holds it.
+    """
+    storage_sha256: Sha256
+    """
+    The library image's SHA-256.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
 class Storage:
     """
     The storage image.
@@ -556,7 +580,7 @@ class Manifest:
     """
     The hash of the request file's bytes.
     """
-    setup: Literal["new-game", "booted"]
+    setup: Literal["new-game", "booted", "save"]
     """
     How the game was set up: the request's start.
     """
@@ -586,6 +610,10 @@ class Manifest:
     """
     How many events the recordings lost.
     """
+    save: SaveRecord | None = None
+    """
+    The library save a save run started from; null for any other setup. Absent before version 3.
+    """
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -611,9 +639,9 @@ class Result:
     What one attempt at a request did, written once when the run ends and never changed. A field that doesn't apply is null, or sits in a group that says why.
     """
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     """
-    2 since the inject kind; 1 results are still read.
+    3 since starts from a save, 2 since the inject kind; 1 and 2 results are still read.
     """
     run: str
     """

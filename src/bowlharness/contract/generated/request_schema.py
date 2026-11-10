@@ -12,14 +12,27 @@ The request's durable identity.
 
 
 @dataclass(frozen=True, kw_only=True)
-class Start:
+class BootStart:
     """
-    How the run reaches its first step.
+    A start from the boot, with nothing loaded.
     """
 
     from_: Literal["new-game", "booted"]
     """
     new-game: the main menu's New Game, then the first step's load. booted: the disc boots straight into the first step's scene.
+    """
+
+
+@dataclass(frozen=True, kw_only=True)
+class SaveStart:
+    """
+    A start from a save in the harness's save library, loaded through the main menu's Load Game. Since schema_version 3.
+    """
+
+    from_: Literal["save"]
+    save: str
+    """
+    The save's name in the library. The first step is the scene it loads into.
     """
 
 
@@ -183,13 +196,19 @@ class InjectTest:
     """
 
 
+type Start = BootStart | SaveStart
+"""
+How the run reaches its first step.
+"""
+
+
 @dataclass(frozen=True, kw_only=True)
 class RecordRequest:
     """
     A route to drive and record, load by load.
     """
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     request_id: RequestId
     kind: Literal["record"]
     start: Start
@@ -208,7 +227,7 @@ class LandingRequest:
     A route to a target step, a landing placed there, and an exit step after it.
     """
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     request_id: RequestId
     kind: Literal["landing"]
     start: Start
@@ -232,7 +251,7 @@ class ControlRequest:
     A route to a target step, watched with nothing placed, and an exit step after it.
     """
 
-    schema_version: Literal[1, 2]
+    schema_version: Literal[1, 2, 3]
     request_id: RequestId
     kind: Literal["control"]
     start: Start
@@ -256,7 +275,7 @@ class InjectRequest:
     A route to a target step, injections written there, and an exit step after it.
     """
 
-    schema_version: Literal[2]
+    schema_version: Literal[2, 3]
     request_id: RequestId
     kind: Literal["inject"]
     start: Start

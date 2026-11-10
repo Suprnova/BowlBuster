@@ -17,8 +17,9 @@ import gdb
 from bowlharness.backends.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
 from bowlharness.driving.landing import check_recipe
 from bowlharness.driving.placer import PlacementFault, ToolPlacer
-from bowlharness.driving.request import LandingTest, Request, read_request
+from bowlharness.driving.request import LandingTest, Request, check_save, read_request
 from bowlharness.profiles import XBOX_NTSC_U
+from bowlharness.saves.library import Library
 from bowlharness.session.commands import (
     LaunchArguments,
     parse_drive_arguments,
@@ -287,6 +288,7 @@ def _drive(args: Sequence[str]) -> None:
     try:
         arguments = parse_drive_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
         request, request_sha256 = read_request(arguments.request, XBOX_NTSC_U)
+        check_save(request, Library(arguments.saves) if arguments.saves else None)
         placer = pin_placer(request, arguments.place, arguments.recordings, XBOX_NTSC_U.name)
     except (OSError, ValueError) as error:
         raise gdb.GdbError(str(error)) from error
@@ -375,6 +377,7 @@ def _queue_command(args: Sequence[str]) -> None:
         arguments = parse_queue_arguments(list(args))
         store = Store(arguments.store, arguments.instance)
         placer = ToolPlacer.pin(arguments.place) if arguments.place else None
+        library = Library(arguments.saves) if arguments.saves else None
     except (OSError, ValueError, PlacementFault) as error:
         raise gdb.GdbError(str(error)) from error
     if placer is not None and placer.tool is not None:
@@ -391,6 +394,7 @@ def _queue_command(args: Sequence[str]) -> None:
             if placer is None or arguments.recordings is None:
                 raise ValueError("a landing request needs --place and --recordings")
             check_recipe(request.test, arguments.recordings, XBOX_NTSC_U.name)
+        check_save(request, library)
         return DrivenSession(
             GdbTarget(XBOX_NTSC_U.registers),
             XBOX_NTSC_U,

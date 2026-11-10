@@ -11,7 +11,7 @@
     "input_ledger", "attended", "captures", "captures_dropped", "client", "memory"
   ],
   "properties": {
-    "schema_version": { "description": "2 since the inject kind; 1 results are still read.", "enum": [1, 2] },
+    "schema_version": { "description": "3 since starts from a save, 2 since the inject kind; 1 and 2 results are still read.", "enum": [1, 2, 3] },
     "run": { "description": "The run's id: the request's id and the attempt, <request>-a<attempt>.", "type": "string" },
     "request": { "description": "The id of the request the run attempted.", "type": "string" },
     "attempt": { "description": "Which attempt at the request this is, from 1.", "type": "integer", "minimum": 1 },
@@ -115,7 +115,11 @@
         "host": { "description": "The host's operating system.", "type": "string" },
         "boot_path": { "description": "How the run's first recording began.", "enum": ["boot", "attached"] },
         "request_sha256": { "description": "The hash of the request file's bytes.", "$ref": "common.schema.json#/$defs/Sha256" },
-        "setup": { "description": "How the game was set up: the request's start.", "enum": ["new-game", "booted"] },
+        "setup": { "description": "How the game was set up: the request's start.", "enum": ["new-game", "booted", "save"] },
+        "save": {
+          "description": "The library save a save run started from; null for any other setup. Absent before version 3.",
+          "oneOf": [{ "$ref": "#/$defs/SaveRecord" }, { "type": "null" }]
+        },
         "observation": { "$ref": "common.schema.json#/$defs/Observe" },
         "input": { "$ref": "common.schema.json#/$defs/InputPolicy" },
         "windows": {
@@ -172,6 +176,18 @@
       "properties": {
         "image": { "type": ["string", "null"] },
         "image_sha256": { "oneOf": [{ "$ref": "common.schema.json#/$defs/Sha256" }, { "type": "null" }] }
+      }
+    },
+    "SaveRecord": {
+      "description": "A save from the harness's library, as image.json recorded it when the image was added.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "slot", "image", "storage_sha256"],
+      "properties": {
+        "name": { "description": "The save's name in the library.", "type": "string" },
+        "slot": { "description": "Its save slot.", "type": "integer", "minimum": 1 },
+        "image": { "description": "The library image that holds it.", "type": "string" },
+        "storage_sha256": { "description": "The library image's SHA-256.", "$ref": "common.schema.json#/$defs/Sha256" }
       }
     },
     "Storage": {

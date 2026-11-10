@@ -168,7 +168,7 @@ class Navigator:
     def start(self) -> None:
         """Checks that the route can be driven at all, and fails it if not."""
         needed = {Capability.BREAKPOINTS, Capability.MEMORY_WRITE}
-        if not needed <= self._target.capabilities:
+        if not needed <= self._target.capabilities or self._request.start == "save":
             self._fail("unsupported")
         elif self._request.start == "new-game":
             self._phase = Phase.MAIN_MENU

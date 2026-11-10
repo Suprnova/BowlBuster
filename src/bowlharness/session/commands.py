@@ -51,11 +51,13 @@ class DriveArguments(LaunchArguments):
         request: The file holding the request to follow.
         place: The published copy of ``bowlbuster`` that places landings, which a landing needs.
         recordings: The folder a landing's recipes are under, which a landing needs.
+        saves: The save library, which a request that starts from a save needs.
     """
 
     request: Path
     place: Path | None = None
     recordings: Path | None = None
+    saves: Path | None = None
 
 
 class _Parser(argparse.ArgumentParser):
@@ -143,8 +145,15 @@ def parse_drive_arguments(arguments: list[str], run_name: str) -> DriveArguments
     parser.add_argument("--request", type=Path, required=True, help="the request to follow")
     parser.add_argument("--place", type=Path, help="the published bowlbuster that places landings")
     parser.add_argument("--recordings", type=Path, help="the folder a landing's recipes are under")
+    parser.add_argument("--saves", type=Path, help="the save library a request that starts from a save needs")
     found = parser.parse_args(arguments)
-    return DriveArguments(**vars(_launch(found)), request=found.request, place=found.place, recordings=found.recordings)
+    return DriveArguments(
+        **vars(_launch(found)),
+        request=found.request,
+        place=found.place,
+        recordings=found.recordings,
+        saves=found.saves,
+    )
 
 
 @dataclass(frozen=True)
@@ -162,6 +171,7 @@ class QueueArguments:
         place: The published copy of ``bowlbuster`` that places landings, which a landing needs.
         recordings: The folder a landing's recipes are under, which a landing needs.
         stall: How long without progress makes a ``stall`` line in the progress stream, in seconds.
+        saves: The save library, which a request that starts from a save needs.
     """
 
     store: Path
@@ -174,6 +184,7 @@ class QueueArguments:
     place: Path | None
     recordings: Path | None
     stall: float
+    saves: Path | None = None
 
 
 def parse_queue_arguments(arguments: list[str]) -> QueueArguments:
@@ -189,6 +200,7 @@ def parse_queue_arguments(arguments: list[str]) -> QueueArguments:
     parser.add_argument("--place", type=Path, help="the published bowlbuster that places landings")
     parser.add_argument("--recordings", type=Path, help="the folder a landing's recipes are under")
     parser.add_argument("--stall", type=float, default=600.0, help="seconds without progress before a stall line")
+    parser.add_argument("--saves", type=Path, help="the save library a request that starts from a save needs")
     found = parser.parse_args(arguments)
     if not found.store.is_absolute():
         raise ValueError(f"--store must be an absolute path, got {found.store}")
@@ -204,4 +216,5 @@ def parse_queue_arguments(arguments: list[str]) -> QueueArguments:
         place=found.place,
         recordings=found.recordings,
         stall=found.stall,
+        saves=found.saves,
     )

@@ -64,6 +64,7 @@ def test_the_manifest_states_what_a_reproduction_restores(tmp_path: Path) -> Non
         None,
     )
     assert [(load["recording"], load["scene"]) for load in manifest["loads"]] == [("s-1", "ORIG")]
+    assert manifest["save"] is None
 
 
 def test_a_failed_step_gives_its_reason_as_the_outcome(tmp_path: Path) -> None:
@@ -135,6 +136,17 @@ def test_a_result_reads_back_as_the_type_it_was_written_from(tmp_path: Path) -> 
     read = read_document(result_schema.Result, result(tmp_path), "result")
 
     assert write_document(read) == result(tmp_path)
+
+
+def test_a_version_2_result_without_a_save_still_reads(tmp_path: Path) -> None:
+    drive(loaded(), tmp_path, route("ORIG"))
+    written = result(tmp_path)
+    del written["manifest"]["save"]
+    written["schema_version"] = 2
+
+    read = read_document(result_schema.Result, written, "result")
+
+    assert (read.schema_version, read.manifest.save) == (2, None) and schema_errors(written, "result") == []
 
 
 def test_a_result_is_never_rewritten(tmp_path: Path) -> None:
