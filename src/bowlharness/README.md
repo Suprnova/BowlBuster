@@ -35,6 +35,8 @@ Before asking a person to run one, say how long it should take. Measured on the 
 | Run | Wall time |
 |---|---|
 | New game to `BB02`, one cheat, nothing logged | about 50 s |
+| A save through Load Game to its scene, nothing logged | about 33 s |
+| Each visit to the Extras screen, on top | about 10 s, plus a second a cursor move |
 | The six-step acceptance route, nothing logged | about 80 s |
 | The six-step acceptance route, every heap event and cutoff capture | about 5.5 min |
 | Each visit to the Options menu, on top | about 10 s for a 16-press entry, 7 s for an 8-press one |
