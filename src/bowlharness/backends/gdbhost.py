@@ -9,17 +9,29 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from contextlib import suppress
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import gdb
 
-from bowlharness.backends.xemu import default_config, describe, launch, load_config, preconditions, running_xemu, stop
+from bowlharness.backends.emulator import Emulator
+from bowlharness.backends.xemu import (
+    default_config,
+    derived_config,
+    describe,
+    launch,
+    load_config,
+    preconditions,
+    running_xemu,
+    stop,
+)
 from bowlharness.driving.landing import check_recipe
 from bowlharness.driving.placer import PlacementFault, ToolPlacer
 from bowlharness.driving.request import LandingTest, Request, check_save, read_request
 from bowlharness.profiles import XBOX_NTSC_U
 from bowlharness.saves.library import Library
+from bowlharness.saves.storage import prepare
 from bowlharness.session.commands import (
     LaunchArguments,
     parse_drive_arguments,
@@ -219,23 +231,61 @@ def _tell(state: str) -> None:
             print(f"result: {written.outcome}" + (f" ({written.cause})" if written.cause else ""))
 
 
+DRIVE_INSTANCE = "drive"
+
+
+class _Xemu:
+    """The xemu a session or a queue runs on: started by the harness, or attached to when ``xemu`` is ``None``."""
+
+    def __init__(self, xemu: Path | None, port: int, log: Path) -> None:
+        self._xemu = xemu
+        self._port = port
+        self._log = log
+        self._process: subprocess.Popen[bytes] | None = None
+
+    @property
+    def restartable(self) -> bool:
+        return self._xemu is not None
+
+    def start(self, config: Path) -> None:
+        if self._xemu is None:
+            _connect(self._port, None)
+            return
+        self._log.parent.mkdir(parents=True, exist_ok=True)
+        self._process = launch(self._xemu, config, self._port, self._log)
+        _connect(self._port, self._process)
+        self.reset()
+
+    def stop(self) -> None:
+        if self._process is None:
+            return
+        with suppress(gdb.error):
+            gdb.execute("disconnect", to_string=True)
+        stop(self._process)
+        self._process.wait(timeout=60)
+        self._process = None
+
+    def reset(self) -> None:
+        gdb.execute("monitor system_reset", to_string=True)
+
+    def describe(self, config: Path) -> dict[str, Any]:
+        return describe(self._xemu, config, gdb.VERSION)
+
+    def running(self) -> list[str]:
+        return running_xemu()
+
+
 def _start_emulator(
     verb: str, xemu: Path | None, config: Path | None, port: int, attach: bool, log: Path
-) -> tuple[dict[str, Any], subprocess.Popen[bytes] | None]:
+) -> tuple[dict[str, Any], _Xemu]:
     """Starts the emulator, or attaches to a running one, and connects to it; returns what a manifest records of it."""
     config = config or default_config()
-    process = None
     if not attach and (failures := preconditions(load_config(config), running_xemu())):
         raise gdb.GdbError(f"cannot {verb}: " + "; ".join(failures))
-    environment = describe(xemu, config, gdb.VERSION)
-    if not attach:
-        assert xemu is not None
-        log.parent.mkdir(parents=True, exist_ok=True)
-        process = launch(xemu, config, port, log)
-    _connect(port, process)
-    if process is not None:
-        gdb.execute("monitor system_reset", to_string=True)
-    return environment, process
+    emulator = _Xemu(None if attach else xemu, port, log)
+    environment = emulator.describe(config)
+    emulator.start(config)
+    return environment, emulator
 
 
 def _launch(
@@ -246,11 +296,11 @@ def _launch(
     if arguments.out.exists():
         raise gdb.GdbError(f"{arguments.out} already exists")
     log = arguments.out.parent / f"{arguments.name}-xemu.log"
-    environment, process = _start_emulator(
+    environment, emulator = _start_emulator(
         verb, arguments.xemu, arguments.config, arguments.port, arguments.attach, log
     )
     _session_out = arguments.out
-    _session = open_session(environment, (lambda: stop(process)) if process else None)
+    _session = open_session(environment, emulator.stop if emulator.restartable else None)
     _tell(_session.run())
 
 
@@ -288,8 +338,16 @@ def _drive(args: Sequence[str]) -> None:
     try:
         arguments = parse_drive_arguments(list(args), time.strftime("%Y%m%d-%H%M%S"))
         request, request_sha256 = read_request(arguments.request, XBOX_NTSC_U)
-        check_save(request, Library(arguments.saves) if arguments.saves else None)
+        library = Library(arguments.saves) if arguments.saves else None
+        check_save(request, library)
         placer = pin_placer(request, arguments.place, arguments.recordings, XBOX_NTSC_U.name)
+        save = None
+        if request.save is not None and library is not None:
+            if arguments.attach:
+                raise ValueError("a run that starts from a save needs an emulator the harness starts, not --attach")
+            storage = prepare(library, request.save, DRIVE_INSTANCE, running_xemu())
+            arguments = replace(arguments, config=derived_config(arguments.config or default_config(), storage.path))
+            save = storage.record()
     except (OSError, ValueError) as error:
         raise gdb.GdbError(str(error)) from error
     if placer is not None and placer.tool is not None:
@@ -304,7 +362,7 @@ def _drive(args: Sequence[str]) -> None:
             request,
             request_sha256,
             run_stem=arguments.name,
-            environment=environment,
+            environment={**environment, **({"save": save} if save else {})},
             boot_path="attached" if arguments.attach else "boot",
             liveness=arguments.liveness,
             on_end=on_end,
@@ -383,8 +441,17 @@ def _queue_command(args: Sequence[str]) -> None:
     if placer is not None and placer.tool is not None:
         print(f"placing with {placer.tool.build} ({placer.tool.path})")
     log = store.root / f"{arguments.instance}-xemu.log"
-    environment, process = _start_emulator(
+    environment, control = _start_emulator(
         "queue", arguments.xemu, arguments.config, arguments.port, arguments.attach, log
+    )
+    progress = ProgressStream(store.progress, arguments.instance, arguments.stall)
+    emulator = Emulator(
+        control,
+        arguments.config or default_config(),
+        arguments.instance,
+        library,
+        environment,
+        lambda reason: progress.write("emulator", restart=reason),
     )
 
     def open_session(
@@ -394,7 +461,6 @@ def _queue_command(args: Sequence[str]) -> None:
             if placer is None or arguments.recordings is None:
                 raise ValueError("a landing request needs --place and --recordings")
             check_recipe(request.test, arguments.recordings, XBOX_NTSC_U.name)
-        check_save(request, library)
         return DrivenSession(
             GdbTarget(XBOX_NTSC_U.registers),
             XBOX_NTSC_U,
@@ -402,7 +468,7 @@ def _queue_command(args: Sequence[str]) -> None:
             request,
             digest,
             run_stem=claim.run,
-            environment=environment,
+            environment=emulator.environment,
             liveness=arguments.liveness,
             placer=placer,
             recordings=arguments.recordings,
@@ -411,12 +477,8 @@ def _queue_command(args: Sequence[str]) -> None:
             on_event=on_event,
         )
 
-    def reboot() -> None:
-        gdb.execute("monitor system_reset", to_string=True)
-
-    progress = ProgressStream(store.progress, arguments.instance, arguments.stall)
-    _queue = Queue(store, progress, XBOX_NTSC_U, open_session, reboot)
-    _queue_end = (lambda: stop(process)) if process else None
+    _queue = Queue(store, progress, XBOX_NTSC_U, open_session, emulator.boot)
+    _queue_end = control.stop if control.restartable else None
     for run in _queue.recover():
         print(f"recovered {run}: its session was lost")
     queue = _queue

@@ -25,6 +25,15 @@ class Storage:
     save: Save
     image: Image
 
+    def record(self) -> dict[str, object]:
+        """What the run's manifest records of the save: its name, slot, image and the image's hash when added."""
+        return {
+            "name": self.save.name,
+            "slot": self.save.slot,
+            "image": self.image.name,
+            "storage_sha256": self.image.sha256,
+        }
+
 
 def work_folder(root: Path, instance: str) -> Path:
     """The folder an instance's working copy lives in.

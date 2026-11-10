@@ -1,8 +1,10 @@
 """Starting xemu, checking its setup, and describing it for a recording's manifest."""
 
 import hashlib
+import json
 import os
 import platform
+import re
 import subprocess
 import tomllib
 from pathlib import Path
@@ -18,6 +20,33 @@ def load_config(path: Path) -> dict[str, Any]:
     """Reads an xemu configuration file."""
     with path.open("rb") as handle:
         return tomllib.load(handle)
+
+
+def derived_config(config: Path, storage: Path) -> Path:
+    """Writes ``config`` with its storage image changed to ``storage``, beside ``storage``, and returns the new file.
+
+    xemu takes no storage path on its command line, so a run on another image needs a configuration of its own. Only
+    the ``hdd_path`` line changes, so the file is the instance's in every other byte; the result is read back to prove
+    it.
+
+    Raises:
+        ValueError: ``config`` doesn't have exactly one ``hdd_path`` line, or the result reads as more than that change.
+    """
+    text = config.read_text(encoding="utf-8")
+    line = re.compile(r"^hdd_path\s*=.*$", re.MULTILINE)
+    if len(line.findall(text)) != 1:
+        raise ValueError(f"{config} has no single hdd_path line to change")
+    derived = line.sub(lambda _: f"hdd_path = {json.dumps(str(storage))}", text)
+    original, changed = tomllib.loads(text), tomllib.loads(derived)
+    files = changed.get("sys", {}).get("files", {})
+    if files.get("hdd_path") != str(storage):
+        raise ValueError(f"{config}'s hdd_path isn't in [sys.files]")
+    files["hdd_path"] = original["sys"]["files"]["hdd_path"]
+    if changed != original:
+        raise ValueError(f"changing {config}'s hdd_path changed more than that line")
+    path = storage.parent / "xemu.toml"
+    path.write_text(derived, encoding="utf-8")
+    return path
 
 
 def running_xemu() -> list[str]:

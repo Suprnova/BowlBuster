@@ -10,6 +10,7 @@ from contract import schema_errors
 from scripted import ScriptedGame
 from support import ENVIRONMENT
 
+from bowlharness.backends.emulator import EmulatorFault
 from bowlharness.backends.mock import MockTarget
 from bowlharness.driving.request import Request
 from bowlharness.session.driven import DrivenSession
@@ -67,10 +68,18 @@ def opener(games: Callable[[], ScriptedGame] = loaded) -> Callable[..., DrivenSe
     return open_session
 
 
-def queue_of(store: Store, games: Callable[[], ScriptedGame] = loaded) -> tuple[Queue, list[int]]:
-    reboots: list[int] = []
+def queue_of(
+    store: Store, games: Callable[[], ScriptedGame] = loaded, reboot: Callable[[Request], None] | None = None
+) -> tuple[Queue, list[str]]:
+    reboots: list[str] = []
+
+    def booted(request: Request) -> None:
+        reboots.append(request.request_id)
+        if reboot is not None:
+            reboot(request)
+
     progress = ProgressStream(store.progress, store.instance)
-    queue = Queue(store, progress, ScriptedGame().profile, opener(games), lambda: reboots.append(1))
+    queue = Queue(store, progress, ScriptedGame().profile, opener(games), booted)
     return queue, reboots
 
 
@@ -126,7 +135,42 @@ def test_the_queue_reboots_the_guest_before_every_run(tmp_path: Path) -> None:
 
     run_all(queue)
 
-    assert len(reboots) == 2
+    assert reboots == ["r1", "r2"]
+
+
+def test_a_request_the_boot_refuses_is_refused_and_released_and_the_rest_run(tmp_path: Path) -> None:
+    store = Store(tmp_path, "inst3")
+    add(store, route("r1"), age=0)
+    add(store, route("r2"), age=1)
+
+    def refuse_r1(request: Request) -> None:
+        if request.request_id == "r1":
+            raise ValueError("start.save names base, which the save library doesn't hold")
+
+    queue, _ = queue_of(store, reboot=refuse_r1)
+
+    run_all(queue)
+
+    events = [(line["event"], line.get("request"), line.get("reason")) for line in progress(store)]
+    assert events[0] == ("refused", "r1", "start.save names base, which the save library doesn't hold")
+    assert [event for event, *_ in events[1:]] == ["started", "finished"] and list(store.claims.iterdir()) == []
+
+
+def test_an_emulator_that_cannot_restart_stops_the_queue_and_leaves_the_request_pending(tmp_path: Path) -> None:
+    store = Store(tmp_path, "inst3")
+    add(store, route("r1"), age=0)
+    add(store, route("r2"), age=1)
+
+    def fail(request: Request) -> None:
+        raise EmulatorFault("restarting the emulator on save failed: xemu exited with code 1")
+
+    queue, _ = queue_of(store, reboot=fail)
+
+    run_all(queue)
+
+    lines = progress(store)
+    assert [(line["event"], line["request"]) for line in lines] == [("lost", "r1")]
+    assert queue.stopped and list(store.claims.iterdir()) == [] and len(store.pending()[0]) == 2
 
 
 def test_the_progress_stream_has_a_line_per_run_in_order(tmp_path: Path) -> None:

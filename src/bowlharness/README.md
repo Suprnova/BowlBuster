@@ -80,8 +80,9 @@ are named under. The harness pins the tool when it starts and records it in the 
 
 A request that starts from a save (`"start": {"from": "save", "save": "<name>"}`) needs `--saves <folder>`, the save
 library ("The save library", below). It is refused unless the library holds the save and the first step is the scene
-the save loads into. Loading a save through the main menu isn't built yet, so such a run fails its first step as
-`unsupported`.
+the save loads into. The run plays on a fresh copy of the save's image in `<folder>/work/drive/`, with xemu started
+on a copy of `--config` that differs only in `hdd_path`, and can't `--attach`. Loading a save through the main menu
+isn't built yet, so such a run fails its first step as `unsupported`.
 
 ## Queueing
 
@@ -90,7 +91,8 @@ uv run python -m bowlharness queue --store <folder> --instance <name> --xemu <xe
 ```
 
 Runs a store's requests one after another, unattended: each pending request in `<folder>/requests/` is claimed, the
-guest rebooted, and the request run into `<folder>/runs/<request>-a<attempt>/`, with its result there. Progress goes to
+guest rebooted (for a request that starts from a save, xemu is closed and started again on a fresh copy of the save's
+image, and again on the instance's own storage for the run after it), and the request run into `<folder>/runs/<request>-a<attempt>/`, with its result there. Progress goes to
 `<folder>/progress.jsonl`. It takes `--place` and `--recordings` for landings and `--saves` for starts from a save, as `drive` does, and stops when nothing
 is pending, the emulator is lost, or a person runs `bowl stop`. Started again, it reports the runs a lost session left
 as `interrupted` and claims them again as new attempts.

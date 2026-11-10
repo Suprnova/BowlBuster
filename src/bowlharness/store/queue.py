@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from bowlharness.backends.emulator import EmulatorFault
 from bowlharness.driving.request import Request, read_request
 from bowlharness.profiles.profile import PlatformProfile
 from bowlharness.recording.result import Ending, build_result, harness_version, moment, write_result
@@ -80,7 +81,8 @@ class Queue:
         profile: The platform's addresses and constants.
         open_session: Opens the session that runs a request: given the request, its file's hash, the claim, the run's
             folder and a listener for the run's events.
-        reboot: Reboots the guest before a run.
+        reboot: Boots the guest afresh for a run, on the storage its request needs. A ``ValueError`` refuses the
+            request with nothing stopped; an :class:`EmulatorFault` means the emulator is down, and the queue stops.
     """
 
     def __init__(
@@ -89,7 +91,7 @@ class Queue:
         progress: ProgressStream,
         profile: PlatformProfile,
         open_session: OpenSession,
-        reboot: Callable[[], None],
+        reboot: Callable[[Request], None],
     ) -> None:
         self._store = store
         self._progress = progress
@@ -152,7 +154,7 @@ class Queue:
             pending = [request for request in pending if request.request_id not in self._reported]
             if not pending:
                 return None
-            if (session := self._start(pending[0], len(pending) - 1)) is not None:
+            if (session := self._start(pending[0], len(pending) - 1)) is not None or self.stopped:
                 return session
 
     def finish(self, session: DrivenSession) -> bool:
@@ -191,7 +193,17 @@ class Queue:
         claim = self._store.claim(request)
         if claim is None:
             return None
-        self._reboot()
+        try:
+            self._reboot(parsed)
+        except ValueError as error:
+            self._store.release(claim)
+            self._report("refused", request.request_id, request=request.request_id, reason=str(error))
+            return None
+        except EmulatorFault as error:
+            self._store.release(claim)
+            self._progress.write(LOST, request=request.request_id, reason=str(error))
+            self.stopped = True
+            return None
         self._current = claim.run
         self._progress.touch()
         self._progress.write("started", run=claim.run, attempt=claim.attempt, done=self.done, left=left)
