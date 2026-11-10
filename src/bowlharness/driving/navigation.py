@@ -36,12 +36,17 @@ class Phase(StrEnum):
 
 
 class Screen(StrEnum):
-    """Where the route is between boot and a new game's first scene."""
+    """Where the route is between boot and its first scene: a new game's, or a loaded save's."""
 
     LOGOS = "logos"
     TITLE = "title"
     MENU = "menu"
     NEW_GAME = "new game"
+    LOAD_GAME = "load game"
+    SAVE = "save"
+
+
+NO_SAVE_CHOSEN = 0xFFFFFFFF
 
 
 class Stage(StrEnum):
@@ -105,6 +110,7 @@ class Navigator:
         held_step: A step that is held once reached, until ``release`` says it may be left: a test step, watched
             through its windows.
         release: Whether the held step may be left.
+        save_slot: The slot, from 1, of the save a ``save`` start loads; the run's storage holds it there.
     """
 
     def __init__(
@@ -116,8 +122,12 @@ class Navigator:
         *,
         held_step: int | None = None,
         release: Callable[[], bool] = lambda: True,
+        save_slot: int | None = None,
     ) -> None:
         self._held_step = held_step
+        self._save_slot = save_slot
+        self._planned: deque[str] = deque()
+        self._chosen = False
         self._release = release
         self._target = target
         self._profile = profile
@@ -168,9 +178,9 @@ class Navigator:
     def start(self) -> None:
         """Checks that the route can be driven at all, and fails it if not."""
         needed = {Capability.BREAKPOINTS, Capability.MEMORY_WRITE}
-        if not needed <= self._target.capabilities or self._request.start == "save":
+        if not needed <= self._target.capabilities or (self._request.start == "save" and self._save_slot is None):
             self._fail("unsupported")
-        elif self._request.start == "new-game":
+        elif self._request.start in ("new-game", "save"):
             self._phase = Phase.MAIN_MENU
             self._enter(Screen.LOGOS)
 
@@ -516,9 +526,9 @@ class Navigator:
         self._recorder.log_event("screen", name=screen.value)
 
     def _main_menu(self) -> None:
-        """Takes the game from its boot logos to the load of a new game: A through the logos, Start at the title, and A
-        until the load begins. Each screen is left on the game's signal, and a screen that never is ends the step
-        ``stalled``, the last ``screen`` event naming it."""
+        """Takes the game from its boot logos to the load of the first step: A through the logos, Start at the title,
+        then A until a new game's load begins, or Load Game and the save's slot. Each screen is left on the game's
+        signal, and a screen that never is ends the step ``stalled``, the last ``screen`` event naming it."""
         navigation = self._profile.navigation
         match self._screen:
             case Screen.LOGOS:
@@ -535,12 +545,45 @@ class Navigator:
                     return
             case Screen.MENU:
                 if self._read(navigation.menu_active):
-                    self._enter(Screen.NEW_GAME)
+                    if self._save_slot is None:
+                        self._enter(Screen.NEW_GAME)
+                    else:
+                        self._plan(Screen.LOAD_GAME, ["down", "a"])
                     return
             case Screen.NEW_GAME:
                 if self._driver_idle:
                     self._press("a")
+            case Screen.LOAD_GAME:
+                if self._read(self._profile.globals.game_mode) == navigation.modes.load_game:
+                    assert self._save_slot is not None
+                    self._plan(Screen.SAVE, ["down"] * (self._save_slot - 1) + ["a"])
+                    return
+                self._press_planned()
+            case Screen.SAVE if not self._chosen:
+                if (chosen := self._read(navigation.chosen_save)) != NO_SAVE_CHOSEN:
+                    self._chose(chosen + 1)
+                    return
+                self._press_planned()
         if self._menu_late():
+            self._fail("stalled")
+
+    def _plan(self, screen: Screen, buttons: list[str]) -> None:
+        """Enters ``screen`` and queues presses that nothing confirms, each ``action_polls`` after the one before."""
+        self._enter(screen)
+        self._planned = deque(buttons)
+        self._mark = self._polls
+
+    def _press_planned(self) -> None:
+        if self._planned and self._driver_idle and self._polls - self._mark >= self._profile.navigation.action_polls:
+            self._press(self._planned.popleft())
+            self._mark = self._polls
+
+    def _chose(self, slot: int) -> None:
+        """Load Game took an A on ``slot``, and the save in it is loading: the save's, or the step fails."""
+        self._planned.clear()
+        self._chosen = True
+        self._recorder.log_event("save_slot", slot=slot, wanted=self._save_slot)
+        if slot != self._save_slot:
             self._fail("stalled")
 
     def _menu_late(self) -> bool:

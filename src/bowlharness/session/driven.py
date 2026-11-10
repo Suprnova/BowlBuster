@@ -141,6 +141,7 @@ class DrivenSession(Session):
             self._request,
             held_step=test.step if test else None,
             release=tracker.release if tracker else lambda: True,
+            save_slot=(self._environment.get("save") or {}).get("slot"),
         )
         navigator = self._navigator
 

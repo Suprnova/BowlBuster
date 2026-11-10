@@ -114,7 +114,11 @@ def request(steps: list[dict[str, Any]], start: str = "booted", profile: Platfor
 
 
 def drive(
-    game: ScriptedGame, directory: Path, request: Request, placer: Placer | None = None
+    game: ScriptedGame,
+    directory: Path,
+    request: Request,
+    placer: Placer | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> tuple[DrivenSession, dict[str, Any]]:
     """Drives the scripted game along the request and returns the session and the recording's manifest.
 
@@ -128,7 +132,7 @@ def drive(
         request,
         DIGEST,
         run_stem="s",
-        environment=ENVIRONMENT,
+        environment=ENVIRONMENT if environment is None else environment,
         harness="0.1.0+test",
         placer=placer,
         recordings=directory / "recordings",

@@ -119,7 +119,7 @@ def test_a_slot_holding_another_scene_fails_before_any_input(tmp_path: Path) -> 
     assert (session.result, manifest["input_ledger"]) == ("failed: step 1 (TARG), menu unreachable", [])
 
 
-def test_a_start_from_a_save_is_not_driven_yet(tmp_path: Path) -> None:
+def test_a_start_from_a_save_with_no_save_in_its_storage_is_unsupported(tmp_path: Path) -> None:
     game = ScriptedGame(FAST)
     level(game, "ORIG", 1)
     polls(game, 20)

@@ -207,7 +207,7 @@ XBOX_NTSC_U = PlatformProfile(
         resend_limit=3,
     ),
     navigation=Navigation(
-        modes=GameModes(boot_movies=1, menu=2, pause_menu=7, play=0xC, paused=(0, 1, 2, 4, 6, 7, 8)),
+        modes=GameModes(boot_movies=1, menu=2, load_game=4, pause_menu=7, play=0xC, paused=(0, 1, 2, 4, 6, 7, 8)),
         playing=1,
         control_off=0x2B0F58,
         talk_box=0x10,
@@ -247,6 +247,7 @@ XBOX_NTSC_U = PlatformProfile(
         ready_seconds=60.0,
         menu_screens=0x2D2384,
         action_polls=60,
+        chosen_save=0x2B6740,
         confirm_presses=3,
         screens=MenuScreens(stride=0xA0, name=4, pause_menu=0x7F8AA5FA, accepted=0x58, reach=4),
         warp_wait_polls=150,

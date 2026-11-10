@@ -378,6 +378,7 @@ class GameModes:
     Attributes:
         boot_movies: The boot logos.
         menu: The title, the main menu and the autosave prompt.
+        load_game: Load Game's list of saves.
         pause_menu: The pause menu and the options menu.
         play: A level in play.
         paused: Every mode in which the game is paused.
@@ -385,6 +386,7 @@ class GameModes:
 
     boot_movies: int
     menu: int
+    load_game: int
     pause_menu: int
     play: int
     paused: tuple[int, ...]
@@ -486,7 +488,9 @@ class Navigation:
             signal, and this only ends a run whose signal never comes.
         menu_screens: The dword that counts the menu screens opened and closed: it rises by 1 when Options opens and
             by 2 when it closes.
-        action_polls: How many polls a press has to show its effect before it is sent again.
+        action_polls: How many polls a press has to show its effect before it is sent again, and how far apart the
+            presses go that nothing confirms.
+        chosen_save: The dword holding the save slot Load Game's A chose, from 0; -1 while the list is open.
         confirm_presses: How many times A is pressed to select a task and confirm its warp.
         screens: The menu's screens, through which each A of the warp's confirmation is confirmed. Each A is sent
             once the last has been taken, since each step of the confirmation ignores input for a while after it
@@ -515,6 +519,7 @@ class Navigation:
     ready_seconds: float
     menu_screens: int
     action_polls: int
+    chosen_save: int
     confirm_presses: int
     screens: MenuScreens
     warp_wait_polls: int

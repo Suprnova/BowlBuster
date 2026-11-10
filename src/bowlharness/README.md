@@ -81,8 +81,8 @@ are named under. The harness pins the tool when it starts and records it in the 
 A request that starts from a save (`"start": {"from": "save", "save": "<name>"}`) needs `--saves <folder>`, the save
 library ("The save library", below). It is refused unless the library holds the save and the first step is the scene
 the save loads into. The run plays on a fresh copy of the save's image in `<folder>/work/drive/`, with xemu started
-on a copy of `--config` that differs only in `hdd_path`, and can't `--attach`. Loading a save through the main menu
-isn't built yet, so such a run fails its first step as `unsupported`.
+on a copy of `--config` that differs only in `hdd_path`, and can't `--attach`. The harness loads the save through
+the main menu's Load Game: Down and A to Load Game, then Down to the save's slot and A.
 
 ## Queueing
 

@@ -75,6 +75,7 @@ class ScriptedGame:
         self.confirms = 0
         self.active_screen = PAUSE_MENU
         self.main_menu_ready = False
+        self.chosen_save = 0xFFFFFFFF
         self._menu: dict[int, bytes] = {}
 
     @property
@@ -274,6 +275,7 @@ class ScriptedGame:
             navigation.movie_flag: struct.pack("<I", movie),
             navigation.menu_world: struct.pack("<I", self.cursor[0]),
             navigation.menu_slot: struct.pack("<I", self.cursor[1]),
+            navigation.chosen_save: struct.pack("<I", self.chosen_save),
             **self._menu,
         }
         words = (0, 0, 0, port, 0)
@@ -319,6 +321,15 @@ class ScriptedGame:
             self.cursor = cursor
         for _ in range(pad.hold_polls - 1 + pad.release_polls):
             self.pad_poll(mode=mode if after is None else after)
+
+    def await_load(self, slot: int, polls: int = 30) -> None:
+        """Load Game's list waiting for A, which loads the save in ``slot`` (from 1), and the polls that finish it."""
+        pad, navigation = self._profile.input, self._profile.navigation
+        chosen = {navigation.chosen_save: struct.pack("<I", slot - 1)}
+        self.pad_poll(mode=navigation.modes.load_game, wait=self.pad_wait(pad.buttons.a, polls, chosen))
+        self.chosen_save = slot - 1
+        for _ in range(pad.hold_polls - 1 + pad.release_polls):
+            self.pad_poll(mode=navigation.modes.load_game)
 
     def pad_wait(self, mask: int, polls: int, then: dict[int, bytes] | None = None) -> Wait:
         """A wait for port 0's controller state to hold ``mask``."""
