@@ -9,6 +9,7 @@ from bowlharness.profiles.profile import (
     Costumes,
     Crash,
     ExtrasScreen,
+    FocusRows,
     GameModes,
     Globals,
     Heap,
@@ -251,7 +252,10 @@ XBOX_NTSC_U = PlatformProfile(
         menu_screens=0x2D2384,
         action_polls=60,
         chosen_save=0x2B6740,
-        extras=ExtrasScreen(vtable=0x294430, controller=0x54, row=8, column=9, rows=0xA, columns=0xB, options_row=3),
+        focus=FocusRows(type_offset=8, type=0x1D030E, id=4, flag=0x18),
+        extras=ExtrasScreen(
+            vtable=0x294430, controller=0x54, row=8, column=9, rows=0xA, columns=0xB, options_id=0xBC34578D
+        ),
         confirm_presses=3,
         screens=MenuScreens(stride=0xA0, name=4, pause_menu=0x7F8AA5FA, accepted=0x58, reach=4),
         warp_wait_polls=150,

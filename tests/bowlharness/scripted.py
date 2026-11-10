@@ -18,6 +18,8 @@ UI_SCENE = 0x6000
 UI_BASES = 0x6100
 UI_OBJECT = 0x6200
 EXTRAS_CONTROLLER = 0x6400
+MENU_ROWS = 0x6600
+ROW_SIZE = 0x20
 PAUSE_MENU = 0xB94EE0
 OTHER_SCREEN = 0x12345678
 BUGCHECK_RVAS = (0x94B0, 0x9442)
@@ -336,24 +338,39 @@ class ScriptedGame:
         for _ in range(pad.hold_polls - 1 + pad.release_polls):
             self.pad_poll(mode=navigation.modes.load_game)
 
-    def extras_screen(self, cursor: tuple[int, int] = (0, 0), grid: tuple[int, int] = (6, 7)) -> None:
-        """The scene's bases, one of them the menu UI object whose controller is the Extras screen's, its cursor at
-        ``cursor`` (row, column) of a ``grid`` of rows and columns."""
+    def menu_scene(self, rows: int = 5, *, extras: bool = False, cursor: tuple[int, int] = (0, 0)) -> None:
+        """The scene's bases: ``rows`` menu rows with the first highlighted (the fourth is Options' Extras row), and if
+        ``extras``, the menu UI object whose controller is the Extras screen's, its cursor at ``cursor`` (row, column)
+        of a grid of 6 rows and 7 columns."""
         profile = self._profile
-        extras, objects = profile.navigation.extras, profile.objects
+        focus, extra, objects = profile.navigation.focus, profile.navigation.extras, profile.objects
         controller = bytearray(0x40)
-        struct.pack_into("<I", controller, 0, extras.vtable)
-        controller[extras.row], controller[extras.column] = cursor
-        controller[extras.rows], controller[extras.columns] = grid
+        struct.pack_into("<I", controller, 0, extra.vtable)
+        controller[extra.row], controller[extra.column] = cursor
+        controller[extra.rows], controller[extra.columns] = 6, 7
+        row_bases = [MENU_ROWS + n * ROW_SIZE for n in range(rows)]
+        bases = [0, UI_OBJECT if extras else 0, *row_bases]
         memory = {
             profile.globals.scene_pointer: struct.pack("<I", UI_SCENE),
-            UI_SCENE + objects.base_count: struct.pack("<I", 2),
+            UI_SCENE + objects.base_count: struct.pack("<I", len(bases)),
             UI_SCENE + objects.base_array: struct.pack("<I", UI_BASES),
-            UI_BASES: struct.pack("<II", 0, UI_OBJECT),
-            UI_OBJECT + extras.controller: struct.pack("<I", EXTRAS_CONTROLLER),
+            UI_BASES: struct.pack(f"<{len(bases)}I", *bases),
+            UI_OBJECT + extra.controller: struct.pack("<I", EXTRAS_CONTROLLER),
             EXTRAS_CONTROLLER: bytes(controller),
+            **{base + focus.type_offset: struct.pack("<I", focus.type) for base in row_bases},
+            **{base + focus.id: struct.pack("<I", extra.options_id - 3 + n) for n, base in enumerate(row_bases)},
+            **self.highlight(0, rows),
         }
-        self._step(0, (0,), memory=memory)
+        self._step(0, (0,), memory={a: v if isinstance(v, bytes) else struct.pack("<I", v) for a, v in memory.items()})
+
+    def extras_screen(self, cursor: tuple[int, int] = (0, 0)) -> None:
+        """The scene of Options: five menu rows and the Extras screen, its cursor at ``cursor``."""
+        self.menu_scene(extras=True, cursor=cursor)
+
+    def highlight(self, row: int, rows: int = 5) -> dict[int, int]:
+        """The memory, as ``await_press`` takes it, of the highlight on row ``row`` of ``rows`` menu rows."""
+        flag = self._profile.navigation.focus.flag
+        return {MENU_ROWS + n * ROW_SIZE + flag: 0x101 if n == row else 0x100 for n in range(rows)}
 
     def extras_cursor(self, row: int, column: int, grid: tuple[int, int] = (6, 7)) -> dict[int, int]:
         """The memory, as ``await_press`` takes it, of the Extras cursor at ``row`` and ``column``."""

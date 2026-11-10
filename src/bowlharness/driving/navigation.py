@@ -10,6 +10,7 @@ from enum import StrEnum
 
 from bowlharness.driving.cheats import Code, plan_codes, read_codes
 from bowlharness.driving.costumes import extra_row_state, find_extras, plan_costumes
+from bowlharness.driving.focus import find_focus, highlighted, row_ids
 from bowlharness.driving.input import InputDriver
 from bowlharness.driving.request import Request
 from bowlharness.profiles.profile import PlatformProfile, Ready
@@ -72,7 +73,7 @@ class _Pending:
 
     action: str
     button: str
-    address: int
+    read: Callable[[], int]
     satisfied: Callable[[int], bool]
     queued_poll: int
     queued_frame: int
@@ -134,6 +135,10 @@ class Navigator:
         self._planned: deque[str] = deque()
         self._chosen = False
         self._chose_row = False
+        self._flags: list[int] = []
+        self._extras_row = 0
+        self._presses_left = 0
+        self._entered = False
         self._release = release
         self._target = target
         self._profile = profile
@@ -345,6 +350,7 @@ class Navigator:
             self._end(DONE)
             self.result = DONE
             return
+        self._flags = []
         self._index += 1
         step = self._request.steps[self._index]
         assert step.menu is not None
@@ -364,15 +370,33 @@ class Navigator:
     def _begin(
         self, action: str, button: str, address: int, satisfied: Callable[[int], bool], *, patient: bool = False
     ) -> None:
+        self._begin_reading(action, button, lambda: self._read(address), satisfied, patient=patient)
+
+    def _begin_reading(
+        self,
+        action: str,
+        button: str,
+        read: Callable[[], int],
+        satisfied: Callable[[int], bool],
+        *,
+        patient: bool = False,
+    ) -> None:
         deadline = time.monotonic() + self._profile.navigation.ready_seconds if patient else None
-        self._pending = _Pending(action, button, address, satisfied, self._polls, self._recorder.frame(), deadline)
+        self._pending = _Pending(action, button, read, satisfied, self._polls, self._recorder.frame(), deadline)
         self._press(button)
+
+    def _begin_down(self, action: str) -> None:
+        """Presses Down in a menu, confirmed by the highlight leaving the row it was on."""
+        before = highlighted(self._target.read, self._flags)
+        self._begin_reading(
+            action, "down", lambda: highlighted(self._target.read, self._flags), lambda now: now != before, patient=True
+        )
 
     def _taken(self) -> bool:
         """Whether the pending press took effect, which is then logged."""
         pending = self._pending
         assert pending is not None
-        if not pending.satisfied(self._read(pending.address)):
+        if not pending.satisfied(pending.read()):
             return False
         self._log_navigation(pending.action, pending.button, (pending.queued_frame, pending.queued_poll), None)
         self._pending = None
@@ -564,17 +588,27 @@ class Navigator:
                     if self._save_slot is None:
                         self._enter(Screen.NEW_GAME)
                     else:
-                        self._plan(Screen.LOAD_GAME, ["down", "a"])
+                        self._flags = find_focus(self._target.read, self._profile)
+                        if self._flags:
+                            self._enter(Screen.LOAD_GAME)
+                            self._begin_down("menu")
+                        else:
+                            self._fail("unsupported")
                     return
             case Screen.NEW_GAME:
                 if self._driver_idle:
                     self._press("a")
             case Screen.LOAD_GAME:
-                if self._read(self._profile.globals.game_mode) == navigation.modes.load_game:
-                    assert self._save_slot is not None
-                    self._plan(Screen.SAVE, ["down"] * (self._save_slot - 1) + ["a"])
+                pending = self._pending
+                if pending is not None and self._confirmed():
+                    if pending.button == "down":
+                        self._begin(
+                            "menu", "a", self._profile.globals.game_mode, lambda m: m == navigation.modes.load_game
+                        )
+                    else:
+                        assert self._save_slot is not None
+                        self._plan(Screen.SAVE, ["down"] * (self._save_slot - 1) + ["a"])
                     return
-                self._press_planned()
             case Screen.SAVE if not self._chosen:
                 if (chosen := self._read(navigation.chosen_save)) != NO_SAVE_CHOSEN:
                     self._chose(chosen + 1)
@@ -652,9 +686,7 @@ class Navigator:
                     self._menu_proven = False
                     self._finish_step(menu_open=True)
             case Stage.EXTRAS:
-                self._press_planned()
-                if not self._planned and self._driver_idle and self._polls - self._mark >= navigation.action_polls:
-                    self._stage = Stage.CHOOSE
+                self._reach_extras()
             case Stage.CHOOSE:
                 self._choose_extra()
             case Stage.BACK:
@@ -666,15 +698,44 @@ class Navigator:
                 if self._confirmed():
                     self._finish_step(menu_open=False)
 
+    def _reach_extras(self) -> None:
+        """Presses Down until the highlight is on the Extras row, each press confirmed by the highlight moving, then A,
+        which nothing confirms: the first cursor press waits ``action_polls`` for the screen to open. Options opens on
+        the row it was left on, so the presses needed vary; a highlight that never reaches the row in one lap ends
+        the step ``stalled``."""
+        if self._pending is not None:
+            self._confirmed()
+        elif not self._driver_idle:
+            return
+        elif self._entered:
+            if self._polls - self._mark >= self._profile.navigation.action_polls:
+                self._stage = Stage.CHOOSE
+        elif highlighted(self._target.read, self._flags) == self._extras_row:
+            self._press("a")
+            self._entered, self._mark = True, self._polls
+        elif self._presses_left:
+            self._presses_left -= 1
+            self._begin_down("options")
+        else:
+            self._fail("stalled")
+
     def _open_extras(self) -> None:
-        """From Options, down to Extras and into it, ``action_polls`` apart, since nothing confirms these presses."""
+        """Finds the Extras screen and the Options rows, and starts for the Extras row."""
         extras = self._profile.navigation.extras
         if (controller := find_extras(self._target.read, self._profile)) is None:
             self._fail("unsupported")
             return
-        self._controller = controller
-        self._planned = deque(["down"] * extras.options_row + ["a"])
-        self._mark = self._polls
+        flags = find_focus(self._target.read, self._profile)
+        if not flags:
+            self._fail("unsupported")
+            return
+        self._controller, self._flags = controller, flags
+        ids = row_ids(self._target.read, self._profile, flags)
+        if extras.options_id not in ids:
+            self._fail("unsupported")
+            return
+        self._extras_row = 1 << ids.index(extras.options_id)
+        self._presses_left, self._entered = len(flags), False
         self._stage = Stage.EXTRAS
 
     def _choose_extra(self) -> None:

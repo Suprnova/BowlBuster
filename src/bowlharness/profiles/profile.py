@@ -397,6 +397,26 @@ class GameModes:
 
 
 @dataclass(frozen=True)
+class FocusRows:
+    """The rows of a menu screen, each a small scene base that holds whether the cursor is on it.
+
+    The harness finds a menu's rows by walking the scene's base array for the bases whose dword at ``type_offset`` is
+    ``type``; exactly one row of a menu is highlighted, and a Down moves the highlight to the next row.
+
+    Attributes:
+        type_offset: Where a row holds its type.
+        type: The type of a menu row.
+        id: Where a row holds its id, which names the row across scenes.
+        flag: Where a row holds its highlight byte, 1 while the cursor is on it.
+    """
+
+    type_offset: int
+    type: int
+    id: int
+    flag: int
+
+
+@dataclass(frozen=True)
 class ExtrasScreen:
     """The Extras screen, reached from Options, where an Extras costume is put on or taken off.
 
@@ -411,7 +431,7 @@ class ExtrasScreen:
         column: Where it holds the cursor's column, which Left and Right move.
         rows: Where it holds the grid's number of rows.
         columns: Where it holds the grid's number of columns.
-        options_row: How many Downs from the row Options opens on reach Extras.
+        options_id: The id of the Extras row of Options, which Options' cursor is moved to by Down.
     """
 
     vtable: int
@@ -420,7 +440,7 @@ class ExtrasScreen:
     column: int
     rows: int
     columns: int
-    options_row: int
+    options_id: int
 
 
 @dataclass(frozen=True)
@@ -522,6 +542,7 @@ class Navigation:
         action_polls: How many polls a press has to show its effect before it is sent again, and how far apart the
             presses go that nothing confirms.
         chosen_save: The dword holding the save slot Load Game's A chose, from 0; -1 while the list is open.
+        focus: The rows of the main menu and of Options, through which a Down is confirmed.
         extras: The Extras screen.
         confirm_presses: How many times A is pressed to select a task and confirm its warp.
         screens: The menu's screens, through which each A of the warp's confirmation is confirmed. Each A is sent
@@ -552,6 +573,7 @@ class Navigation:
     menu_screens: int
     action_polls: int
     chosen_save: int
+    focus: FocusRows
     extras: ExtrasScreen
     confirm_presses: int
     screens: MenuScreens

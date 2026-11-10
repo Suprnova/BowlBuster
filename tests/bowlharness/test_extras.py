@@ -18,12 +18,13 @@ def ready(game: ScriptedGame, scene: str, counter: int, worn: dict[int, int] | N
     polls(game, 11)
 
 
-def into_extras(game: ScriptedGame, screens: int) -> None:
-    """X to Options, three Downs and A to Extras, whose cursor starts at the top left."""
-    game.await_press("x", mode=PAUSE_MENU, memory={SCREENS: screens})
-    for _ in range(3):
-        game.await_press("down", mode=PAUSE_MENU)
-    game.await_press("a", mode=PAUSE_MENU, memory=game.extras_cursor(0, 0))
+def into_extras(game: ScriptedGame, screens: int, row: int = 0) -> None:
+    """X to Options, which opens on row ``row``, then Downs and A to Extras (row 3), whose cursor starts at the top
+    left."""
+    game.await_press("x", mode=PAUSE_MENU, memory={SCREENS: screens, **game.highlight(row)})
+    for down in range(row + 1, 4):
+        game.await_press("down", mode=PAUSE_MENU, memory=game.highlight(down))
+    game.await_press("a", mode=PAUSE_MENU, memory={**game.extras_cursor(0, 0), **game.highlight(-1)})
 
 
 def choose(game: ScriptedGame, moves: list[tuple[str, int, int]], row: int, extra_id: int, state: int) -> None:
@@ -33,8 +34,7 @@ def choose(game: ScriptedGame, moves: list[tuple[str, int, int]], row: int, extr
 
 
 def leave_extras(game: ScriptedGame, screens: int) -> None:
-    """B from Extras to the pause menu, changing the screen count; B closing the pause menu; and Start opening it
-    again, since the pause menu Extras returns to takes no cursor press."""
+    """B from Extras, changing the screen count; B closing the pause menu; and Start opening it again."""
     game.await_press("b", mode=PAUSE_MENU, memory={SCREENS: screens})
     game.await_press("b", mode=PAUSE_MENU, after=PLAY)
     game.await_press("start", after=PAUSE_MENU)
@@ -102,7 +102,7 @@ def test_a_later_step_without_the_costume_chooses_it_again_to_take_it_off(tmp_pa
     leave_extras(game, 8)
     warp(game, (1, 0), "ORIG", "TARG", 2, worn={1: 1})
     game.await_press("start", after=PAUSE_MENU)
-    into_extras(game, 10)
+    into_extras(game, 10, row=3)
     choose(game, [("right", 0, 1)], 1, MERMAID_MAN, 0)
     leave_extras(game, 12)
     warp(game, (2, 0), "TARG", "LAST", 3)
@@ -128,9 +128,9 @@ def test_a_cheat_costume_and_an_extras_costume_go_on_together_the_codes_first(tm
     polls(game, 2, mode=PAUSE_MENU)
     game.enter_code(PLSA[0])
     game.held = 0
-    for _ in range(3):
-        game.await_press("down", mode=PAUSE_MENU)
-    game.await_press("a", mode=PAUSE_MENU, memory=game.extras_cursor(0, 0))
+    for row in range(1, 4):
+        game.await_press("down", mode=PAUSE_MENU, memory=game.highlight(row))
+    game.await_press("a", mode=PAUSE_MENU, memory={**game.extras_cursor(0, 0), **game.highlight(-1)})
     choose(game, [("right", 0, 1), ("right", 0, 2), ("right", 0, 3)], 3, DISCO_PATRICK, 1)
     leave_extras(game, 8)
     warp(game, (1, 0), "ORIG", "TARG", 2, worn={DISCO_PATRICK: 1}, cheats=PLSA[1])
