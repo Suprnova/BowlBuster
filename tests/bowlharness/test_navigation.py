@@ -57,6 +57,24 @@ def test_a_navigation_event_says_when_a_press_was_sent_and_taken(tmp_path: Path)
     assert pause["taken"]["poll"] > pause["sent"]["poll"] and pause["taken"]["frame"] >= pause["sent"]["frame"]
 
 
+def test_the_first_confirm_waits_for_the_active_screen_to_come_near_the_pause_menu(tmp_path: Path) -> None:
+    game = ScriptedGame(FAST)
+    game.menu_scenes({(0, 0): "ORIG"})
+    level(game, "ORIG", 1)
+    game.await_press("start", after=PAUSE_MENU)
+    game.active_screen = 0x20000000
+    polls(game, 10, mode=PAUSE_MENU)
+    game.active_screen = PAUSE_MENU_SCREEN
+    for _ in range(3):
+        game.await_confirm(mode=PAUSE_MENU, after=PAUSE_MENU)
+    game.scene_exit("ORIG", 1)
+    level(game, "ORIG", 2)
+
+    session, manifest = drive(game, tmp_path, route("ORIG", ("ORIG", 1, 1)))
+
+    assert (session.result, [load["counter"] for load in manifest["loads"]]) == ("done", [1, 2])
+
+
 def test_reselecting_the_loaded_task_is_a_load(tmp_path: Path) -> None:
     game = ScriptedGame(FAST)
     game.menu_scenes({(0, 0): "ORIG"})

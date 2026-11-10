@@ -195,7 +195,7 @@ def test_a_cheat_whose_bit_no_row_sets_fails_the_route_as_unsupported_before_any
     assert (session.result, manifest["input_ledger"]) == ("failed: step 0 (ORIG), unsupported", [])
 
 
-def test_an_extras_costume_fails_the_route_as_unsupported_before_any_input(tmp_path: Path) -> None:
+def test_an_extras_costume_with_no_extras_row_fails_the_route_as_unsupported_before_any_input(tmp_path: Path) -> None:
     game = ScriptedGame(FAST)
     game.menu_scenes({(0, 0): "ORIG", (1, 0): "TARG"})
     level(game, "ORIG", 1)

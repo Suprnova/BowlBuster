@@ -14,6 +14,10 @@ ARRAY = 0x4400
 LAYER_OBJECTS = 0x4800
 SCENE_OBJECT = 0x5000
 SEQUENCES = 0x7000
+UI_SCENE = 0x6000
+UI_BASES = 0x6100
+UI_OBJECT = 0x6200
+EXTRAS_CONTROLLER = 0x6400
 PAUSE_MENU = 0xB94EE0
 OTHER_SCREEN = 0x12345678
 BUGCHECK_RVAS = (0x94B0, 0x9442)
@@ -76,6 +80,7 @@ class ScriptedGame:
         self.active_screen = PAUSE_MENU
         self.main_menu_ready = False
         self.chosen_save = 0xFFFFFFFF
+        self.chests = 0
         self._menu: dict[int, bytes] = {}
 
     @property
@@ -331,6 +336,36 @@ class ScriptedGame:
         for _ in range(pad.hold_polls - 1 + pad.release_polls):
             self.pad_poll(mode=navigation.modes.load_game)
 
+    def extras_screen(self, cursor: tuple[int, int] = (0, 0), grid: tuple[int, int] = (6, 7)) -> None:
+        """The scene's bases, one of them the menu UI object whose controller is the Extras screen's, its cursor at
+        ``cursor`` (row, column) of a ``grid`` of rows and columns."""
+        profile = self._profile
+        extras, objects = profile.navigation.extras, profile.objects
+        controller = bytearray(0x40)
+        struct.pack_into("<I", controller, 0, extras.vtable)
+        controller[extras.row], controller[extras.column] = cursor
+        controller[extras.rows], controller[extras.columns] = grid
+        memory = {
+            profile.globals.scene_pointer: struct.pack("<I", UI_SCENE),
+            UI_SCENE + objects.base_count: struct.pack("<I", 2),
+            UI_SCENE + objects.base_array: struct.pack("<I", UI_BASES),
+            UI_BASES: struct.pack("<II", 0, UI_OBJECT),
+            UI_OBJECT + extras.controller: struct.pack("<I", EXTRAS_CONTROLLER),
+            EXTRAS_CONTROLLER: bytes(controller),
+        }
+        self._step(0, (0,), memory=memory)
+
+    def extras_cursor(self, row: int, column: int, grid: tuple[int, int] = (6, 7)) -> dict[int, int]:
+        """The memory, as ``await_press`` takes it, of the Extras cursor at ``row`` and ``column``."""
+        extras = self._profile.navigation.extras
+        return {EXTRAS_CONTROLLER + extras.row: int.from_bytes(bytes([row, column, *grid]), "little")}
+
+    def extra_row(self, row: int, extra_id: int, state: int) -> dict[int, int]:
+        """The memory, as ``await_press`` takes it, of row ``row`` of the extras table: a costume, in ``state``."""
+        costumes = self._profile.costumes
+        word = int.from_bytes(bytes([costumes.extra_kind, extra_id, 0, state]), "little")
+        return {costumes.extras + row * costumes.extra_stride: word}
+
     def pad_wait(self, mask: int, polls: int, then: dict[int, bytes] | None = None) -> Wait:
         """A wait for port 0's controller state to hold ``mask``."""
         pad = self._profile.input
@@ -447,6 +482,7 @@ class ScriptedGame:
             costumes.extras_count: struct.pack("<I", len(extras)),
             costumes.extras: rows,
             costumes.cheat_mask: struct.pack("<I", cheats),
+            costumes.chest_count: struct.pack("<I", self.chests),
         }
 
     def _cheat_table(self) -> dict[int, bytes]:

@@ -99,6 +99,8 @@ class Costumes:
     Attributes:
         characters: What a recording calls each character, by the index the table's character field holds.
         tag_prefixes: How the tags of each character's archives start, in the order of ``characters``.
+        extra_unlock_offset: Where an extras row holds the chest count that unlocks it.
+        chest_count: The dword counting the chests opened, which unlocks an extras row once it reaches the row's count.
     """
 
     characters: tuple[str, ...]
@@ -112,9 +114,11 @@ class Costumes:
     extras: int
     extra_stride: int
     extra_state_offset: int
+    extra_unlock_offset: int
     extra_kind: int
     extra_entries: int
     cheat_mask: int
+    chest_count: int
 
 
 @dataclass(frozen=True)
@@ -393,6 +397,33 @@ class GameModes:
 
 
 @dataclass(frozen=True)
+class ExtrasScreen:
+    """The Extras screen, reached from Options, where an Extras costume is put on or taken off.
+
+    Its controller is the object a menu UI object points to at ``controller``, told apart by its ``vtable``; the
+    harness finds that UI object in the scene's base array. The cursor is a row and a column of a grid of ``rows`` by
+    ``columns`` bytes, and the ``Extra`` row it is on is ``row * columns + column``.
+
+    Attributes:
+        vtable: The controller's vtable.
+        controller: Where the UI object holds the controller.
+        row: Where the controller holds the cursor's row, which Up and Down move.
+        column: Where it holds the cursor's column, which Left and Right move.
+        rows: Where it holds the grid's number of rows.
+        columns: Where it holds the grid's number of columns.
+        options_row: How many Downs from the row Options opens on reach Extras.
+    """
+
+    vtable: int
+    controller: int
+    row: int
+    column: int
+    rows: int
+    columns: int
+    options_row: int
+
+
+@dataclass(frozen=True)
 class MenuScreens:
     """The menu's screens: objects a fixed distance apart, which the active-menu pointer points into.
 
@@ -491,6 +522,7 @@ class Navigation:
         action_polls: How many polls a press has to show its effect before it is sent again, and how far apart the
             presses go that nothing confirms.
         chosen_save: The dword holding the save slot Load Game's A chose, from 0; -1 while the list is open.
+        extras: The Extras screen.
         confirm_presses: How many times A is pressed to select a task and confirm its warp.
         screens: The menu's screens, through which each A of the warp's confirmation is confirmed. Each A is sent
             once the last has been taken, since each step of the confirmation ignores input for a while after it
@@ -520,6 +552,7 @@ class Navigation:
     menu_screens: int
     action_polls: int
     chosen_save: int
+    extras: ExtrasScreen
     confirm_presses: int
     screens: MenuScreens
     warp_wait_polls: int

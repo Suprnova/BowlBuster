@@ -8,7 +8,8 @@ from contextlib import suppress
 from dataclasses import dataclass
 from enum import StrEnum
 
-from bowlharness.driving.cheats import Code, plan_codes
+from bowlharness.driving.cheats import Code, plan_codes, read_codes
+from bowlharness.driving.costumes import extra_row_state, find_extras, plan_costumes
 from bowlharness.driving.input import InputDriver
 from bowlharness.driving.request import Request
 from bowlharness.profiles.profile import PlatformProfile, Ready
@@ -57,6 +58,10 @@ class Stage(StrEnum):
     HOLD = "hold"
     SETTLE = "settle"
     CODE = "code"
+    EXTRAS = "extras"
+    CHOOSE = "choose"
+    BACK = "back"
+    SHUT = "shut"
     LEAVE = "leave"
     CLOSE = "close"
 
@@ -128,6 +133,7 @@ class Navigator:
         self._save_slot = save_slot
         self._planned: deque[str] = deque()
         self._chosen = False
+        self._chose_row = False
         self._release = release
         self._target = target
         self._profile = profile
@@ -156,6 +162,8 @@ class Navigator:
         self._quiet = 0
         self._signal = ""
         self._codes: deque[Code] = deque()
+        self._extras: deque[int] = deque()
+        self._controller = 0
         self._stage = Stage.MENU
         self._number = 0
         self._attempt = 0
@@ -306,14 +314,21 @@ class Navigator:
             return
         last = self._index + 1 == len(self._request.steps)
         following = None if last else self._request.steps[self._index + 1].costumes
+        read = self._target.read
         try:
-            self._codes = deque(
-                plan_codes(self._target.read, self._profile, self._request.steps[self._index].cheats, following)
-            )
+            codes = plan_codes(read, self._profile, self._request.steps[self._index].cheats)
+            extras: tuple[int, ...] = ()
+            if following is not None:
+                mask = self._read(self._profile.costumes.cheat_mask)
+                for code in codes:
+                    mask = code.apply(mask)
+                plan = plan_costumes(read, self._profile, read_codes(read, self._profile), mask, following)
+                codes, extras = [*codes, *plan.codes], plan.extras
         except ValueError:
             self._fail("unsupported")
             return
-        if not self._codes:
+        self._codes, self._extras = deque(codes), deque(extras)
+        if not self._codes and not self._extras:
             self._finish_step(menu_open=self._game_opened)
             return
         self._stage = Stage.MENU
@@ -480,7 +495,8 @@ class Navigator:
                 self._phase = Phase.WARPING
                 return
         if (screen := self._pause_screen()) is None:
-            self._fail("stalled")
+            if self._menu_late():
+                self._fail("stalled")
             return
         accepted = screen + navigation.screens.accepted
         before = self._read(accepted)
@@ -602,7 +618,10 @@ class Navigator:
                     self._fail("stalled")
             case Stage.OPEN:
                 if self._confirmed():
-                    self._stage = Stage.HOLD
+                    if self._codes:
+                        self._stage = Stage.HOLD
+                    else:
+                        self._open_extras()
             case Stage.HOLD if self._driver_idle:
                 assert self._driver is not None
                 self._driver.hold_chord("l", "r")
@@ -620,6 +639,9 @@ class Navigator:
             case Stage.LEAVE if self._driver_idle:
                 assert self._driver is not None
                 self._driver.release_chord()
+                if self._extras:
+                    self._open_extras()
+                    return
                 if self._index + 1 == len(self._request.steps):
                     self._finish_step(menu_open=True)
                     return
@@ -629,6 +651,65 @@ class Navigator:
                 if self._confirmed():
                     self._menu_proven = False
                     self._finish_step(menu_open=True)
+            case Stage.EXTRAS:
+                self._press_planned()
+                if not self._planned and self._driver_idle and self._polls - self._mark >= navigation.action_polls:
+                    self._stage = Stage.CHOOSE
+            case Stage.CHOOSE:
+                self._choose_extra()
+            case Stage.BACK:
+                if self._confirmed():
+                    play = self._profile.navigation.modes.pause_menu
+                    self._begin("pause", "b", self._profile.globals.game_mode, lambda mode: mode != play, patient=True)
+                    self._stage = Stage.SHUT
+            case Stage.SHUT:
+                if self._confirmed():
+                    self._finish_step(menu_open=False)
+
+    def _open_extras(self) -> None:
+        """From Options, down to Extras and into it, ``action_polls`` apart, since nothing confirms these presses."""
+        extras = self._profile.navigation.extras
+        if (controller := find_extras(self._target.read, self._profile)) is None:
+            self._fail("unsupported")
+            return
+        self._controller = controller
+        self._planned = deque(["down"] * extras.options_row + ["a"])
+        self._mark = self._polls
+        self._stage = Stage.EXTRAS
+
+    def _choose_extra(self) -> None:
+        """Moves the Extras cursor to the next row to choose, each move confirmed by the cursor, and chooses it with A,
+        confirmed by the row's state byte; then leaves for the pause menu."""
+        extras = self._profile.navigation.extras
+        if self._pending is not None:
+            if self._confirmed() and self._chose_row:
+                self._chose_row = False
+                self._extras.popleft()
+            return
+        if not self._extras:
+            self._press_for_screen("b")
+            self._stage = Stage.BACK
+            return
+        if not self._driver_idle:
+            return
+        cursor = self._target.read(self._controller + extras.row, 2)
+        columns = self._target.read(self._controller + extras.columns, 1)[0] or 1
+        row = self._extras[0]
+        target = divmod(row, columns)
+        if (cursor[0], cursor[1]) == target:
+            address = self._profile.costumes.extras + row * self._profile.costumes.extra_stride
+            before = extra_row_state(self._target.read, self._profile, row)
+            self._chose_row = True
+            self._begin(
+                "extra", "a", address, lambda _: extra_row_state(self._target.read, self._profile, row) != before
+            )
+            return
+        if cursor[0] != target[0]:
+            button = "down" if cursor[0] < target[0] else "up"
+        else:
+            button = "right" if cursor[1] < target[1] else "left"
+        before_cursor = self._read(self._controller + extras.row)
+        self._begin("extra", button, self._controller + extras.row, lambda now: now != before_cursor)
 
     def _press_for_screen(self, button: str) -> None:
         """Presses a button that opens or closes a menu screen, confirmed by the screen count changing."""

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import cache
 
 from bowlharness.profiles.profile import PlatformProfile
-from bowlharness.recording.observe import Read, costume_entries, u32
+from bowlharness.recording.observe import Read, u32
 
 
 @dataclass(frozen=True)
@@ -45,45 +45,23 @@ def read_codes(read: Read, profile: PlatformProfile) -> list[Code]:
     return codes
 
 
-def plan_codes(
-    read: Read, profile: PlatformProfile, requested: tuple[str, ...], costumes: tuple[str, ...] | None
-) -> list[Code]:
-    """The codes to enter, in order: those of the ``requested`` cheats, then those that leave exactly ``costumes`` worn.
+def plan_codes(read: Read, profile: PlatformProfile, requested: tuple[str, ...]) -> list[Code]:
+    """The codes of the ``requested`` cheats, in order, each by the table's row with the bit the profile gives its name.
 
-    A requested cheat is entered by the table's row with the bit the profile gives its name. A code that doesn't change
-    the cheat mask is left out, and so is a costume that is already as wanted. ``costumes`` is ``None`` when no costume
-    is wanted of this step, so none is toggled.
+    A code that doesn't change the cheat mask is left out. The costume codes are :func:`plan_costumes`'s.
 
     Raises:
-        ValueError: No row sets a requested cheat's bit, or a costume isn't one a cheat can give.
+        ValueError: No row sets a requested cheat's bit.
     """
     table = cache(lambda: read_codes(read, profile))
     mask = u32(read, profile.costumes.cheat_mask)
     plan: list[Code] = []
-
-    def enter(code: Code) -> None:
-        nonlocal mask
-        plan.append(code)
-        mask = code.apply(mask)
-
     for name in requested:
         bit = profile.navigation.cheats.bit(name)
         code = next((code for code in table() if code.bit == bit), None)
         if code is None:
             raise ValueError(f"no cheat sets {bit:#x}" if bit else f"no cheat is called {name}")
         if code.toggles or not mask & code.bit:
-            enter(code)
-    if costumes is None:
-        return plan
-    entries = costume_entries(read, profile.costumes)
-    for tag in costumes:
-        if not any(entry.tag == tag and not entry.extra for entry in entries):
-            raise ValueError(f"{tag} is not a costume a cheat gives")
-    for entry in (entry for entry in entries if not entry.extra):
-        if bool(entry.mask & mask) == (entry.tag in costumes):
-            continue
-        code = next((code for code in table() if code.toggles and code.bit & entry.mask), None)
-        if code is None:
-            raise ValueError(f"no cheat toggles {entry.tag}")
-        enter(code)
+            plan.append(code)
+            mask = code.apply(mask)
     return plan
