@@ -84,6 +84,7 @@ public class LandingTests
 
         Assert.Equal(address, word.Address);
         Assert.Equal(RegionKind.Block, word.Region.Kind);
+        Assert.Equal(new UnknownRegionName(word.Region.Block!.Value.Request.Caller), word.Name);
         Assert.Equal(1, word.Region.Block?.Position);
         Assert.Equal(TargetLayerOp, word.Region.Block?.Op);
         Assert.Equal(offset, word.Region.Offset);
@@ -128,6 +129,7 @@ public class LandingTests
         Landing landing = LandingOf(1, OriginRecordedAt, OriginKey, FillerKey);
 
         Assert.All(landing.Words, static word => Assert.Equal(new LandingRegion(RegionKind.AboveHeap, null, 0), word.Region));
+        Assert.All(landing.Words, static word => Assert.Null(word.Name));
         Assert.True(landing.Sphere.Address >= landing.Heap.Top);
     }
 

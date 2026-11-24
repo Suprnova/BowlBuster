@@ -22,7 +22,7 @@ namespace BowlBuster.Landings;
 /// </remarks>
 /// <param name="profile">The platform's constants.</param>
 /// <param name="layers">The archive layers on disc, or <see langword="null"/> when there are none to read.</param>
-public sealed class OriginalBytesReader(PlatformProfile profile, ILayerImageSource? layers)
+public sealed class OriginalBytesReader(PlatformProfile profile, ILayerSource? layers)
 {
     /// <summary>
     /// Reads a field's original bytes.
@@ -64,19 +64,3 @@ public sealed class OriginalBytesReader(PlatformProfile profile, ILayerImageSour
     }
 }
 
-/// <summary>
-/// The archive layers on disc, as the game maps them into a heap block.
-/// </summary>
-public interface ILayerImageSource
-{
-    /// <summary>
-    /// Reads bytes from a layer's image. An asset directory comes from the same allocator as a layer and carries the same
-    /// identity, so an implementation must check that the block is the layer before answering.
-    /// </summary>
-    /// <param name="layer">The layer the loader was loading.</param>
-    /// <param name="blockSize">The size of the heap block.</param>
-    /// <param name="offset">The offset in the block.</param>
-    /// <param name="destination">Receives the bytes.</param>
-    /// <returns><see langword="true"/> when the block is that layer and the image holds every byte asked for.</returns>
-    bool TryRead(LayerId layer, uint blockSize, uint offset, Span<byte> destination);
-}

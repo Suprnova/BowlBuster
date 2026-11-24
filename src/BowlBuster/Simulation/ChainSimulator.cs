@@ -19,14 +19,15 @@ namespace BowlBuster.Simulation;
 /// <param name="profile">The platform's constants.</param>
 /// <param name="library">The recordings to draw on.</param>
 /// <param name="captures">Where to find captures for original bytes, or <see langword="null"/> for none.</param>
-/// <param name="layers">The archive layers on disc, for bytes no capture holds, or <see langword="null"/> for none.</param>
+/// <param name="layers">The archive layers on disc, for bytes no capture holds and for naming what a word lands in, or <see langword="null"/> for none.</param>
 public sealed class ChainSimulator(
     PlatformProfile profile,
     RecordingLibrary library,
     ICaptureSource? captures = null,
-    ILayerImageSource? layers = null)
+    ILayerSource? layers = null)
 {
     private readonly OriginalBytesReader originals = new(profile, layers);
+    private readonly RegionNamer namer = new(layers);
 
     /// <summary>
     /// Simulates a chain.
@@ -158,7 +159,7 @@ public sealed class ChainSimulator(
         LandingRegion region = tracker.Locate(address, sphere.Position);
         (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, region.Block is { } block ? loadCaptures[block.Position] : null);
 
-        return new LandingWord(word, address, region, original, isVolatile);
+        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region));
     }
 
     private bool IsSphere(HeapRequest request) => request is PoolAllocRequest instance && instance.Caller == profile.Sites.Sphere;

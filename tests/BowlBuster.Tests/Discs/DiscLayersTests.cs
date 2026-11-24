@@ -122,6 +122,47 @@ public sealed class DiscLayersTests : IDisposable
         Assert.Equal(new OriginalBytes(3, ByteSource.Disk, 0x700008), original);
     }
 
+    private static readonly LayerId Mnui = new("MN\\MNUI", 0);
+    private static readonly AssetRef First = new(1, "first", nameof(AssetType.Counter));
+    private static readonly AssetRef Second = new(2, "second", nameof(AssetType.Counter));
+
+    [Theory]
+    [InlineData(0u, true)]
+    [InlineData(3u, true)]
+    [InlineData(8u, false)]
+    public void Name_InAnAsset_NamesItAndTheOffsetInIt(uint offset, bool firstWord)
+    {
+        var name = Assert.IsType<LayerAssetName>(layers.Name(Mnui, BlockSize, offset));
+
+        Assert.Equal(new LayerAssetName(Mnui, First, offset), name);
+        Assert.Equal(firstWord, name.IsFirstWord);
+    }
+
+    [Fact]
+    public void Name_InTheSecondAsset_CountsFromItsStart() =>
+        Assert.Equal(new LayerAssetName(Mnui, Second, 4), layers.Name(Mnui, BlockSize, 20));
+
+    [Fact]
+    public void Name_InThePaddingBetweenAssets_NamesBoth() =>
+        Assert.Equal(new LayerPaddingName(Mnui, First, Second, 2), layers.Name(Mnui, BlockSize, 14));
+
+    [Theory]
+    [InlineData(ImageLength, 0u)]
+    [InlineData(BlockSize - 1, BlockSize - 1 - ImageLength)]
+    public void Name_PastTheImageInTheBlock_IsTheSlack(uint offset, uint pastEnd) =>
+        Assert.Equal(new LayerSlackName(Mnui, Second, pastEnd), layers.Name(Mnui, BlockSize, offset));
+
+    [Fact]
+    public void Name_PastTheBlock_IsNull() =>
+        Assert.Null(layers.Name(Mnui, BlockSize, BlockSize));
+
+    [Fact]
+    public void Name_BlockThatIsntTheLayer_IsNull()
+    {
+        Assert.Null(layers.Name(Mnui, 0x600, 0));
+        Assert.Null(layers.Name(new LayerId("MN\\MNUS", 0), BlockSize, 0));
+    }
+
     [Fact]
     public void Constructor_PlatformWithNoEvilHopPlatform_ThrowsArgumentException() =>
         Assert.Throws<ArgumentException>(() => new DiscLayers(disc.FullName, Platform with { Platform = "gamecube" }));

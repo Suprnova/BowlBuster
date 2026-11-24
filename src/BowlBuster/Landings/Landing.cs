@@ -45,7 +45,8 @@ public readonly record struct LandingHeap(uint Top, uint Cursor, int Depth);
 /// <param name="Region">What its first byte lies in.</param>
 /// <param name="Original">The bytes there before the write, or <see langword="null"/> when nothing holds them.</param>
 /// <param name="IsVolatile">Whether the game rebuilds these bytes every frame, so a capture can't say what a later frame holds.</param>
-public readonly record struct LandingWord(FootprintWord Word, uint Address, LandingRegion Region, OriginalBytes? Original, bool IsVolatile);
+/// <param name="Name">What the block it lies in holds there, or <see langword="null"/> when it lies in no live block.</param>
+public readonly record struct LandingWord(FootprintWord Word, uint Address, LandingRegion Region, OriginalBytes? Original, bool IsVolatile, RegionName? Name);
 
 /// <summary>
 /// The bytes a field held before the write. They are as the recording's run held them, so a pointer among them is in that

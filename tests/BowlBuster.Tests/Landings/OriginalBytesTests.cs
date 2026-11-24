@@ -49,7 +49,7 @@ public class OriginalBytesTests
 
     private static LandingRegion InBlock(PlacedBlock block, uint offset) => new(RegionKind.Block, block, offset);
 
-    private ChainSimulator Simulator(IReadOnlyDictionary<string, uint>? tops = null, ILayerImageSource? layers = null) => new(
+    private ChainSimulator Simulator(IReadOnlyDictionary<string, uint>? tops = null, ILayerSource? layers = null) => new(
         Platform,
         new RecordingLibrary([origin, target]),
         new FakeCaptures(tops ?? new Dictionary<string, uint> { [TargetCapture] = 0x79876C }),
@@ -270,7 +270,7 @@ public class OriginalBytesTests
         }
     }
 
-    private sealed class FakeLayers : ILayerImageSource
+    private sealed class FakeLayers : ILayerSource
     {
         public bool Refuses { get; init; }
 
@@ -290,5 +290,7 @@ public class OriginalBytesTests
             BitConverter.TryWriteBytes(destination, ValueAt(offset));
             return true;
         }
+
+        public RegionName? Name(LayerId layer, uint blockSize, uint offset) => null;
     }
 }

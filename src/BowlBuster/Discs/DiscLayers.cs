@@ -22,7 +22,7 @@ namespace BowlBuster.Discs;
 /// </remarks>
 /// <param name="root">The extracted disc's root directory.</param>
 /// <param name="profile">The platform whose build the disc holds.</param>
-public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerImageSource
+public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerSource
 {
     private const string HipExtension = ".HIP";
 
@@ -42,6 +42,21 @@ public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerIma
         image.Span.Slice((int)offset, destination.Length).CopyTo(destination);
         return true;
     }
+
+    /// <inheritdoc/>
+    public RegionName? Name(LayerId layer, uint blockSize, uint offset)
+    {
+        if (offset >= blockSize || Match(layer, blockSize) is not { Layout: { Entries.Count: > 0 } layout }) return null;
+
+        if (layout.Locate(offset) is not { } location)
+            return new LayerSlackName(layer, RefOf(((AssetEntry)layout.Entries[^1]).Asset), offset - layout.Length);
+
+        return location.Asset is { } asset
+            ? new LayerAssetName(layer, RefOf(asset), location.OffsetInEntry)
+            : new LayerPaddingName(layer, RefOf(location.Previous!.Asset), RefOf(location.Next!.Asset), location.OffsetInEntry);
+    }
+
+    private static AssetRef RefOf(Asset asset) => new(asset.Id.Value, asset.Name, asset.Type.ToString());
 
     /// <summary>
     /// The layer a block of <paramref name="blockSize"/> holds, when the disc has it and the size matches.
