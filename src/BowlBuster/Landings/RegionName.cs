@@ -126,7 +126,7 @@ public sealed record LookupEntryName(int Slot, bool IsPointer, uint? Id, AssetRe
 }
 
 /// <summary>
-/// In an entry of an array of pointers to live bases: the base array, the scene's entity arrays, or a group's items.
+/// In an entry of an array of pointers: the base array, the scene's entity arrays, a group's items, or a pointer list.
 /// </summary>
 /// <param name="Array">The array's name, as the field that holds it is named.</param>
 /// <param name="Entry">The entry's index.</param>

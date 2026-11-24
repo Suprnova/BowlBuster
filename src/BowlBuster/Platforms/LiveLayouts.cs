@@ -156,7 +156,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
                 new("destructible", 0x2A4, 4),
             ])),
             new(0x07, "CAM", 0x18, @base),
-            new(0x0B, "SIMP", 0x104, [.. entity, new("sasset", 0xE0, 4), new("sflags", 0xE4, 4), new("destructible", 0xF4, 4)]),
+            new(0x0B, "SIMP", 0x104, [.. entity, new("sasset", 0xE0, 4), new("sflags", 0xE4, 4), new("destructible", 0xF4, 4), new("smgr", 0xF8, 4)]),
             new(0x0D, "MVPT", 0x34, @base),
             new(0x0E, "TIMR", 0x20, @base),
             new(0x10, "PORT", 0x18, @base),

@@ -90,6 +90,14 @@ public class SceneNamersTests
         Assert.Equal(new RecordArrayName("particles", 2, 0x1C, Scene.RecordArrays[0].Record.FieldAt(0x1C)), Name(Block(Address, 0xC000, 0x73E61), (2 * 0x30) + 0x1C));
 
     [Fact]
+    public void Name_InTheStaticSimpleManagers_NamesTheRecordAndField() =>
+        Assert.Equal(("smgrs", 1, "ent"), Assert.IsType<RecordArrayName>(Name(Block(Address, 0x80, 0x99997), 0x40 + 0x38)) is var name ? (name.Array, name.Record, name.Field?.Name) : default);
+
+    [Fact]
+    public void Name_InAPointerList_NamesTheEntry() =>
+        Assert.Equal(new PointerEntryName("pointer list", 1, null), Name(Block(Address, 8, 0x184B90), 4));
+
+    [Fact]
     public void Name_RecordArrayThatIsntWholeRecords_IsUnknown() =>
         Assert.Equal(new UnknownRegionName(0x73E61), Name(Block(Address, 0x40, 0x73E61), 0));
 

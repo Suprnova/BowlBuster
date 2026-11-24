@@ -1,10 +1,10 @@
 namespace BowlBuster.Platforms;
 
 /// <summary>
-/// A site that allocates an array of pointers to live bases.
+/// A site that allocates an array of pointers.
 /// </summary>
 /// <param name="Caller">The allocation's return address.</param>
-/// <param name="Name">The array's name, as the field that holds it is named.</param>
+/// <param name="Name">The array's name, as the field that holds it is named, or what the array is for a site that serves many owners.</param>
 public sealed record PointerArraySite(uint Caller, string Name);
 
 /// <summary>
@@ -21,7 +21,7 @@ public sealed record RecordArraySite(uint Caller, string Name, RecordLayout Reco
 /// <param name="SceneSite">The site of the <c>zScene</c> record.</param>
 /// <param name="Scene">The <c>zScene</c> record's layout.</param>
 /// <param name="EnvSite">The site of the scene's <c>xEnv</c>, whose layout isn't known.</param>
-/// <param name="PointerArrays">The arrays of pointers to live bases, the base array among them.</param>
+/// <param name="PointerArrays">The arrays of pointers: the base array, the scene's entity arrays, and the game's growable pointer lists.</param>
 /// <param name="GroupItemsSite">The site of a group's item array: pointers to its items' live bases.</param>
 /// <param name="GroupType">The live type byte of a group.</param>
 /// <param name="GroupItemsOffset">The offset of the live group's pointer to its item array.</param>
@@ -80,6 +80,7 @@ public sealed record SceneStructures(
             new(0x18BE47, "dyns"),
             new(0x18BE66, "npcs"),
             new(0x18BE94, "act_ents"),
+            new(0x184B90, "pointer list"),
         ],
         0x176466,
         0x11,
@@ -91,5 +92,21 @@ public sealed record SceneStructures(
         0x1400,
         [
             new(0x73E61, "particles", new RecordLayout(0x30, [new("position", 0x0, 0xC), new("velocity", 0x10, 0xC), new("lifetime", 0x1C, 4)])),
+            new(0x170D44, "queue pool", new RecordLayout(0x2C, [])),
+            new(0x99997, "smgrs", new RecordLayout(0x40,
+            [
+                new("worldBound.center", 0x0, 0xC),
+                new("worldBound.r", 0xC, 4),
+                new("noRenderDist", 0x10, 4),
+                new("lodDist0", 0x14, 4),
+                new("fadeDist", 0x18, 4),
+                new("flags", 0x1C, 4),
+                new("lodBucket", 0x20, 8),
+                new("lodAtomic", 0x28, 8),
+                new("mat", 0x30, 4),
+                new("model", 0x34, 4),
+                new("ent", 0x38, 4),
+                new("lkit", 0x3C, 4),
+            ])),
         ]);
 }
