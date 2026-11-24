@@ -48,5 +48,7 @@ public class RegionNamerTests
         public bool TryRead(LayerId layer, uint blockSize, uint offset, Span<byte> destination) => false;
 
         public RegionName? Name(LayerId layer, uint blockSize, uint offset) => name;
+
+        public AssetRef? FindAsset(IReadOnlyList<string> archives, uint id) => null;
     }
 }

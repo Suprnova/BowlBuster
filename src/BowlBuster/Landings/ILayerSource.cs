@@ -3,7 +3,7 @@ using BowlBuster.Recordings;
 namespace BowlBuster.Landings;
 
 /// <summary>
-/// The archive layers on disc, as the game maps them into a heap block.
+/// The archives on disc: their layers, as the game maps them into a heap block, and their assets.
 /// </summary>
 /// <remarks>
 /// An asset directory comes from the same allocator as a layer and carries the same identity, so an implementation must
@@ -29,4 +29,12 @@ public interface ILayerSource
     /// <param name="offset">The offset in the block.</param>
     /// <returns>The name, or <see langword="null"/> when the block isn't that layer or the offset is past its end.</returns>
     RegionName? Name(LayerId layer, uint blockSize, uint offset);
+
+    /// <summary>
+    /// Finds an asset by its ID in the first of some archives that has it.
+    /// </summary>
+    /// <param name="archives">The archives to look in, named as a recording names them.</param>
+    /// <param name="id">The asset's ID.</param>
+    /// <returns>The asset, or <see langword="null"/> when none of the archives that resolve has it.</returns>
+    AssetRef? FindAsset(IReadOnlyList<string> archives, uint id);
 }

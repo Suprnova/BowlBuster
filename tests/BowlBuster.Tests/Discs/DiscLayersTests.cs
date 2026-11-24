@@ -164,6 +164,18 @@ public sealed class DiscLayersTests : IDisposable
     }
 
     [Fact]
+    public void FindAsset_IdInTheArchives_NamesIt() =>
+        Assert.Equal(Second, layers.FindAsset(["MN\\MNUI"], 2));
+
+    [Fact]
+    public void FindAsset_ArchiveNotOnTheDisc_IsSkipped() =>
+        Assert.Equal(First, layers.FindAsset(["XX\\NONE", "B1\\B101.HOP"], 1));
+
+    [Fact]
+    public void FindAsset_IdInNoArchive_IsNull() =>
+        Assert.Null(layers.FindAsset(["MN\\MNUI", "B1\\B101.HOP"], 3));
+
+    [Fact]
     public void Constructor_PlatformWithNoEvilHopPlatform_ThrowsArgumentException() =>
         Assert.Throws<ArgumentException>(() => new DiscLayers(disc.FullName, Platform with { Platform = "gamecube" }));
 }

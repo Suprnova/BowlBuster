@@ -1,3 +1,4 @@
+using BowlBuster.Platforms;
 using BowlBuster.Recordings;
 
 namespace BowlBuster.Landings;
@@ -78,6 +79,23 @@ public sealed record LayerSlackName(LayerId Layer, AssetRef Last, uint OffsetPas
 {
     /// <inheritdoc/>
     public override NamingDepth Depth => NamingDepth.Field;
+}
+
+/// <summary>
+/// Inside an object of a live object array.
+/// </summary>
+/// <param name="Type">The array's type.</param>
+/// <param name="Element">The object's index in the array.</param>
+/// <param name="Id">The object's ID from the load's capture, or <see langword="null"/> when there's no capture or it holds 0.</param>
+/// <param name="Asset">The asset of that ID in the load's archives, or <see langword="null"/> when the disc doesn't name it.</param>
+/// <param name="OffsetInObject">The offset from the object's first byte.</param>
+/// <param name="Field">The field that covers the offset, or <see langword="null"/> when the layout names none there.</param>
+public sealed record LiveObjectName(LiveType Type, int Element, uint? Id, AssetRef? Asset, uint OffsetInObject, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => Field is not null ? NamingDepth.Field
+        : Id is not null ? NamingDepth.Identity
+        : NamingDepth.Element;
 }
 
 /// <summary>

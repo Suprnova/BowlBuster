@@ -56,6 +56,17 @@ public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerSou
             : new LayerPaddingName(layer, RefOf(location.Previous!.Asset), RefOf(location.Next!.Asset), location.OffsetInEntry);
     }
 
+    /// <inheritdoc/>
+    public AssetRef? FindAsset(IReadOnlyList<string> archives, uint id)
+    {
+        ArgumentNullException.ThrowIfNull(archives);
+        return archives
+            .Select(archive => ViewOf(archive)?.Index.Find(new AssetId(id)))
+            .OfType<Asset>()
+            .Select(static asset => (AssetRef?)RefOf(asset))
+            .FirstOrDefault();
+    }
+
     private static AssetRef RefOf(Asset asset) => new(asset.Id.Value, asset.Name, asset.Type.ToString());
 
     /// <summary>

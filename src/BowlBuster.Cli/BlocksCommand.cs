@@ -74,6 +74,7 @@ internal static class BlocksCommand
     private static string Kind(RegionName name) => name switch
     {
         LayerAssetName or LayerPaddingName or LayerSlackName => "layer",
+        LiveObjectName live => $"live {live.Type.Name}",
         _ => "unknown",
     };
 

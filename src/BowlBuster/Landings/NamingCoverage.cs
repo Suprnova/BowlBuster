@@ -59,12 +59,13 @@ public sealed class NamingCoverage(PlatformProfile profile, RegionNamer namer, I
         for (int op = 0; op < load.Heap.Cutoff!.Value.RequestCount; op++)
             tracker.Apply(replayer, op, load.Heap.Requests[op]);
 
-        return new LoadNaming(segment, load, [.. tracker.Live.Select(block => Measure(block, capture))]);
+        LoadContext context = LoadContext.Of(load.Heap, capture);
+        return new LoadNaming(segment, load, [.. tracker.Live.Select(block => Measure(block, context))]);
     }
 
-    private BlockNaming Measure(PlacedBlock block, ILoadCapture? capture)
+    private BlockNaming Measure(PlacedBlock block, LoadContext load)
     {
-        RegionName NameAt(uint offset) => namer.Name(new LandingRegion(RegionKind.Block, block, offset), capture)!;
+        RegionName NameAt(uint offset) => namer.Name(new LandingRegion(RegionKind.Block, block, offset), load)!;
 
         Dictionary<NamingDepth, uint> bytes = [];
         for (uint offset = 0; offset < block.Size; offset += sizeof(uint))

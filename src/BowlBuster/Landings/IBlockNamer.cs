@@ -1,5 +1,3 @@
-using BowlBuster.Recordings;
-
 namespace BowlBuster.Landings;
 
 /// <summary>
@@ -21,8 +19,8 @@ internal interface IBlockNamer
 /// What a block namer may read.
 /// </summary>
 /// <param name="Layers">The archive layers on disc, or <see langword="null"/> when there are none to read.</param>
-/// <param name="Capture">The capture of the load that allocated the block, or <see langword="null"/> when it has none.</param>
-internal sealed record NamingContext(ILayerSource? Layers, ILoadCapture? Capture);
+/// <param name="Load">The load that allocated the block, or <see langword="null"/> when nothing is known of it.</param>
+internal sealed record NamingContext(ILayerSource? Layers, LoadContext? Load);
 
 /// <summary>
 /// Names a class-1 archive layer's block from the disc.

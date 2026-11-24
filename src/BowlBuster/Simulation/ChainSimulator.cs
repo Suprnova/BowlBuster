@@ -100,7 +100,7 @@ public sealed class ChainSimulator(
             heap.Allocate(profile.PlayerEntitySize, 0);
         }
 
-        ILoadCapture?[] loadCaptures = [.. sources.Select(CaptureOf)];
+        LoadContext[] contexts = [.. sources.Select(source => LoadContext.Of(source.Load.Heap, CaptureOf(source)))];
         BlockTracker tracker = new(profile.Heap0);
         List<SimulatedLoad> loads = [];
         SphereAssignment? sphere = null;
@@ -121,7 +121,7 @@ public sealed class ChainSimulator(
             for (int op = 0; op <= log.Requests.Count; op++)
             {
                 if (op == log.Cutoff?.RequestCount && !setsSphere && sphere is { } stale)
-                    landing = Resolve(stale, tracker, heap, loadCaptures);
+                    landing = Resolve(stale, tracker, heap, contexts);
 
                 if (op == log.Requests.Count) break;
 
@@ -147,20 +147,20 @@ public sealed class ChainSimulator(
     private ILoadCapture? CaptureOf(LoadSource source) =>
         source.Load.Heap.Cutoff?.CaptureId is { } id ? captures?.Find(source.RecordingId, id) : null;
 
-    private Landing Resolve(SphereAssignment sphere, BlockTracker tracker, GameHeap heap, ILoadCapture?[] loadCaptures) => new(
+    private Landing Resolve(SphereAssignment sphere, BlockTracker tracker, GameHeap heap, LoadContext[] contexts) => new(
         sphere,
         tracker.FindFrom(profile.Sites.PlayerEntity)?.Address,
         new LandingHeap(tracker.HeapTop, heap.Current.Cursor, heap.Depth),
-        [.. profile.Footprint.Words.Select(word => Resolve(word, sphere, tracker, loadCaptures))]);
+        [.. profile.Footprint.Words.Select(word => Resolve(word, sphere, tracker, contexts))]);
 
-    private LandingWord Resolve(FootprintWord word, SphereAssignment sphere, BlockTracker tracker, ILoadCapture?[] loadCaptures)
+    private LandingWord Resolve(FootprintWord word, SphereAssignment sphere, BlockTracker tracker, LoadContext[] contexts)
     {
         uint address = sphere.Address + word.Offset;
         LandingRegion region = tracker.Locate(address, sphere.Position);
-        ILoadCapture? capture = region.Block is { } block ? loadCaptures[block.Position] : null;
-        (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, capture);
+        LoadContext? load = region.Block is { } block ? contexts[block.Position] : null;
+        (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, load?.Capture);
 
-        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region, capture));
+        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region, load));
     }
 
     private bool IsSphere(HeapRequest request) => request is PoolAllocRequest instance && instance.Caller == profile.Sites.Sphere;

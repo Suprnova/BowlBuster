@@ -10,6 +10,7 @@ namespace BowlBuster.Platforms;
 /// <param name="LayerRounding">The multiple a class-1 archive layer's block is rounded up to from its image's length.</param>
 /// <param name="Platform">The platform's name in a recording. A recording made on another platform can't be replayed on this profile.</param>
 /// <param name="Footprint">What the stale write touches.</param>
+/// <param name="Live">The live object types and the sites of their arrays.</param>
 public sealed record PlatformProfile(
     HeapProfile Heap0,
     uint PlayerEntitySize,
@@ -17,7 +18,8 @@ public sealed record PlatformProfile(
     AllocationSites Sites,
     uint LayerRounding,
     string Platform,
-    FootprintProfile Footprint)
+    FootprintProfile Footprint,
+    LiveLayouts Live)
 {
     private const uint ScaleWord = 0x40833333;
 
@@ -52,5 +54,6 @@ public sealed record PlatformProfile(
             new(0x70, 4, null),
             new(0x74, 4, null),
             new(0x78, 4, null),
-        ]));
+        ]),
+        LiveLayouts.Xbox);
 }
