@@ -11,6 +11,7 @@ namespace BowlBuster.Platforms;
 /// <param name="Platform">The platform's name in a recording. A recording made on another platform can't be replayed on this profile.</param>
 /// <param name="Footprint">What the stale write touches.</param>
 /// <param name="Live">The live object types and the sites of their arrays.</param>
+/// <param name="Scene">The scene's own structures beyond its live objects.</param>
 public sealed record PlatformProfile(
     HeapProfile Heap0,
     uint PlayerEntitySize,
@@ -19,7 +20,8 @@ public sealed record PlatformProfile(
     uint LayerRounding,
     string Platform,
     FootprintProfile Footprint,
-    LiveLayouts Live)
+    LiveLayouts Live,
+    SceneStructures Scene)
 {
     private const uint ScaleWord = 0x40833333;
 
@@ -53,7 +55,7 @@ public sealed record PlatformProfile(
                 new("scale", 0x58, 0xC),
                 new("box", 0x64, 0x18),
             ]),
-        new AllocationSites(0x72670, 0x182B2A, 0xAF43D, 0x192860, 0x186603, 0x74031, 0x74014),
+        new AllocationSites(0x72670, 0x182B2A, 0xAF43D, 0x192860, 0x186603, 0x74031),
         0x800,
         "xbox",
         new FootprintProfile(
@@ -78,5 +80,6 @@ public sealed record PlatformProfile(
             new(0x74, 4, null),
             new(0x78, 4, null),
         ]),
-        LiveLayouts.Xbox);
+        LiveLayouts.Xbox,
+        SceneStructures.Xbox);
 }

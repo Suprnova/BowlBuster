@@ -47,9 +47,9 @@ public class NamingCoverageTests
     [Fact]
     public void Measure_BlockNoNamerNames_IsUnknownByCallerThroughout()
     {
-        BlockNaming entity = Measure(OriginCaptured(), new RegionNamerTests.NamingLayers(Named)).Single().Blocks[0];
+        BlockNaming layer = Measure(OriginCaptured(), null).Single().Blocks[1];
 
-        Assert.Equal(new UnknownRegionName(EntitySite), entity.First);
-        Assert.Equal(new Dictionary<NamingDepth, uint> { [NamingDepth.Caller] = EntitySize }, entity.Bytes);
+        Assert.Equal(new UnknownRegionName(LayerSite), layer.First);
+        Assert.Equal(new Dictionary<NamingDepth, uint> { [NamingDepth.Caller] = 0x10000 }, layer.Bytes);
     }
 }

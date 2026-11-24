@@ -34,7 +34,7 @@ public class TableNamersTests
 
     private static PlacedBlock Lookup(uint size = 0x20) => Block(Table, size, Platform.Sites.LookupTable);
 
-    private static PlacedBlock Bases(uint size = 0xC) => Block(Table, size, Platform.Sites.BaseArray);
+    private static PlacedBlock Bases(uint size = 0xC) => Block(Table, size, 0x74014);
 
     [Theory]
     [InlineData(0x8u, 1, false)]
@@ -67,9 +67,9 @@ public class TableNamersTests
     [Fact]
     public void Name_BaseEntry_NamesWhatItPointsAt()
     {
-        var name = Assert.IsType<BaseEntryName>(Name(Bases(), 0x5, Capture().Word(Table + 4, Objects + CounterSize)));
+        var name = Assert.IsType<PointerEntryName>(Name(Bases(), 0x5, Capture().Word(Table + 4, Objects + CounterSize)));
 
-        Assert.Equal(1, name.Entry);
+        Assert.Equal(("bases", 1), (name.Array, name.Entry));
         Assert.Equal(new LiveObjectName(Counter, 1, 0x200, null, 0, Counter.FieldAt(0)), name.Target);
     }
 
@@ -77,15 +77,15 @@ public class TableNamersTests
     [InlineData(0u)]
     [InlineData(Objects + (3 * CounterSize))]
     public void Name_BaseEntryPointingAtNoLiveBlock_HasNoTarget(uint target) =>
-        Assert.Equal(new BaseEntryName(0, null), Name(Bases(), 0, Capture().Word(Table, target)));
+        Assert.Equal(new PointerEntryName("bases", 0, null), Name(Bases(), 0, Capture().Word(Table, target)));
 
     [Fact]
     public void Name_BaseEntryPointingAtItsOwnArray_HasNoTarget() =>
-        Assert.Equal(new BaseEntryName(0, null), Name(Bases(), 0, Capture().Word(Table, Table + 4)));
+        Assert.Equal(new PointerEntryName("bases", 0, null), Name(Bases(), 0, Capture().Word(Table, Table + 4)));
 
     [Fact]
     public void Name_BaseArrayWithoutACapture_HasEntriesButNoTargets() =>
-        Assert.Equal(new BaseEntryName(2, null), Name(Bases(), 0x8, null));
+        Assert.Equal(new PointerEntryName("bases", 2, null), Name(Bases(), 0x8, null));
 
     [Fact]
     public void BlockAt_AnEarlierLoadsBlockOverTheSameRecordedAddress_IsNotTheLoads()

@@ -21,10 +21,13 @@ internal sealed class LiveObjectNamer(LiveLayouts layouts, LiveArraySite site) :
 
     public RegionName? Name(PlacedBlock block, uint offset, NamingContext context)
     {
-        if (TypeOf(block, context.Load?.Capture) is not { } type || block.Size % type.Size is not 0) return null;
+        if (TypeOf(block, context.Load?.Capture) is not { } type) return null;
 
-        uint element = offset / type.Size;
-        uint recorded = block.Request.Address + (element * type.Size);
+        uint size = site.ObjectSize ?? type.Size;
+        if (block.Size % size is not 0) return null;
+
+        uint element = offset / size;
+        uint recorded = block.Request.Address + (element * size);
         uint? id = null;
 
         if (context.Load?.Capture is { } capture)
@@ -34,7 +37,7 @@ internal sealed class LiveObjectNamer(LiveLayouts layouts, LiveArraySite site) :
         }
 
         AssetRef? asset = id is { } known ? context.FindAsset(known) : null;
-        uint inObject = offset - (element * type.Size);
+        uint inObject = offset - (element * size);
         return new LiveObjectName(type, (int)element, id, asset, inObject, type.FieldAt(inObject));
     }
 

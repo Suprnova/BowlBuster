@@ -63,8 +63,9 @@ public sealed record RecordLayout(uint Size, IReadOnlyList<LiveField> Fields)
 /// A site that allocates an array of live objects.
 /// </summary>
 /// <param name="Caller">The allocation's return address.</param>
-/// <param name="Type">The type the site always allocates, for an array the game leaves empty, so that no object holds a type byte to read. <see langword="null"/> reads the type from the first object.</param>
-public sealed record LiveArraySite(uint Caller, byte? Type = null);
+/// <param name="Type">The type the site always allocates, so no object's type byte is read: for an array the game leaves empty, or a site of one object. <see langword="null"/> reads the type from the first object.</param>
+/// <param name="ObjectSize">The size of the site's objects when it isn't their type's, for a site whose object extends its type's layout. <see langword="null"/> takes the type's size.</param>
+public sealed record LiveArraySite(uint Caller, byte? Type = null, uint? ObjectSize = null);
 
 /// <summary>
 /// The live object types, the sites that allocate their arrays, and where their objects' assets are.
@@ -86,7 +87,8 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
 
     /// <summary>
     /// The Xbox layouts (2.4): the static type table at <c>0x2B6AA0</c>, the dynamic kinds ending at <c>0x29784C</c>,
-    /// the fields the executable confirms, and the array sites: the scene's own five, the MovePoints' and the surfaces'.
+    /// the fields the executable confirms, and the array sites: the scene's own five, the MovePoints' and the surfaces',
+    /// and the player entity, a <c>PLYR</c> of <c>0x2B8</c> bytes.
     /// </summary>
     public static LiveLayouts Xbox { get; } = BuildXbox();
 
@@ -226,7 +228,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
             new(0x86, "Function Generator", 0x30, @base),
         ];
 
-        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5)],
+        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5), new(0x72670, 0x03, 0x2B8)],
             ["boot", @"MN\mnuc"],
             new RecordLayout(0x60,
             [

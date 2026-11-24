@@ -21,25 +21,6 @@ internal sealed class LookupTableNamer : IBlockNamer
 }
 
 /// <summary>
-/// Names the base array: one pointer per live base, named by what it points at.
-/// </summary>
-/// <param name="namer">Names what an entry points at.</param>
-internal sealed class BaseArrayNamer(RegionNamer namer) : IBlockNamer
-{
-    public RegionName? Name(PlacedBlock block, uint offset, NamingContext context)
-    {
-        if (block.Size % sizeof(uint) is not 0) return null;
-
-        uint entry = offset / sizeof(uint);
-        RegionName? target = context.Load?.Capture?.WordAt(block.Request.Address + (entry * sizeof(uint))) is { } pointer and not 0
-            && context.BlockAt(block.Position, pointer) is { } held && held != block
-            ? namer.Name(held, pointer - held.Request.Address, context)
-            : null;
-        return new BaseEntryName((int)entry, target);
-    }
-}
-
-/// <summary>
 /// Reads words from a capture.
 /// </summary>
 internal static class CaptureReads

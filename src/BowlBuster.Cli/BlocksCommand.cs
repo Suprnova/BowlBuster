@@ -79,7 +79,10 @@ internal static class BlocksCommand
         ModelMatrixName { Pool: null } or ModelInstanceName { Pool: null } => "model instance",
         ModelMatrixName or ModelPoolHeaderName or ModelInstanceName => "model pool",
         AssetDirectoryName directory => $"directory {directory.Archive}",
-        BaseEntryName => "base array",
+        PointerEntryName pointers => pointers.Array,
+        SceneName => "scene",
+        EnvName => "env",
+        WalkRecordName => "walk records",
         _ => "unknown",
     };
 

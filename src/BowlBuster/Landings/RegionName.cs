@@ -126,14 +126,50 @@ public sealed record LookupEntryName(int Slot, bool IsPointer, uint? Id, AssetRe
 }
 
 /// <summary>
-/// In an entry of the base array, which points at a live base.
+/// In an entry of an array of pointers to live bases: the base array, the scene's entity arrays, or a group's items.
 /// </summary>
+/// <param name="Array">The array's name, as the field that holds it is named.</param>
 /// <param name="Entry">The entry's index.</param>
 /// <param name="Target">What the entry points at in the load's capture, or <see langword="null"/> when there's no capture or it points at no live block.</param>
-public sealed record BaseEntryName(int Entry, RegionName? Target) : RegionName
+/// <param name="Owner">The field that holds the array, for an array whose owner is looked up, or <see langword="null"/>.</param>
+public sealed record PointerEntryName(string Array, int Entry, RegionName? Target, RegionName? Owner = null) : RegionName
 {
     /// <inheritdoc/>
     public override NamingDepth Depth => NamingDepth.Field;
+}
+
+/// <summary>
+/// In the scene's <c>zScene</c> record.
+/// </summary>
+/// <param name="OffsetInScene">The offset from the record's first byte.</param>
+/// <param name="Field">The field that covers the offset, or <see langword="null"/> when the layout names none there.</param>
+public sealed record SceneName(uint OffsetInScene, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => Field is not null ? NamingDepth.Field : NamingDepth.Kind;
+}
+
+/// <summary>
+/// In the scene's <c>xEnv</c>, whose fields aren't known.
+/// </summary>
+/// <param name="OffsetInEnv">The offset from its first byte.</param>
+public sealed record EnvName(uint OffsetInEnv) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => NamingDepth.Kind;
+}
+
+/// <summary>
+/// In a walk record, or in the list of words that follows a category's records.
+/// </summary>
+/// <param name="Category">The walk category.</param>
+/// <param name="Record">The record's index in its category, or <see langword="null"/> in the category's list.</param>
+/// <param name="Offset">The offset from the record's first byte, or from the list's.</param>
+/// <param name="Field">The record's field that covers the offset, or <see langword="null"/> in the list or where the layout names none.</param>
+public sealed record WalkRecordName(int Category, int? Record, uint Offset, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => Field is not null || Record is null ? NamingDepth.Field : NamingDepth.Element;
 }
 
 /// <summary>
