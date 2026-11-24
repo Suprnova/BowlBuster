@@ -37,18 +37,21 @@ public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerIma
     /// <inheritdoc/>
     public bool TryRead(LayerId layer, uint blockSize, uint offset, Span<byte> destination)
     {
-        if (ImageOf(layer, blockSize) is not { } image || offset + (uint)destination.Length > (uint)image.Length) return false;
+        if (Match(layer, blockSize) is not { Image: var image } || offset + (uint)destination.Length > (uint)image.Length) return false;
 
         image.Span.Slice((int)offset, destination.Length).CopyTo(destination);
         return true;
     }
 
-    private ReadOnlyMemory<byte>? ImageOf(LayerId layer, uint blockSize)
+    /// <summary>
+    /// The layer a block of <paramref name="blockSize"/> holds, when the disc has it and the size matches.
+    /// </summary>
+    internal (ReadOnlyMemory<byte> Image, LayerLayout Layout)? Match(LayerId layer, uint blockSize)
     {
         if (ViewOf(layer.Archive) is not { } view || layer.Layer < 0 || layer.Layer >= view.Layers.Count) return null;
 
         var image = view.GetLayerImage(layer.Layer);
-        return RoundUp((uint)image.Length, profile.LayerRounding) == blockSize ? image : null;
+        return RoundUp((uint)image.Length, profile.LayerRounding) == blockSize ? (image, view.GetLayout(layer.Layer)) : null;
     }
 
     private AssetView? ViewOf(string archive)

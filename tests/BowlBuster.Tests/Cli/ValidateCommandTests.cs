@@ -152,4 +152,56 @@ public sealed class ValidateCommandTests : IDisposable
         Assert.Equal(CommandLineApp.Success, exitCode);
         Assert.Equal($"{VersionBanner.For(typeof(VersionBanner).Assembly)}{Environment.NewLine}", output.ToString());
     }
+
+    [Fact]
+    public void Validate_DiscThatIsntADirectory_ExitsUnreadable()
+    {
+        using ScriptedRecordingFolder folder = new(ScriptedRecordingFolder.TwoLoads());
+
+        int exitCode = Run("recordings", "validate", folder.Path, "--disc", System.IO.Path.Combine(folder.Path, "no-such-disc"));
+
+        Assert.Equal(CommandLineApp.Unreadable, exitCode);
+        Assert.Contains("Cannot read the disc", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_WithADisc_ReportsTheLayers()
+    {
+        using ScriptedRecordingFolder folder = new(ScriptedRecordingFolder.TwoLoads());
+        DirectoryInfo disc = Directory.CreateTempSubdirectory("bowlbuster-validate-disc-");
+
+        try
+        {
+            int exitCode = Run("recordings", "validate", folder.Path, "--disc", disc.FullName);
+
+            Assert.Equal(CommandLineApp.Success, exitCode);
+            Assert.Matches(@"Layers \(0 of [1-9]\d* the same as on disc\)", output.ToString());
+            Assert.Matches(@"TARG layer 0  counter 4 op \d+  not on disc", output.ToString());
+        }
+        finally
+        {
+            disc.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Validate_WithADiscAsJson_PrintsTheLayers()
+    {
+        using ScriptedRecordingFolder folder = new(ScriptedRecordingFolder.TwoLoads());
+        DirectoryInfo disc = Directory.CreateTempSubdirectory("bowlbuster-validate-disc-");
+
+        try
+        {
+            Run("recordings", "validate", folder.Path, "--json", "--disc", disc.FullName);
+
+            JsonArray layers = JsonNode.Parse(output.ToString())!["layers"]!.AsArray();
+
+            Assert.All(layers, static layer => Assert.Equal("notOnDisc", layer!["match"]!.GetValue<string>()));
+            Assert.Contains(layers, static layer => layer!["archive"]!.GetValue<string>() == "TARG" && layer["layer"]!.GetValue<int>() == 0);
+        }
+        finally
+        {
+            disc.Delete(recursive: true);
+        }
+    }
 }
