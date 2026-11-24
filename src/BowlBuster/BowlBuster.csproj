@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="EvilHop" />
     <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
