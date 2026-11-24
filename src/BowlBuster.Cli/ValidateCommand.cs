@@ -16,9 +16,6 @@ internal static class ValidateCommand
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    /// <summary>The environment variable naming the extracted disc when <c>--disc</c> doesn't.</summary>
-    public const string DiscVariable = "BOWL_DISC";
-
     private const int NamedDifferences = 5;
 
     public static Command Build(TextWriter output, TextWriter error, Func<DirectoryInfo?, Vocabulary> vocabulary)
@@ -26,13 +23,13 @@ internal static class ValidateCommand
         Argument<DirectoryInfo> recording = new("recording") { Description = "The recording's directory." };
         Option<bool> json = new("--json") { Description = "Print the result as JSON." };
         Option<DirectoryInfo?> catalog = new("--catalog") { Description = "The catalog directory, to name the costumes a load wore." };
-        Option<DirectoryInfo?> disc = new("--disc") { Description = $"The extracted disc, to check the recording's layer blocks against; else {DiscVariable}." };
+        Option<DirectoryInfo?> disc = RecordingInputs.DiscOption("to check the recording's layer blocks against");
 
         Command command = new("validate", "Replay a recording and say whether it can be used.") { recording, json, catalog, disc };
         command.SetAction(parsed => Run(
             parsed.GetRequiredValue(recording),
             parsed.GetValue(catalog),
-            parsed.GetValue(disc) ?? DiscFromEnvironment(),
+            RecordingInputs.Disc(parsed.GetValue(disc)),
             parsed.GetValue(json),
             output,
             error,
@@ -40,33 +37,14 @@ internal static class ValidateCommand
         return command;
     }
 
-    private static DirectoryInfo? DiscFromEnvironment() =>
-        Environment.GetEnvironmentVariable(DiscVariable) is { Length: > 0 } named ? new DirectoryInfo(named) : null;
-
     private static int Run(DirectoryInfo directory, DirectoryInfo? catalog, DirectoryInfo? disc, bool asJson, TextWriter output, TextWriter error, Func<DirectoryInfo?, Vocabulary> vocabulary)
     {
-        if (disc is { Exists: false })
-        {
-            error.WriteLine($"Cannot read the disc: {disc.FullName} isn't a directory.");
+        if (RecordingInputs.Read(directory, disc, () => vocabulary(catalog), error) is not { Recording: var recording, Result: var result } replayed)
             return CommandLineApp.Unreadable;
-        }
-
-        Recording recording;
-        try
-        {
-            recording = RecordingDirectory.Read(directory.FullName, vocabulary(catalog));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or FormatException or CatalogException)
-        {
-            error.WriteLine($"Cannot read the recording: {exception.Message}");
-            return CommandLineApp.Unreadable;
-        }
 
         PlatformProfile profile = PlatformProfile.XboxNtscU;
-        FileCaptureSource captures = new(directory.FullName);
-        RecordingValidation result = new ReplayValidator(profile, captures).Validate(recording);
         IReadOnlyList<LayerComparison>? layers = result.IsAccepted && disc is not null
-            ? new LayerCheck(profile, new DiscLayers(disc.FullName, profile), captures).Compare(recording)
+            ? new LayerCheck(profile, new DiscLayers(disc.FullName, profile), replayed.Captures).Compare(recording)
             : null;
 
         if (asJson) output.WriteLine(JsonSerializer.Serialize(Describe(recording, result, layers), JsonOptions));
@@ -77,7 +55,7 @@ internal static class ValidateCommand
         }
         else error.WriteLine($"Rejected {recording.Id}: {result.Rejection}");
 
-        return result.IsAccepted ? CommandLineApp.Success : CommandLineApp.Rejected;
+        return replayed.ExitCode;
     }
 
     private static void WriteAccepted(Recording recording, TextWriter output)

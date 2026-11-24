@@ -27,7 +27,7 @@ public sealed class ChainSimulator(
     ILayerSource? layers = null)
 {
     private readonly OriginalBytesReader originals = new(profile, layers);
-    private readonly RegionNamer namer = new(layers);
+    private readonly RegionNamer namer = new(profile, layers);
 
     /// <summary>
     /// Simulates a chain.
@@ -157,9 +157,10 @@ public sealed class ChainSimulator(
     {
         uint address = sphere.Address + word.Offset;
         LandingRegion region = tracker.Locate(address, sphere.Position);
-        (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, region.Block is { } block ? loadCaptures[block.Position] : null);
+        ILoadCapture? capture = region.Block is { } block ? loadCaptures[block.Position] : null;
+        (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, capture);
 
-        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region));
+        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region, capture));
     }
 
     private bool IsSphere(HeapRequest request) => request is PoolAllocRequest instance && instance.Caller == profile.Sites.Sphere;

@@ -31,6 +31,11 @@ public sealed class BlockTracker(HeapProfile profile)
     public uint HeapTop { get; private set; }
 
     /// <summary>
+    /// The live blocks, in address order.
+    /// </summary>
+    public IReadOnlyList<PlacedBlock> Live => live;
+
+    /// <summary>
     /// Starts the chain's next load.
     /// </summary>
     public void BeginLoad()
