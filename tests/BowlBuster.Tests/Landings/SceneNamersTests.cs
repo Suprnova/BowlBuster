@@ -78,6 +78,14 @@ public class SceneNamersTests
     }
 
     [Fact]
+    public void Name_InTheParticlePool_NamesTheChunk() =>
+        Assert.Equal(new ParticlePoolName(3, 0x10), Name(Block(Address, 0x28000, Scene.ParticlePoolSite), (3 * 0x1400) + 0x10));
+
+    [Fact]
+    public void Name_ParticlePoolThatIsntWholeChunks_IsUnknown() =>
+        Assert.Equal(new UnknownRegionName(Scene.ParticlePoolSite), Name(Block(Address, 0x1000, Scene.ParticlePoolSite), 0));
+
+    [Fact]
     public void Name_PlayerEntity_IsAPlayerObjectOfItsOwnSize()
     {
         var name = Assert.IsType<LiveObjectName>(Name(Block(Address, 0x2B8, Platform.Sites.PlayerEntity), 0x2B4));

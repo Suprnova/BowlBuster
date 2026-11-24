@@ -211,6 +211,17 @@ public sealed record ModelInstanceName(ModelPoolShape? Pool, int Instance, uint 
 }
 
 /// <summary>
+/// In a chunk of the particle pool, whose elements are in the format of whichever particle client holds the chunk.
+/// </summary>
+/// <param name="Chunk">The chunk's index.</param>
+/// <param name="OffsetInChunk">The offset from the chunk's first byte.</param>
+public sealed record ParticlePoolName(int Chunk, uint OffsetInChunk) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => NamingDepth.Element;
+}
+
+/// <summary>
 /// In a block no layout names yet, known only by the return address of its allocation (4.3): an unknown region (5.6).
 /// </summary>
 /// <param name="Caller">The allocation's caller.</param>

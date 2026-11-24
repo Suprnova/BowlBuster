@@ -20,6 +20,8 @@ public sealed record PointerArraySite(uint Caller, string Name);
 /// <param name="WalkRecordsSite">The site of the walk records.</param>
 /// <param name="WalkCategories">The number of records in each walk category, in block order. Each category's records are followed by a list of its count plus 2 words.</param>
 /// <param name="WalkRecord">A walk record's layout.</param>
+/// <param name="ParticlePoolSite">The site of the particle pool: one buffer of equal chunks that the particle clients store their elements in.</param>
+/// <param name="ParticleChunkSize">The size of one of the particle pool's chunks.</param>
 public sealed record SceneStructures(
     uint SceneSite,
     RecordLayout Scene,
@@ -30,7 +32,9 @@ public sealed record SceneStructures(
     uint GroupItemsOffset,
     uint WalkRecordsSite,
     IReadOnlyList<int> WalkCategories,
-    RecordLayout WalkRecord)
+    RecordLayout WalkRecord,
+    uint ParticlePoolSite,
+    uint ParticleChunkSize)
 {
     /// <summary>
     /// The Xbox structures.
@@ -72,5 +76,7 @@ public sealed record SceneStructures(
         0x18,
         0x188FC8,
         [4, 8, 12, 16, 12, 8],
-        new RecordLayout(0x20, [new("prev", 0x0, 4), new("object", 0x4, 4), new("flags", 0x8, 4)]));
+        new RecordLayout(0x20, [new("prev", 0x0, 4), new("object", 0x4, 4), new("flags", 0x8, 4)]),
+        0x191B52,
+        0x1400);
 }

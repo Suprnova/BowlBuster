@@ -75,6 +75,16 @@ internal sealed class EnvNamer : IBlockNamer
 }
 
 /// <summary>
+/// Names the particle pool by chunk.
+/// </summary>
+/// <param name="chunkSize">The size of a chunk.</param>
+internal sealed class ParticlePoolNamer(uint chunkSize) : IBlockNamer
+{
+    public RegionName? Name(PlacedBlock block, uint offset, NamingContext context) =>
+        block.Size % chunkSize is 0 ? new ParticlePoolName((int)(offset / chunkSize), offset % chunkSize) : null;
+}
+
+/// <summary>
 /// Names the walk records: each category's records, then its list of words.
 /// </summary>
 /// <param name="scene">The scene's structures, which give the categories and the record's layout.</param>

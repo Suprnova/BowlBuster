@@ -83,6 +83,7 @@ internal static class BlocksCommand
         SceneName => "scene",
         EnvName => "env",
         WalkRecordName => "walk records",
+        ParticlePoolName => "particle pool",
         _ => "unknown",
     };
 
