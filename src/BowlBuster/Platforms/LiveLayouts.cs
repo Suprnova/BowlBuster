@@ -1,7 +1,7 @@
 namespace BowlBuster.Platforms;
 
 /// <summary>
-/// A named field of a live object.
+/// A named field of a structure the game builds at run time.
 /// </summary>
 /// <param name="Name">The field's name, as rules claim it.</param>
 /// <param name="Offset">The field's offset in the object.</param>
@@ -30,6 +30,21 @@ public sealed record LiveType(byte Id, string Name, uint Size, IReadOnlyList<Liv
 }
 
 /// <summary>
+/// The layout of a fixed-size record the game builds at run time.
+/// </summary>
+/// <param name="Size">The record's size.</param>
+/// <param name="Fields">The fields the layout names, in offset order.</param>
+public sealed record RecordLayout(uint Size, IReadOnlyList<LiveField> Fields)
+{
+    /// <summary>
+    /// Finds the field that covers an offset.
+    /// </summary>
+    /// <param name="offset">The offset in the record.</param>
+    /// <returns>The field, or <see langword="null"/> when the layout names none there.</returns>
+    public LiveField? FieldAt(uint offset) => Fields.FirstOrDefault(field => offset >= field.Offset && offset < field.End);
+}
+
+/// <summary>
 /// A site that allocates an array of live objects.
 /// </summary>
 /// <param name="Caller">The allocation's return address.</param>
@@ -42,7 +57,8 @@ public sealed record LiveArraySite(uint Caller, byte? Type = null);
 /// <param name="Types">Every type, static and dynamic.</param>
 /// <param name="Sites">The sites of the live object arrays.</param>
 /// <param name="BootArchives">The archives the game loads once at boot, below every scene, named as a recording names an archive. A scene's objects whose assets aren't in its own archives have them here.</param>
-public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<LiveArraySite> Sites, IReadOnlyList<string> BootArchives)
+/// <param name="DirectoryRecord">A record of an archive's asset directory: one per asset, in ascending ID order.</param>
+public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<LiveArraySite> Sites, IReadOnlyList<string> BootArchives, RecordLayout DirectoryRecord)
 {
     private readonly Dictionary<byte, LiveType> byId = Types.ToDictionary(static type => type.Id);
 
@@ -195,7 +211,17 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
             new(0x86, "Function Generator", 0x30, @base),
         ];
 
-        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5)], ["boot", @"MN\mnuc"]);
+        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5)],
+            ["boot", @"MN\mnuc"],
+            new RecordLayout(0x60,
+            [
+                new("id", 0x0, 4),
+                new("type", 0x4, 4),
+                new("data", 0x24, 4),
+                new("typeInfo", 0x34, 4),
+                new("package", 0x3C, 4),
+                new("name", 0x40, 0x20),
+            ]));
     }
 
     private static LiveField[] Sorted(LiveField[] fields) => [.. fields.OrderBy(static field => field.Offset)];

@@ -64,3 +64,13 @@ internal sealed class LayerNamer : IBlockNamer
     public RegionName? Name(PlacedBlock block, uint offset, NamingContext context) =>
         block.Request.Layer is { } layer ? context.Layers?.Name(layer, block.Size, offset) : null;
 }
+
+/// <summary>
+/// Tries namers in turn, for a site that allocates blocks of several kinds.
+/// </summary>
+/// <param name="namers">The namers, in the order to try them.</param>
+internal sealed class FirstNamer(params IBlockNamer[] namers) : IBlockNamer
+{
+    public RegionName? Name(PlacedBlock block, uint offset, NamingContext context) =>
+        namers.Select(namer => namer.Name(block, offset, context)).FirstOrDefault(static name => name is not null);
+}

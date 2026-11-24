@@ -6,9 +6,10 @@ namespace BowlBuster.Landings;
 /// Names what a landing word lies in, with a namer per block kind chosen by the block's allocation site.
 /// </summary>
 /// <remarks>
-/// A class-1 archive layer is named down to its asset, padding or slack from the disc; a live object array down to the
-/// object, its asset and its field from the load's capture; the lookup table down to the slot and its entry's asset; and
-/// the base array down to the entry and what it points at. Any other block, or a block its namer can't tell, is an
+/// A class-1 archive layer is named down to its asset, padding or slack from the disc, and an asset directory down to
+/// the record's asset and field; a live object array down to the object, its asset and its field from the load's
+/// capture; the lookup table down to the slot and its entry's asset; and the base array down to the entry and what it
+/// points at. Any other block, or a block its namer can't tell, is an
 /// unknown region named by its caller: a wrong guess is worse than an unknown.
 /// </remarks>
 public sealed class RegionNamer
@@ -29,7 +30,7 @@ public sealed class RegionNamer
         this.layers = layers;
         bootArchives = profile.Live.BootArchives;
         namers = profile.Live.Sites.ToDictionary(static site => site.Caller, IBlockNamer (site) => new LiveObjectNamer(profile.Live, site));
-        namers[profile.Sites.ArchiveLayer] = new LayerNamer();
+        namers[profile.Sites.ArchiveLayer] = new FirstNamer(new LayerNamer(), new AssetDirectoryNamer(profile.Live.DirectoryRecord));
         namers[profile.Sites.LookupTable] = new LookupTableNamer();
         namers[profile.Sites.BaseArray] = new BaseArrayNamer(this);
     }

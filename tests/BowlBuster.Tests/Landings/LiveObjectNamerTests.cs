@@ -104,5 +104,7 @@ public class LiveObjectNamerTests
         public AssetRef? FindAsset(IReadOnlyList<string> archives, uint id) => archives
             .Select(archive => assets.TryGetValue((archive, id), out AssetRef asset) ? asset : (AssetRef?)null)
             .FirstOrDefault(static asset => asset is not null);
+
+        public IReadOnlyList<AssetRef>? DirectoryOf(string archive) => null;
     }
 }

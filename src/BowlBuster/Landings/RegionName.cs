@@ -99,6 +99,20 @@ public sealed record LiveObjectName(LiveType Type, int Element, uint? Id, AssetR
 }
 
 /// <summary>
+/// In a record of an archive's asset directory.
+/// </summary>
+/// <param name="Archive">The archive, named as a recording names it.</param>
+/// <param name="Record">The record's index.</param>
+/// <param name="Asset">The record's asset.</param>
+/// <param name="OffsetInRecord">The offset from the record's first byte.</param>
+/// <param name="Field">The field that covers the offset, or <see langword="null"/> when the layout names none there.</param>
+public sealed record AssetDirectoryName(string Archive, int Record, AssetRef Asset, uint OffsetInRecord, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => Field is not null ? NamingDepth.Field : NamingDepth.Identity;
+}
+
+/// <summary>
 /// In a slot of the object lookup table, which holds an ID and a pointer to its live base.
 /// </summary>
 /// <param name="Slot">The slot's index.</param>

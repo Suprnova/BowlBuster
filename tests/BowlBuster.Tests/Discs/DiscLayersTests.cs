@@ -176,6 +176,14 @@ public sealed class DiscLayersTests : IDisposable
         Assert.Null(layers.FindAsset(["MN\\MNUI", "B1\\B101.HOP"], 3));
 
     [Fact]
+    public void DirectoryOf_AnArchive_ListsItsAssetsByAscendingId() =>
+        Assert.Equal([First, Second], layers.DirectoryOf("B1\\B101.HOP"));
+
+    [Fact]
+    public void DirectoryOf_ArchiveNotOnTheDisc_IsNull() =>
+        Assert.Null(layers.DirectoryOf("XX\\NONE"));
+
+    [Fact]
     public void Constructor_PlatformWithNoEvilHopPlatform_ThrowsArgumentException() =>
         Assert.Throws<ArgumentException>(() => new DiscLayers(disc.FullName, Platform with { Platform = "gamecube" }));
 }

@@ -76,6 +76,7 @@ internal static class BlocksCommand
         LayerAssetName or LayerPaddingName or LayerSlackName => "layer",
         LiveObjectName live => $"live {live.Type.Name}",
         LookupEntryName => "lookup table",
+        AssetDirectoryName directory => $"directory {directory.Archive}",
         BaseEntryName => "base array",
         _ => "unknown",
     };

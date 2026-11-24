@@ -294,5 +294,8 @@ public class OriginalBytesTests
         public RegionName? Name(LayerId layer, uint blockSize, uint offset) => null;
 
         public AssetRef? FindAsset(IReadOnlyList<string> archives, uint id) => null;
+
+
+        public IReadOnlyList<AssetRef>? DirectoryOf(string archive) => null;
     }
 }

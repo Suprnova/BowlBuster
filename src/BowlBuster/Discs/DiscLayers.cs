@@ -33,6 +33,7 @@ public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerSou
     };
 
     private readonly Dictionary<string, AssetView?> views = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyList<AssetRef>?> directories = new(StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc/>
     public bool TryRead(LayerId layer, uint blockSize, uint offset, Span<byte> destination)
@@ -65,6 +66,16 @@ public sealed class DiscLayers(string root, PlatformProfile profile) : ILayerSou
             .OfType<Asset>()
             .Select(static asset => (AssetRef?)RefOf(asset))
             .FirstOrDefault();
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<AssetRef>? DirectoryOf(string archive)
+    {
+        if (directories.TryGetValue(archive, out var known)) return known;
+
+        return directories[archive] = ViewOf(archive) is { } view
+            ? [.. view.Layers.SelectMany(static layer => layer.Assets).OrderBy(static asset => asset.Id.Value).Select(RefOf)]
+            : null;
     }
 
     private static AssetRef RefOf(Asset asset) => new(asset.Id.Value, asset.Name, asset.Type.ToString());

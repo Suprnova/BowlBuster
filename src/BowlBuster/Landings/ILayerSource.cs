@@ -37,4 +37,11 @@ public interface ILayerSource
     /// <param name="id">The asset's ID.</param>
     /// <returns>The asset, or <see langword="null"/> when none of the archives that resolve has it.</returns>
     AssetRef? FindAsset(IReadOnlyList<string> archives, uint id);
+
+    /// <summary>
+    /// Lists an archive's assets in the order of its asset directory, which is ascending ID.
+    /// </summary>
+    /// <param name="archive">The archive, named as a recording names it.</param>
+    /// <returns>The assets, or <see langword="null"/> when the archive doesn't resolve.</returns>
+    IReadOnlyList<AssetRef>? DirectoryOf(string archive);
 }
