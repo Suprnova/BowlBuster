@@ -1,6 +1,5 @@
 using BowlBuster.Platforms;
 using BowlBuster.Recordings;
-using System.Buffers.Binary;
 
 namespace BowlBuster.Landings;
 
@@ -30,31 +29,17 @@ internal sealed class LiveObjectNamer(LiveLayouts layouts, LiveArraySite site) :
 
         if (context.Load?.Capture is { } capture)
         {
-            if (site.Type is null && ByteAt(capture, recorded + TypeOffset) != type.Id) return null;
-            id = WordAt(capture, recorded + IdOffset) is { } word and not 0 ? word : null;
+            if (site.Type is null && capture.ByteAt(recorded + TypeOffset) != type.Id) return null;
+            id = capture.WordAt(recorded + IdOffset) is { } word and not 0 ? word : null;
         }
 
-        AssetRef? asset = id is { } known && context.Layers is { } disc
-            ? disc.FindAsset(context.Load!.Archives, known) ?? disc.FindAsset(layouts.BootArchives, known)
-            : null;
+        AssetRef? asset = id is { } known ? context.FindAsset(known) : null;
         uint inObject = offset - (element * type.Size);
         return new LiveObjectName(type, (int)element, id, asset, inObject, type.FieldAt(inObject));
     }
 
     private LiveType? TypeOf(PlacedBlock block, ILoadCapture? capture) =>
         site.Type is { } fixedType ? layouts.Find(fixedType)
-        : capture is not null && ByteAt(capture, block.Request.Address + TypeOffset) is { } read ? layouts.Find(read)
+        : capture is not null && capture.ByteAt(block.Request.Address + TypeOffset) is { } read ? layouts.Find(read)
         : null;
-
-    private static byte? ByteAt(ILoadCapture capture, uint address)
-    {
-        Span<byte> value = stackalloc byte[1];
-        return capture.TryRead(address, value) ? value[0] : null;
-    }
-
-    private static uint? WordAt(ILoadCapture capture, uint address)
-    {
-        Span<byte> value = stackalloc byte[sizeof(uint)];
-        return capture.TryRead(address, value) ? BinaryPrimitives.ReadUInt32LittleEndian(value) : null;
-    }
 }

@@ -30,7 +30,7 @@ public sealed record PlatformProfile(
         new HeapProfile(0xE00000, 12, 16, 12),
         0x2B8,
         new ModelPoolProfile([new(0x31, 0x40), new(0x4A, 8), new(0x144, 1)], 0xC, 0xA0, 0x40, 0x40),
-        new AllocationSites(0x72670, 0x182B2A, 0xAF43D, 0x192860, 0x186603),
+        new AllocationSites(0x72670, 0x182B2A, 0xAF43D, 0x192860, 0x186603, 0x74031, 0x74014),
         0x800,
         "xbox",
         new FootprintProfile(

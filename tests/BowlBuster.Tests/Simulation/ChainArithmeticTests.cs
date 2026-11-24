@@ -242,7 +242,7 @@ public class ChainArithmeticTests
         {
             PlayerEntitySize = EntitySize,
             Pools = Platform.Pools with { InstanceSize = InstanceSize },
-            Sites = new AllocationSites(EntitySite, PoolSite, SphereSite, LayerSite, 0x5500),
+            Sites = new AllocationSites(EntitySite, PoolSite, SphereSite, LayerSite, 0x5500, 0x5600, 0x5700),
             Platform = "second",
             Footprint = new FootprintProfile([new FootprintWord(0x20, 4, 0), new FootprintWord(0x44, 4, 0x3F800000)]),
         };

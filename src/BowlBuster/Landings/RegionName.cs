@@ -99,6 +99,30 @@ public sealed record LiveObjectName(LiveType Type, int Element, uint? Id, AssetR
 }
 
 /// <summary>
+/// In a slot of the object lookup table, which holds an ID and a pointer to its live base.
+/// </summary>
+/// <param name="Slot">The slot's index.</param>
+/// <param name="IsPointer">Whether the offset is in the slot's pointer rather than its ID.</param>
+/// <param name="Id">The slot's ID from the load's capture, or <see langword="null"/> when there's no capture or the slot is empty.</param>
+/// <param name="Asset">The asset of that ID in the load's archives, or <see langword="null"/> when the disc doesn't name it.</param>
+public sealed record LookupEntryName(int Slot, bool IsPointer, uint? Id, AssetRef? Asset) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => NamingDepth.Field;
+}
+
+/// <summary>
+/// In an entry of the base array, which points at a live base.
+/// </summary>
+/// <param name="Entry">The entry's index.</param>
+/// <param name="Target">What the entry points at in the load's capture, or <see langword="null"/> when there's no capture or it points at no live block.</param>
+public sealed record BaseEntryName(int Entry, RegionName? Target) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => NamingDepth.Field;
+}
+
+/// <summary>
 /// In a block no layout names yet, known only by the return address of its allocation (4.3): an unknown region (5.6).
 /// </summary>
 /// <param name="Caller">The allocation's caller.</param>

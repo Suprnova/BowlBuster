@@ -160,7 +160,7 @@ public sealed class ChainSimulator(
         LoadContext? load = region.Block is { } block ? contexts[block.Position] : null;
         (OriginalBytes? original, bool isVolatile) = originals.Read(region, word, load?.Capture);
 
-        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region, load));
+        return new LandingWord(word, address, region, original, isVolatile, namer.Name(region, load, tracker.Live));
     }
 
     private bool IsSphere(HeapRequest request) => request is PoolAllocRequest instance && instance.Caller == profile.Sites.Sphere;

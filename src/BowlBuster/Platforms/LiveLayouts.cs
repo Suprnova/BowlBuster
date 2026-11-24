@@ -55,7 +55,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
 
     /// <summary>
     /// The Xbox layouts (2.4): the static type table at <c>0x2B6AA0</c>, the dynamic kinds ending at <c>0x29784C</c>,
-    /// and the fields the executable confirms.
+    /// the fields the executable confirms, and the array sites: the scene's own five, the MovePoints' and the surfaces'.
     /// </summary>
     public static LiveLayouts Xbox { get; } = BuildXbox();
 
@@ -195,7 +195,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
             new(0x86, "Function Generator", 0x30, @base),
         ];
 
-        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B)], ["boot", @"MN\mnuc"]);
+        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5)], ["boot", @"MN\mnuc"]);
     }
 
     private static LiveField[] Sorted(LiveField[] fields) => [.. fields.OrderBy(static field => field.Offset)];

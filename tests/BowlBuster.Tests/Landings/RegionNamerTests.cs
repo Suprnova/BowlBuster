@@ -13,7 +13,7 @@ public class RegionNamerTests
     private static PlacedBlock Block(uint caller, LayerId? layer = null) =>
         new(0, 0, 0x6FFFF4, 0x700000, 0x800, new AllocRequest(0x800, 0x40, 0x700000, caller, layer));
 
-    private static RegionName? Name(ILayerSource? layers, LandingRegion region) => new RegionNamer(Platform, layers).Name(region, null);
+    private static RegionName? Name(ILayerSource? layers, LandingRegion region) => new RegionNamer(Platform, layers).Name(region, null, []);
 
     [Fact]
     public void Name_LayerBlockTheSourceNames_IsTheSourcesName() =>
@@ -33,7 +33,7 @@ public class RegionNamerTests
 
     [Fact]
     public void Name_LayerIdentityFromAnotherSite_IsUnknownByCaller() =>
-        Assert.Equal(new UnknownRegionName(0x74031), Name(new NamingLayers(Named), new LandingRegion(RegionKind.Block, Block(0x74031, Layer), 4)));
+        Assert.Equal(new UnknownRegionName(0x186603), Name(new NamingLayers(Named), new LandingRegion(RegionKind.Block, Block(0x186603, Layer), 4)));
 
     [Theory]
     [InlineData(RegionKind.Header)]

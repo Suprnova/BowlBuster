@@ -9,4 +9,6 @@ namespace BowlBuster.Platforms;
 /// <param name="Sphere">The Macho Bowl's sphere, a model instance taken from a pool when SpongeBob's character initialises.</param>
 /// <param name="ArchiveLayer">An archive layer that lives in the heap, or an asset directory, which comes from the same site.</param>
 /// <param name="ModelInstance">A model instance allocated straight from the heap, outside the pools.</param>
-public sealed record AllocationSites(uint PlayerEntity, uint ModelPool, uint Sphere, uint ArchiveLayer, uint ModelInstance);
+/// <param name="LookupTable">The scene's object lookup table.</param>
+/// <param name="BaseArray">The scene's base array: a pointer to each live base.</param>
+public sealed record AllocationSites(uint PlayerEntity, uint ModelPool, uint Sphere, uint ArchiveLayer, uint ModelInstance, uint LookupTable, uint BaseArray);

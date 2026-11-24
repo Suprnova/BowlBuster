@@ -27,7 +27,7 @@ public class LiveObjectNamerTests
     private static RegionName? Name(uint offset, ILoadCapture? capture, uint caller = ArraySite, uint size = 3 * 0x1C, ILayerSource? layers = null)
     {
         PlacedBlock block = new(0, 0, Address - 0xC, Address, size, new AllocRequest(size, 0x10, Address, caller));
-        return new RegionNamer(Platform, layers).Name(new LandingRegion(RegionKind.Block, block, offset), new LoadContext(capture, [Scene]));
+        return new RegionNamer(Platform, layers).Name(new LandingRegion(RegionKind.Block, block, offset), new LoadContext(capture, [Scene]), []);
     }
 
     [Fact]
