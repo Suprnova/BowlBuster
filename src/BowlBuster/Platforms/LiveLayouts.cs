@@ -32,7 +32,7 @@ public static class LiveFields
 /// </summary>
 /// <param name="Id">The type byte every object of the type holds at <c>+8</c>.</param>
 /// <param name="Name">The type's name in the executable's type tables.</param>
-/// <param name="Size">The size of one object.</param>
+/// <param name="Size">The size of one object, or 0 for a type whose objects vary in size, each a block of its own.</param>
 /// <param name="Fields">The fields the layout names, in offset order. Bytes no field covers are unnamed.</param>
 public sealed record LiveType(byte Id, string Name, uint Size, IReadOnlyList<LiveField> Fields)
 {
@@ -65,7 +65,8 @@ public sealed record RecordLayout(uint Size, IReadOnlyList<LiveField> Fields)
 /// <param name="Caller">The allocation's return address.</param>
 /// <param name="Type">The type the site always allocates, so no object's type byte is read: for an array the game leaves empty, or a site of one object. <see langword="null"/> reads the type from the first object.</param>
 /// <param name="ObjectSize">The size of the site's objects when it isn't their type's, for a site whose object extends its type's layout. <see langword="null"/> takes the type's size.</param>
-public sealed record LiveArraySite(uint Caller, byte? Type = null, uint? ObjectSize = null);
+/// <param name="Only">The types a site that allocates other things too may hold; a block of any other type has no name. <see langword="null"/> allows every type.</param>
+public sealed record LiveArraySite(uint Caller, byte? Type = null, uint? ObjectSize = null, IReadOnlyList<byte>? Only = null);
 
 /// <summary>
 /// The live object types, the sites that allocate their arrays, and where their objects' assets are.
@@ -87,8 +88,9 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
 
     /// <summary>
     /// The Xbox layouts (2.4): the static type table at <c>0x2B6AA0</c>, the dynamic kinds ending at <c>0x29784C</c>,
-    /// the fields the executable confirms, and the array sites: the scene's own five, the MovePoints' and the surfaces',
-    /// and the player entity, a <c>PLYR</c> of <c>0x2B8</c> bytes.
+    /// the fields the executable confirms, and the array sites: the scene's own five, the MovePoints', the surfaces' and
+    /// the dispatchers', the player entity (a <c>PLYR</c> of <c>0x2B8</c> bytes), and the NPCs, which <c>operator new</c>
+    /// allocates among other classes.
     /// </summary>
     public static LiveLayouts Xbox { get; } = BuildXbox();
 
@@ -166,6 +168,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
             new(0x1A, "SURF", 0x2C, @base),
             new(0x1C, "hud:image", 0xC4, ui),
             new(0x1D, "VOLU", 0x18, @base),
+            new(0x1E, "DPAT", 0x1C, @base),
             new(0x1F, "COND", 0x1C, @base),
             new(0x24, "FOG", 0x18, @base),
             new(0x25, "LITE", 0x68, @base),
@@ -174,6 +177,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
             new(0x28, "CSNM", 0x28, @base),
             new(0x29, "EGEN", 0x120, @base),
             new(0x2A, "SCRP", 0x28, [.. @base, new("nextEvent", 0x18, 4), new("running", 0x1C, 4), new("clock", 0x20, 4), new("speed", 0x24, 4)]),
+            new(0x2B, "NPC", 0, header),
             new(0x2F, "BOUL", 0x20C, @base),
             new(0x31, "Teleport", 0x14C, @base),
             new(0x32, "BusStop", 0x34, @base),
@@ -235,7 +239,7 @@ public sealed record LiveLayouts(IReadOnlyList<LiveType> Types, IReadOnlyList<Li
             new(0x86, "Function Generator", 0x30, @base),
         ];
 
-        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5), new(0x72670, 0x03, 0x2B8)],
+        return new LiveLayouts(types, [new(0x68E71), new(0x68F3B), new(0x68D28), new(0x69081, 0x03), new(0x6913B), new(0x4577C), new(0x1A05D5), new(0x72670, 0x03, 0x2B8), new(0x33273), new(0x18A15A, Only: [0x2B])],
             ["boot", @"MN\mnuc"],
             new RecordLayout(0x60,
             [

@@ -11,7 +11,8 @@ namespace BowlBuster.Landings;
 /// capture; the lookup table down to the slot and its entry's asset; an array of pointers to live bases (the base array,
 /// the scene's entity arrays, a group's items) down to the entry and what it points at; a model pool or standalone
 /// instance down to the matrix, the header or the instance's field; the scene's record, its <c>xEnv</c> and the walk
-/// records down to their fields; and the particle pool down to the chunk. Any other block, or a block its namer can't tell, is an unknown region named by its
+/// records down to their fields; the particle pool down to the chunk; and an array of fixed-size records down to the
+/// record's field. Any other block, or a block its namer can't tell, is an unknown region named by its
 /// caller: a wrong guess is worse than an unknown.
 /// </remarks>
 public sealed class RegionNamer
@@ -40,6 +41,7 @@ public sealed class RegionNamer
         namers[profile.Scene.EnvSite] = new EnvNamer();
         namers[profile.Scene.WalkRecordsSite] = new WalkRecordsNamer(profile.Scene);
         namers[profile.Scene.ParticlePoolSite] = new ParticlePoolNamer(profile.Scene.ParticleChunkSize);
+        foreach (RecordArraySite array in profile.Scene.RecordArrays) namers[array.Caller] = new RecordArrayNamer(array);
         namers[profile.Sites.ModelPool] = new ModelPoolNamer(profile.Pools);
         namers[profile.Sites.ModelInstance] = new ModelInstanceNamer(profile.Pools);
     }

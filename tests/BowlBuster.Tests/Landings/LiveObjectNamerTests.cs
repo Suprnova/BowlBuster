@@ -83,6 +83,22 @@ public class LiveObjectNamerTests
     public void Name_PlayerArrayThatHoldsNoTypeByte_StillTakesTheSitesType() =>
         Assert.IsType<LiveObjectName>(Name(0x18, new ByteCapture(Address, 0xE0), PlayerSite, 0xE0));
 
+    [Fact]
+    public void Name_NpcFromOperatorNew_IsOneObjectOfTheBlocksSize()
+    {
+        var name = Assert.IsType<LiveObjectName>(Name(0x1F0, new ByteCapture(Address, 0x200).Byte(Address + 8, 0x2B).Word(Address + 4, 0x500), 0x18A15A, 0x200));
+
+        Assert.Equal(("NPC", 0, 0x500u, 0x1F0u, (LiveField?)null), (name.Type.Name, name.Element, name.Id, name.OffsetInObject, name.Field));
+    }
+
+    [Fact]
+    public void Name_OtherClassFromOperatorNew_IsUnknown() =>
+        Assert.Equal(new UnknownRegionName(0x18A15A), Name(0x4, new ByteCapture(Address, 0x200).Byte(Address + 8, CounterType), 0x18A15A, 0x200));
+
+    [Fact]
+    public void Name_DispatcherArray_IsNamedByItsTypeByte() =>
+        Assert.Equal("DPAT", Assert.IsType<LiveObjectName>(Name(0x4, new ByteCapture(Address, 0x38).Byte(Address + 8, 0x1E).Byte(Address + 0x1C + 8, 0x1E), 0x33273, 0x38)).Type.Name);
+
     [Theory]
     [InlineData(0x18u, 0x100u)]
     [InlineData(0x38u + 0x18, 0x300u)]

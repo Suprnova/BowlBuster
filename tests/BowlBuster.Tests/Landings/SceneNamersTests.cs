@@ -86,6 +86,14 @@ public class SceneNamersTests
         Assert.Equal(new UnknownRegionName(Scene.ParticlePoolSite), Name(Block(Address, 0x1000, Scene.ParticlePoolSite), 0));
 
     [Fact]
+    public void Name_InTheParticleRecords_NamesTheRecordAndField() =>
+        Assert.Equal(new RecordArrayName("particles", 2, 0x1C, Scene.RecordArrays[0].Record.FieldAt(0x1C)), Name(Block(Address, 0xC000, 0x73E61), (2 * 0x30) + 0x1C));
+
+    [Fact]
+    public void Name_RecordArrayThatIsntWholeRecords_IsUnknown() =>
+        Assert.Equal(new UnknownRegionName(0x73E61), Name(Block(Address, 0x40, 0x73E61), 0));
+
+    [Fact]
     public void Name_PlayerEntity_IsAPlayerObjectOfItsOwnSize()
     {
         var name = Assert.IsType<LiveObjectName>(Name(Block(Address, 0x2B8, Platform.Sites.PlayerEntity), 0x2B4));

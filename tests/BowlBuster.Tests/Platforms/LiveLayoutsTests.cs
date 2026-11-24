@@ -14,7 +14,7 @@ public class LiveLayoutsTests
     {
         LiveType type = Layouts.Find(id)!;
 
-        Assert.All(type.Fields, field => Assert.True(field.Size > 0 && field.End <= type.Size, $"{type.Name}.{field.Name}"));
+        Assert.All(type.Fields, field => Assert.True(field.Size > 0 && (type.Size is 0 || field.End <= type.Size), $"{type.Name}.{field.Name}"));
         Assert.All(type.Fields.Zip(type.Fields.Skip(1)), pair => Assert.True(pair.First.End <= pair.Second.Offset, $"{type.Name}: {pair.First.Name}, {pair.Second.Name}"));
     }
 

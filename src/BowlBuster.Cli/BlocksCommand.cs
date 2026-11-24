@@ -84,6 +84,7 @@ internal static class BlocksCommand
         EnvName => "env",
         WalkRecordName => "walk records",
         ParticlePoolName => "particle pool",
+        RecordArrayName records => records.Array,
         _ => "unknown",
     };
 

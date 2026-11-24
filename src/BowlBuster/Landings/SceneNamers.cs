@@ -75,6 +75,18 @@ internal sealed class EnvNamer : IBlockNamer
 }
 
 /// <summary>
+/// Names an array of fixed-size records.
+/// </summary>
+/// <param name="site">The array's site, name and record layout.</param>
+internal sealed class RecordArrayNamer(RecordArraySite site) : IBlockNamer
+{
+    public RegionName? Name(PlacedBlock block, uint offset, NamingContext context) =>
+        block.Size % site.Record.Size is 0
+            ? new RecordArrayName(site.Name, (int)(offset / site.Record.Size), offset % site.Record.Size, site.Record.FieldAt(offset % site.Record.Size))
+            : null;
+}
+
+/// <summary>
 /// Names the particle pool by chunk.
 /// </summary>
 /// <param name="chunkSize">The size of a chunk.</param>

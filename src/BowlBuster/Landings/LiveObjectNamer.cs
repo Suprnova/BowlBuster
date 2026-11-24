@@ -21,9 +21,9 @@ internal sealed class LiveObjectNamer(LiveLayouts layouts, LiveArraySite site) :
 
     public RegionName? Name(PlacedBlock block, uint offset, NamingContext context)
     {
-        if (TypeOf(block, context.Load?.Capture) is not { } type) return null;
+        if (TypeOf(block, context.Load?.Capture) is not { } type || site.Only?.Contains(type.Id) is false) return null;
 
-        uint size = site.ObjectSize ?? type.Size;
+        uint size = site.ObjectSize ?? (type.Size is 0 ? block.Size : type.Size);
         if (block.Size % size is not 0) return null;
 
         uint element = offset / size;

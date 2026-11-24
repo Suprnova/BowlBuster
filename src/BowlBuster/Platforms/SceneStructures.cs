@@ -8,6 +8,14 @@ namespace BowlBuster.Platforms;
 public sealed record PointerArraySite(uint Caller, string Name);
 
 /// <summary>
+/// A site that allocates an array of fixed-size records.
+/// </summary>
+/// <param name="Caller">The allocation's return address.</param>
+/// <param name="Name">The array's name.</param>
+/// <param name="Record">A record's layout.</param>
+public sealed record RecordArraySite(uint Caller, string Name, RecordLayout Record);
+
+/// <summary>
 /// The scene's own structures in heap 0, beyond its live objects (2.4).
 /// </summary>
 /// <param name="SceneSite">The site of the <c>zScene</c> record.</param>
@@ -22,6 +30,7 @@ public sealed record PointerArraySite(uint Caller, string Name);
 /// <param name="WalkRecord">A walk record's layout.</param>
 /// <param name="ParticlePoolSite">The site of the particle pool: one buffer of equal chunks that the particle clients store their elements in.</param>
 /// <param name="ParticleChunkSize">The size of one of the particle pool's chunks.</param>
+/// <param name="RecordArrays">The arrays of fixed-size records.</param>
 public sealed record SceneStructures(
     uint SceneSite,
     RecordLayout Scene,
@@ -34,7 +43,8 @@ public sealed record SceneStructures(
     IReadOnlyList<int> WalkCategories,
     RecordLayout WalkRecord,
     uint ParticlePoolSite,
-    uint ParticleChunkSize)
+    uint ParticleChunkSize,
+    IReadOnlyList<RecordArraySite> RecordArrays)
 {
     /// <summary>
     /// The Xbox structures.
@@ -78,5 +88,8 @@ public sealed record SceneStructures(
         [4, 8, 12, 16, 12, 8],
         new RecordLayout(0x20, [new("prev", 0x0, 4), new("object", 0x4, 4), new("flags", 0x8, 4)]),
         0x191B52,
-        0x1400);
+        0x1400,
+        [
+            new(0x73E61, "particles", new RecordLayout(0x30, [new("position", 0x0, 0xC), new("velocity", 0x10, 0xC), new("lifetime", 0x1C, 4)])),
+        ]);
 }

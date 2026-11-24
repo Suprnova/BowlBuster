@@ -222,6 +222,19 @@ public sealed record ParticlePoolName(int Chunk, uint OffsetInChunk) : RegionNam
 }
 
 /// <summary>
+/// In a record of an array of fixed-size records.
+/// </summary>
+/// <param name="Array">The array's name.</param>
+/// <param name="Record">The record's index.</param>
+/// <param name="OffsetInRecord">The offset from the record's first byte.</param>
+/// <param name="Field">The field that covers the offset, or <see langword="null"/> when the layout names none there.</param>
+public sealed record RecordArrayName(string Array, int Record, uint OffsetInRecord, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => Field is not null ? NamingDepth.Field : NamingDepth.Element;
+}
+
+/// <summary>
 /// In a block no layout names yet, known only by the return address of its allocation (4.3): an unknown region (5.6).
 /// </summary>
 /// <param name="Caller">The allocation's caller.</param>
