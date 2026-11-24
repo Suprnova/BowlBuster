@@ -117,6 +117,8 @@ class Navigator:
             through its windows.
         release: Whether the held step may be left.
         save_slot: The slot, from 1, of the save a ``save`` start loads; the run's storage holds it there.
+        clock: The clock a menu's ready time is measured on, in seconds: the wall clock, since a menu measures it in
+            real time.
     """
 
     def __init__(
@@ -129,7 +131,9 @@ class Navigator:
         held_step: int | None = None,
         release: Callable[[], bool] = lambda: True,
         save_slot: int | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        self._clock = clock
         self._held_step = held_step
         self._save_slot = save_slot
         self._planned: deque[str] = deque()
@@ -278,7 +282,7 @@ class Navigator:
             self._press("b" if control_off & navigation.talk_box else "a")
         if mode == modes.pause_menu:
             self._game_opened = True
-            self._menu_opened = time.monotonic()
+            self._menu_opened = self._clock()
             self._reached("pause_menu")
         elif self._players_frame is not None:
             self._wait_for_the_player(control_off)
@@ -339,7 +343,7 @@ class Navigator:
         self._stage = Stage.MENU
         self._number = self._attempt = 0
         self._after_pause = Phase.CHEATS
-        self._menu_opened = time.monotonic()
+        self._menu_opened = self._clock()
         self._phase = Phase.CHEATS if self._game_opened else Phase.PAUSE
 
     def _finish_step(self, *, menu_open: bool) -> None:
@@ -358,7 +362,7 @@ class Navigator:
             self._fail("menu unreachable")
             return
         self._after_pause = Phase.WORLD
-        self._menu_opened = time.monotonic()
+        self._menu_opened = self._clock()
         self._trusted = menu_open and not self._game_opened
         self._phase = Phase.WORLD if menu_open else Phase.PAUSE
 
@@ -381,7 +385,7 @@ class Navigator:
         *,
         patient: bool = False,
     ) -> None:
-        deadline = time.monotonic() + self._profile.navigation.ready_seconds if patient else None
+        deadline = self._clock() + self._profile.navigation.ready_seconds if patient else None
         self._pending = _Pending(action, button, read, satisfied, self._polls, self._recorder.frame(), deadline)
         self._press(button)
 
@@ -442,7 +446,7 @@ class Navigator:
     def _exhausted(self, pending: _Pending) -> bool:
         if pending.deadline is None:
             return pending.attempts > self._profile.input.resend_limit
-        return time.monotonic() >= pending.deadline
+        return self._clock() >= pending.deadline
 
     def _pause(self) -> None:
         modes = self._profile.navigation.modes
@@ -451,7 +455,7 @@ class Navigator:
                 self._begin("pause", "start", self._profile.globals.game_mode, lambda mode: mode == modes.pause_menu)
         elif self._confirmed():
             self._trusted = True
-            self._menu_opened = time.monotonic()
+            self._menu_opened = self._clock()
             self._phase = self._after_pause
 
     def _world(self) -> None:
@@ -561,7 +565,7 @@ class Navigator:
 
     def _enter(self, screen: Screen) -> None:
         self._screen = screen
-        self._menu_opened = time.monotonic()
+        self._menu_opened = self._clock()
         self._pending = None
         self._recorder.log_event("screen", name=screen.value)
 
@@ -638,7 +642,7 @@ class Navigator:
 
     def _menu_late(self) -> bool:
         """Whether the wait for a menu has outlasted the time the profile allows."""
-        return time.monotonic() - self._menu_opened >= self._profile.navigation.ready_seconds
+        return self._clock() - self._menu_opened >= self._profile.navigation.ready_seconds
 
     def _cheats(self) -> None:
         """Enters the step's codes in the Options menu, then leaves it for the pause menu."""

@@ -1,6 +1,7 @@
 """A session that drives the game along a request's route and records it."""
 
 import json
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,7 @@ class DrivenSession(Session):
         attempt: Which attempt at the request the run is.
         instance: The emulator instance running it, when a queue claimed it.
         on_event: Called with each event of the run's recordings, as it is logged.
+        clock: The wall clock, in seconds, that a menu's ready time and a stage's times are measured on.
 
     Attributes:
         written: The run's result, once the session has ended and written it.
@@ -77,7 +79,9 @@ class DrivenSession(Session):
         attempt: int = 1,
         instance: str | None = None,
         on_event: Callable[[str, dict[str, object]], None] | None = None,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        self._clock = clock
         self._attempt = attempt
         self._instance = instance
         self._on_event = on_event
@@ -132,6 +136,7 @@ class DrivenSession(Session):
                 windows,
                 self._current_step,
                 exits=test.step < len(self._request.steps) - 1,
+                clock=self._clock,
             )
         tracker = self._tracker
         self._navigator = Navigator(
@@ -142,6 +147,7 @@ class DrivenSession(Session):
             held_step=test.step if test else None,
             release=tracker.release if tracker else lambda: True,
             save_slot=(self._environment.get("save") or {}).get("slot"),
+            clock=self._clock,
         )
         navigator = self._navigator
 

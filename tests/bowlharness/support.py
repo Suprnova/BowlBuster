@@ -1,4 +1,5 @@
 import json
+import struct
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -58,9 +59,13 @@ ENVIRONMENT = {
     "host": "Windows-11",
 }
 PAUSE_MENU = XBOX_NTSC_U.navigation.modes.pause_menu
+FRAME_SECONDS = 1 / 60
+"""A guest frame's length. A driven test clocks its session by the guest's frame counter, so its timeouts fall at the
+same frame on every run."""
+
 FAST = replace(
     COMPACT,
-    navigation=replace(COMPACT.navigation, ready_seconds=0.2, action_polls=15),
+    navigation=replace(COMPACT.navigation, ready_seconds=1.0, action_polls=15),
     scene_classes=replace(COMPACT.scene_classes, stall_frames=20),
 )
 
@@ -125,6 +130,7 @@ def drive(
     A landing's recipes are under ``directory / "recordings"``.
     """
     target = MockTarget(game.script, {**game.kernel_image(), game.profile.globals.frame: bytes(4)})
+    frame = game.profile.globals.frame
     session = DrivenSession(
         target,
         game.profile,
@@ -136,6 +142,7 @@ def drive(
         harness="0.1.0+test",
         placer=placer,
         recordings=directory / "recordings",
+        clock=lambda: struct.unpack("<I", target.read(frame, 4))[0] * FRAME_SECONDS,
     )
     session.run()
     return session, json.loads((directory / "out" / "s-1" / "manifest.json").read_text())
