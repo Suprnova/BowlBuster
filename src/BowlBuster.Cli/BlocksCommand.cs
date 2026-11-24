@@ -76,6 +76,8 @@ internal static class BlocksCommand
         LayerAssetName or LayerPaddingName or LayerSlackName => "layer",
         LiveObjectName live => $"live {live.Type.Name}",
         LookupEntryName => "lookup table",
+        ModelMatrixName { Pool: null } or ModelInstanceName { Pool: null } => "model instance",
+        ModelMatrixName or ModelPoolHeaderName or ModelInstanceName => "model pool",
         AssetDirectoryName directory => $"directory {directory.Archive}",
         BaseEntryName => "base array",
         _ => "unknown",

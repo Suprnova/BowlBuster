@@ -11,12 +11,16 @@ namespace BowlBuster.Platforms;
 /// <param name="InstanceSize">The size in bytes of one model instance.</param>
 /// <param name="MatrixSize">The size in bytes of one bone matrix.</param>
 /// <param name="ExtraMatrixFlag">The model flag bit that makes an instance need one more matrix.</param>
+/// <param name="HeaderFields">The fields of a pool's header.</param>
+/// <param name="InstanceFields">The fields of a model instance the executable confirms.</param>
 public sealed record ModelPoolProfile(
     IReadOnlyList<ModelPoolShape> Shapes,
     uint HeaderSize,
     uint InstanceSize,
     uint MatrixSize,
-    uint ExtraMatrixFlag)
+    uint ExtraMatrixFlag,
+    IReadOnlyList<LiveField> HeaderFields,
+    IReadOnlyList<LiveField> InstanceFields)
 {
     /// <summary>
     /// The size of the heap block a pool occupies.

@@ -8,9 +8,10 @@ namespace BowlBuster.Landings;
 /// <remarks>
 /// A class-1 archive layer is named down to its asset, padding or slack from the disc, and an asset directory down to
 /// the record's asset and field; a live object array down to the object, its asset and its field from the load's
-/// capture; the lookup table down to the slot and its entry's asset; and the base array down to the entry and what it
-/// points at. Any other block, or a block its namer can't tell, is an
-/// unknown region named by its caller: a wrong guess is worse than an unknown.
+/// capture; the lookup table down to the slot and its entry's asset; the base array down to the entry and what it
+/// points at; and a model pool or standalone instance down to the matrix, the header or the instance's field. Any other
+/// block, or a block its namer can't tell, is an unknown region named by its caller: a wrong guess is worse than an
+/// unknown.
 /// </remarks>
 public sealed class RegionNamer
 {
@@ -33,6 +34,8 @@ public sealed class RegionNamer
         namers[profile.Sites.ArchiveLayer] = new FirstNamer(new LayerNamer(), new AssetDirectoryNamer(profile.Live.DirectoryRecord));
         namers[profile.Sites.LookupTable] = new LookupTableNamer();
         namers[profile.Sites.BaseArray] = new BaseArrayNamer(this);
+        namers[profile.Sites.ModelPool] = new ModelPoolNamer(profile.Pools);
+        namers[profile.Sites.ModelInstance] = new ModelInstanceNamer(profile.Pools);
     }
 
     /// <summary>

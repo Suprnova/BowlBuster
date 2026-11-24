@@ -13,6 +13,21 @@ public sealed record LiveField(string Name, uint Offset, uint Size)
 }
 
 /// <summary>
+/// Looks fields up by offset.
+/// </summary>
+public static class LiveFields
+{
+    /// <summary>
+    /// Finds the field that covers an offset.
+    /// </summary>
+    /// <param name="fields">The fields of a structure.</param>
+    /// <param name="offset">The offset in the structure.</param>
+    /// <returns>The field, or <see langword="null"/> when none covers the offset.</returns>
+    public static LiveField? FieldAt(this IReadOnlyList<LiveField> fields, uint offset) =>
+        fields.FirstOrDefault(field => offset >= field.Offset && offset < field.End);
+}
+
+/// <summary>
 /// A live object type: what the scene allocates one array of per type.
 /// </summary>
 /// <param name="Id">The type byte every object of the type holds at <c>+8</c>.</param>
@@ -26,7 +41,7 @@ public sealed record LiveType(byte Id, string Name, uint Size, IReadOnlyList<Liv
     /// </summary>
     /// <param name="offset">The offset in the object.</param>
     /// <returns>The field, or <see langword="null"/> when the layout names none there.</returns>
-    public LiveField? FieldAt(uint offset) => Fields.FirstOrDefault(field => offset >= field.Offset && offset < field.End);
+    public LiveField? FieldAt(uint offset) => Fields.FieldAt(offset);
 }
 
 /// <summary>
@@ -41,7 +56,7 @@ public sealed record RecordLayout(uint Size, IReadOnlyList<LiveField> Fields)
     /// </summary>
     /// <param name="offset">The offset in the record.</param>
     /// <returns>The field, or <see langword="null"/> when the layout names none there.</returns>
-    public LiveField? FieldAt(uint offset) => Fields.FirstOrDefault(field => offset >= field.Offset && offset < field.End);
+    public LiveField? FieldAt(uint offset) => Fields.FieldAt(offset);
 }
 
 /// <summary>

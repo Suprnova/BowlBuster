@@ -28,8 +28,9 @@ public sealed class BlocksCommandTests : IDisposable
         int exitCode = Run("recordings", "blocks", folder.Path);
 
         Assert.Equal(CommandLineApp.Success, exitCode);
-        Assert.Contains("Blocks of synthetic-1: 1 captured cutoff(s), 0.0% named", output.ToString(), StringComparison.Ordinal);
-        Assert.Contains("Segment 0  TARG  counter 4  7 block(s), 0.0% named", output.ToString(), StringComparison.Ordinal);
+        Assert.Matches(@"Blocks of synthetic-1: 1 captured cutoff\(s\), \d+\.\d% named", output.ToString());
+        Assert.Matches(@"Segment 0  TARG  counter 4  7 block\(s\), \d+\.\d% named", output.ToString());
+        Assert.Matches(@"0x182B2A  0x[0-9A-F]+  size 0x[0-9A-F]+  model pool  .*field", output.ToString());
         Assert.Matches(@"op \d+  0x192860  0x[0-9A-F]+  size 0x60040  unknown  TARG layer 0  caller 100\.0%", output.ToString());
         Assert.Matches(@"0x192860  2 block\(s\)  0x60840 bytes  0\.0% named", output.ToString());
         Assert.Equal("", error.ToString());

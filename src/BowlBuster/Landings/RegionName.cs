@@ -137,6 +137,44 @@ public sealed record BaseEntryName(int Entry, RegionName? Target) : RegionName
 }
 
 /// <summary>
+/// In a bone matrix of a model pool or a standalone model instance.
+/// </summary>
+/// <param name="Pool">The pool, or <see langword="null"/> for a standalone instance.</param>
+/// <param name="Instance">The index of the instance the matrix belongs to; 0 for a standalone instance.</param>
+/// <param name="Matrix">The matrix's index among the instance's.</param>
+/// <param name="OffsetInMatrix">The offset from the matrix's first byte.</param>
+public sealed record ModelMatrixName(ModelPoolShape? Pool, int Instance, int Matrix, uint OffsetInMatrix) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => NamingDepth.Field;
+}
+
+/// <summary>
+/// In a model pool's header.
+/// </summary>
+/// <param name="Pool">The pool.</param>
+/// <param name="OffsetInHeader">The offset from the header's first byte.</param>
+/// <param name="Field">The field that covers the offset.</param>
+public sealed record ModelPoolHeaderName(ModelPoolShape Pool, uint OffsetInHeader, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => NamingDepth.Field;
+}
+
+/// <summary>
+/// In a model instance of a pool, or a standalone one.
+/// </summary>
+/// <param name="Pool">The pool, or <see langword="null"/> for a standalone instance.</param>
+/// <param name="Instance">The instance's index in the pool; 0 for a standalone instance.</param>
+/// <param name="OffsetInInstance">The offset from the instance's first byte.</param>
+/// <param name="Field">The field that covers the offset, or <see langword="null"/> when the layout names none there.</param>
+public sealed record ModelInstanceName(ModelPoolShape? Pool, int Instance, uint OffsetInInstance, LiveField? Field) : RegionName
+{
+    /// <inheritdoc/>
+    public override NamingDepth Depth => Field is not null ? NamingDepth.Field : NamingDepth.Element;
+}
+
+/// <summary>
 /// In a block no layout names yet, known only by the return address of its allocation (4.3): an unknown region (5.6).
 /// </summary>
 /// <param name="Caller">The allocation's caller.</param>
